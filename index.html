@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>BBQ 발주 도우미</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #1a1a2e;
+  --card: #16213e;
+  --card-border: #0f3460;
+  --text: #e0e0e0;
+  --text-dim: #888;
+  --accent: #e94560;
+  --accent2: #0f3460;
+  --green: #27ae60;
+  --badge-red: #e94560;
+  --badge-gray: #555;
+  --input-bg: #0f3460;
+  --tab-active: #e94560;
+  --tab-inactive: #16213e;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  padding-bottom: 80px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--card);
+  border-bottom: 1px solid var(--card-border);
+  padding: 12px 16px;
+}
+.header h1 { font-size: 18px; margin-bottom: 8px; }
+.header-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.summary-badge {
+  background: var(--badge-red);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: bold;
+}
+.summary-badge.zero { background: var(--green); }
+.last-saved {
+  font-size: 11px; color: var(--text-dim); margin-left: auto;
+}
+
+/* Controls */
+.controls {
+  display: flex; gap: 8px; align-items: center;
+  padding: 10px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--card-border);
+}
+.controls label { font-size: 13px; color: var(--text-dim); }
+.controls select {
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+.controls .day-info {
+  font-size: 11px; color: var(--text-dim); margin-left: 4px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  position: sticky; top: 72px; z-index: 99;
+  background: var(--bg);
+}
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  background: var(--tab-inactive);
+  color: var(--text-dim);
+  border-bottom: 3px solid transparent;
+  transition: all .2s;
+}
+.tab-btn.active {
+  color: #fff;
+  background: var(--card);
+  border-bottom-color: var(--tab-active);
+}
+
+/* Category sections */
+.section-title {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: rgba(0,0,0,.2);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Grid */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 8px;
+}
+
+/* Card */
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 10px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 90px;
+}
+.card.needs-order { border-color: var(--badge-red); }
+.card-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  padding-right: 36px;
+  word-break: keep-all;
+}
+.card-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.badge {
+  position: absolute;
+  top: 6px; right: 6px;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  padding: 0 6px;
+}
+.badge.red { background: var(--badge-red); }
+.badge.gray { background: var(--badge-gray); }
+.input-row {
+  display: flex; align-items: center; gap: 6px; margin-top: auto;
+}
+.input-row input {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px;
+  font-size: 16px;
+  text-align: center;
+  -webkit-appearance: none;
+}
+.input-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.input-row .unit {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  min-width: 20px;
+}
+
+/* Footer buttons */
+.footer {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  gap: 0;
+  z-index: 100;
+  background: var(--card);
+  border-top: 1px solid var(--card-border);
+}
+.footer button {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #fff;
+  transition: opacity .2s;
+}
+.footer button:active { opacity: .7; }
+.btn-save { background: var(--accent); }
+.btn-init { background: var(--accent2); }
+.btn-order-list { background: var(--green); }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,.85);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-size: 13px;
+  z-index: 200;
+  opacity: 0;
+  transition: opacity .3s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+
+/* Order summary modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 300;
+  justify-content: center;
+  align-items: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--card);
+  border-radius: 14px;
+  width: 92%; max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px;
+}
+.modal h2 { font-size: 16px; margin-bottom: 12px; }
+.modal-item {
+  display: flex; justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--card-border);
+  font-size: 13px;
+}
+.modal-item .qty { color: var(--accent); font-weight: bold; }
+.modal-close {
+  margin-top: 14px;
+  width: 100%;
+  padding: 12px;
+  background: var(--accent2);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* Search */
+.search-wrap {
+  padding: 8px 16px;
+  background: var(--bg);
+}
+.search-wrap input {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 14px;
+}
+.search-wrap input:focus { outline: none; border-color: var(--accent); }
+
+/* Weekend indicator */
+.weekend-mark {
+  background: #ff6b35;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+/* Hidden */
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <h1>BBQ 발주 도우미</h1>
+    <span class="summary-badge" id="summaryBadge">발주 필요 0개</span>
+  </div>
+  <div class="header-row">
+    <span class="last-saved" id="lastSaved">저장 기록 없음</span>
+  </div>
+</div>
+
+<div class="controls">
+  <label>며칠치 발주?</label>
+  <select id="orderDays">
+    <option value="1">1일</option>
+    <option value="2" selected>2일</option>
+    <option value="3">3일</option>
+    <option value="4">4일</option>
+    <option value="5">5일</option>
+    <option value="6">6일</option>
+    <option value="7">7일</option>
+  </select>
+  <span class="day-info" id="dayInfo"></span>
+  <span class="weekend-mark hidden" id="weekendMark">금/토 할증</span>
+</div>
+
+<div class="search-wrap">
+  <input type="text" id="searchInput" placeholder="품목 검색...">
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="main">+ 본사 발주</button>
+  <button class="tab-btn" data-tab="etc">- 기타/소모품</button>
+</div>
+
+<div id="mainTab"></div>
+<div id="etcTab" class="hidden"></div>
+
+<div class="footer">
+  <button class="btn-save" onclick="saveToFirebase()">저장</button>
+  <button class="btn-order-list" onclick="showOrderList()">발주 목록</button>
+  <button class="btn-init" onclick="confirmInit()">초기화</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="orderModal">
+  <div class="modal">
+    <h2>발주 필요 목록</h2>
+    <div id="orderListContent"></div>
+    <button class="modal-close" onclick="closeModal()">닫기</button>
+  </div>
+</div>
+
+<script>
+const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
+const FB_PATH = '/order';
+
+// All items data
+const ALL_ITEMS = [
+  // --- 본사 발주 (+) ---
+  // 신선육
+  {name:'신선육(10호)-뼈한마리',cat:'main',sub:'신선육',daily:2.2,buffer:0.8,unit:'박',orderUnit:'박스'},
+  {name:'통다리바베큐,자메이카',cat:'main',sub:'신선육',daily:5,buffer:4,unit:'개',orderUnit:'개'},
+  {name:'신선순살(720g)',cat:'main',sub:'신선육',daily:1.7,buffer:1,unit:'박',orderUnit:'박스'},
+  {name:'신선북채(신)-다리',cat:'main',sub:'신선육',daily:2.4,buffer:1,unit:'팩',orderUnit:'팩'},
+  {name:'벌크신선통날개',cat:'main',sub:'신선육',daily:1.4,buffer:0.3,unit:'팩',orderUnit:'팩'},
+  // 냉동
+  {name:'냉동-핫윙,비비윙스',cat:'main',sub:'냉동',daily:2.7,buffer:3,unit:'개',orderUnit:'박스'},
+  {name:'냉동-닭껍데기(국내산)',cat:'main',sub:'냉동',daily:2,buffer:3,unit:'개',orderUnit:'개'},
+  {name:'냉동-떡볶이(16개)',cat:'main',sub:'냉동',daily:3,buffer:3,unit:'개',orderUnit:'박스'},
+  {name:'냉동-모둠감자튀김,모듬',cat:'main',sub:'냉동',daily:1,buffer:3,unit:'개',orderUnit:'개'},
+  {name:'냉동-오감볼',cat:'main',sub:'냉동',daily:1,buffer:3,unit:'개',orderUnit:'개'},
+  {name:'냉동-레귤러컷(감자튀김)',cat:'main',sub:'냉동',daily:0.4,buffer:0.4,unit:'봉',orderUnit:'봉'},
+  {name:'냉동-치즈볼-BBQ황금알치즈볼',cat:'main',sub:'냉동',daily:0.5,buffer:0.5,unit:'봉',orderUnit:'봉'},
+  {name:'냉동-치즈볼-더블치즈볼',cat:'main',sub:'냉동',daily:0.4,buffer:0.4,unit:'봉',orderUnit:'봉'},
+  {name:'냉동-치즈볼-BBQ치즈볼(크림)',cat:'main',sub:'냉동',daily:0.3,buffer:0.3,unit:'봉',orderUnit:'봉'},
+  {name:'냉동-멘보샤',cat:'main',sub:'냉동',daily:0.3,buffer:0.3,unit:'개',orderUnit:'박스'},
+  {name:'냉동-타르타르새우',cat:'main',sub:'냉동',daily:0.3,buffer:0.4,unit:'봉',orderUnit:'봉'},
+  {name:'냉동-BBQ소떡소떡',cat:'main',sub:'냉동',daily:0.2,buffer:0.3,unit:'봉',orderUnit:'봉'},
+  {name:'냉동-가지튀김',cat:'main',sub:'냉동',daily:0.2,buffer:0.3,unit:'봉',orderUnit:'봉'},
+  {name:'냉동-오징어튀김(오징어다리아님)',cat:'main',sub:'냉동',daily:0.2,buffer:0,unit:'봉',orderUnit:'봉'},
+  {name:'냉동-고추튀김',cat:'main',sub:'냉동',daily:0.19,buffer:0.2,unit:'개',orderUnit:'개'},
+  {name:'냉동-고로케',cat:'main',sub:'냉동',daily:0.12,buffer:0.2,unit:'팩',orderUnit:'팩'},
+  {name:'냉동-롱김말이',cat:'main',sub:'냉동',daily:0.11,buffer:0.5,unit:'봉',orderUnit:'봉'},
+  {name:'냉동-바사칸윙',cat:'main',sub:'냉동',daily:0,buffer:1,unit:'개',orderUnit:'박스'},
+  {name:'냉동-크런치너겟,순살크래커',cat:'main',sub:'냉동',daily:0,buffer:4,unit:'개',orderUnit:'박스'},
+  {name:'냉동-치즈스틱',cat:'main',sub:'냉동',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'냉동스팀고구마',cat:'main',sub:'냉동',daily:0.1,buffer:0.3,unit:'개',orderUnit:'개'},
+  {name:'BBQ싱싱옥수수콘립',cat:'main',sub:'냉동',daily:0.35,buffer:0.3,unit:'봉',orderUnit:'봉'},
+  // 소스
+  {name:'BBQ시크릿양념소스(주방용)',cat:'main',sub:'소스',daily:2,buffer:1.5,unit:'팩',orderUnit:'팩'},
+  {name:'BBQ시크릿양념소스(배달용)',cat:'main',sub:'소스',daily:0.6,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'통다리바베큐소스(1kg)',cat:'main',sub:'소스',daily:0.8,buffer:1,unit:'팩',orderUnit:'팩'},
+  {name:'골든크리스피배터믹스(맵소반죽)',cat:'main',sub:'소스',daily:0.55,buffer:1,unit:'팩',orderUnit:'팩'},
+  {name:'올리브치킨용배터믹스-파우다',cat:'main',sub:'소스',daily:2.5,buffer:2,unit:'팩',orderUnit:'팩'},
+  {name:'올리브마리네이드(신)',cat:'main',sub:'소스',daily:0.6,buffer:1.2,unit:'팩',orderUnit:'팩'},
+  {name:'(신)올리브오일',cat:'main',sub:'소스',daily:0.5,buffer:3.7,unit:'캔',orderUnit:'캔'},
+  {name:'핫앤크리스피마리네이드',cat:'main',sub:'소스',daily:0.2,buffer:0.3,unit:'팩',orderUnit:'팩'},
+  {name:'빠리배터믹스',cat:'main',sub:'소스',daily:0.1,buffer:0.4,unit:'팩',orderUnit:'팩'},
+  {name:'(신)스모크치킨',cat:'main',sub:'소스',daily:0.4,buffer:0.6,unit:'봉',orderUnit:'봉'},
+  {name:'맵소디소스',cat:'main',sub:'소스',daily:0.2,buffer:0.4,unit:'팩',orderUnit:'팩'},
+  {name:'땡쇼크소스',cat:'main',sub:'소스',daily:0.2,buffer:0.5,unit:'팩',orderUnit:'팩'},
+  {name:'배달소스-(신)스모크소스',cat:'main',sub:'소스',daily:0.1,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'파인마요',cat:'main',sub:'소스',daily:0.1,buffer:0.5,unit:'박스',orderUnit:'박스'},
+  {name:'치즈갈릭',cat:'main',sub:'소스',daily:2,buffer:1,unit:'박스',orderUnit:'박스'},
+  {name:'치킨간지',cat:'main',sub:'소스',daily:0.1,buffer:0.2,unit:'박스',orderUnit:'박스'},
+  {name:'BBQ뿜치킹시즈닝(25g)',cat:'main',sub:'소스',daily:0.1,buffer:0.5,unit:'개',orderUnit:'개'},
+  {name:'BBQ뿜치킹시즈닝(58g)',cat:'main',sub:'소스',daily:0.4,buffer:0.3,unit:'개',orderUnit:'개'},
+  {name:'볼케이노핫소스',cat:'main',sub:'소스',daily:0,buffer:1,unit:'박스',orderUnit:'박스'},
+  // 포장재
+  {name:'치킨무(배달용)',cat:'main',sub:'포장재',daily:1.5,buffer:1,unit:'박',orderUnit:'박스'},
+  {name:'BBQ박스패키지(대)',cat:'main',sub:'포장재',daily:0.2,buffer:0.3,unit:'박',orderUnit:'박스'},
+  {name:'BBQ박스패키지(중)',cat:'main',sub:'포장재',daily:0.55,buffer:0.5,unit:'박',orderUnit:'박스'},
+  {name:'BBQ박스패키지(소)',cat:'main',sub:'포장재',daily:0.2,buffer:0.2,unit:'박',orderUnit:'박스'},
+  {name:'트레이(중)',cat:'main',sub:'포장재',daily:0.55,buffer:0.6,unit:'박',orderUnit:'박스'},
+  {name:'트레이(소)',cat:'main',sub:'포장재',daily:0.6,buffer:0.5,unit:'박',orderUnit:'박스'},
+  {name:'비닐-(신규)BBQ비닐쇼핑백(중)',cat:'main',sub:'포장재',daily:0.6,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'비닐-BBQ비닐봉투(소)',cat:'main',sub:'포장재',daily:0.25,buffer:0.3,unit:'봉',orderUnit:'봉'},
+  {name:'소독저(젓가락)',cat:'main',sub:'포장재',daily:0.2,buffer:0.2,unit:'박',orderUnit:'박스'},
+  {name:'(신)위생장갑(200매)',cat:'main',sub:'포장재',daily:0.4,buffer:0.4,unit:'개',orderUnit:'개'},
+  {name:'JHP종이봉투(대)or(소)',cat:'main',sub:'포장재',daily:0.1,buffer:0.3,unit:'묶',orderUnit:'묶음'},
+  {name:'직사각용기1(190,감자),2(230,치즈스틱)',cat:'main',sub:'포장재',daily:0.1,buffer:0.5,unit:'묶',orderUnit:'묶음'},
+  {name:'알루미늄캔(뚜껑포함)',cat:'main',sub:'포장재',daily:0.1,buffer:0.5,unit:'개',orderUnit:'개'},
+
+  // --- 기타/소모품 (-) ---
+  {name:'두마리치킨,파더스',cat:'etc',sub:'기타',daily:0,buffer:2,unit:'개',orderUnit:'박스'},
+  {name:'배달소스-순살크래커소스',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'배달소스-(신)비비소스',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'극한갈비소스',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'치킨무(벌크)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'팩',orderUnit:'박스'},
+  {name:'종이쇼핑백',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'박',orderUnit:'박스'},
+  {name:'물티슈(500)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'내프킨',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'박스',orderUnit:'박스'},
+  {name:'여과지필터(320*535)(14)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'장',orderUnit:'장'},
+  {name:'BBQ블랙페퍼시즈닝(벌크)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'블랙페퍼시즈닝(15g)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'쉐킷쉐킷치즈맛시즈닝',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'시식용기(맛탕)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'산가측정페이퍼',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'비닐-(신규)BBQ비닐쇼핑백(대)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'(신)롤백(500매)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'스티커T/컷팅칼(떡볶이스티커)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'봉'},
+  {name:'안신스티커,BBQ테이프(N)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'일회용 케찹',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'박스',orderUnit:'박스'},
+  {name:'햇반',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'박스',orderUnit:'박스'},
+  {name:'먹태버터맛,매운맛',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'수제맥주-바이젠',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'삿포로',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'휴지',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'종이,쿠킹호일(25cm*50m)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'30분 주차권',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'포스용지',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
+  {name:'고추,가위,소금,종이호일,레몬보이,검정봉투',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
+  {name:'수제맥주 공케그(빈통)',cat:'etc',sub:'기타',daily:0,buffer:0,unit:'개',orderUnit:'개'},
+];
+
+let stockData = {}; // { itemName: stockQty }
+let currentTab = 'main';
+
+// --- Utility ---
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function getWeekendMultiplier(orderDays) {
+  // Check if any of the next orderDays includes Fri(5) or Sat(6)
+  const now = new Date();
+  // KST
+  const kst = new Date(now.getTime() + 9 * 3600000);
+  let hasFriSat = false;
+  for (let i = 0; i <= orderDays; i++) {
+    const d = new Date(kst.getTime() + i * 86400000);
+    const dow = d.getUTCDay();
+    if (dow === 5 || dow === 6) { hasFriSat = true; break; }
+  }
+  return hasFriSat ? 1.18 : 1.0;
+}
+
+function calcOrderQty(item, stock, orderDays) {
+  const mult = getWeekendMultiplier(orderDays);
+  const needed = item.daily * orderDays * mult + item.buffer - (stock || 0);
+  return Math.max(0, Math.ceil(needed));
+}
+
+function updateDayInfo() {
+  const days = parseInt(document.getElementById('orderDays').value);
+  const mult = getWeekendMultiplier(days);
+  const info = document.getElementById('dayInfo');
+  const mark = document.getElementById('weekendMark');
+  if (mult > 1) {
+    mark.classList.remove('hidden');
+    info.textContent = `(x${mult})`;
+  } else {
+    mark.classList.add('hidden');
+    info.textContent = '';
+  }
+}
+
+// --- Rendering ---
+function renderItems() {
+  const mainContainer = document.getElementById('mainTab');
+  const etcContainer = document.getElementById('etcTab');
+  mainContainer.innerHTML = '';
+  etcContainer.innerHTML = '';
+
+  const days = parseInt(document.getElementById('orderDays').value);
+  const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+  const mainSubs = ['신선육','냉동','소스','포장재'];
+  const etcSubs = ['기타'];
+
+  let needOrderCount = 0;
+
+  function renderCategory(container, cat, subs) {
+    subs.forEach(sub => {
+      const items = ALL_ITEMS.filter(i => i.cat === cat && i.sub === sub);
+      const filtered = searchTerm ? items.filter(i => i.name.toLowerCase().includes(searchTerm)) : items;
+      if (filtered.length === 0) return;
+
+      const title = document.createElement('div');
+      title.className = 'section-title';
+      title.textContent = sub;
+      container.appendChild(title);
+
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+
+      filtered.forEach(item => {
+        const stock = stockData[item.name] !== undefined ? stockData[item.name] : '';
+        const stockNum = stock === '' ? 0 : parseFloat(stock);
+        const orderQty = calcOrderQty(item, stockNum, days);
+        if (orderQty > 0) needOrderCount++;
+
+        const card = document.createElement('div');
+        card.className = 'card' + (orderQty > 0 ? ' needs-order' : '');
+        card.setAttribute('data-item', item.name);
+
+        const badge = document.createElement('div');
+        badge.className = 'badge ' + (orderQty > 0 ? 'red' : 'gray');
+        badge.textContent = orderQty;
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'card-name';
+        nameEl.textContent = item.name;
+
+        const meta = document.createElement('div');
+        meta.className = 'card-meta';
+        const dailyStr = item.daily > 0 ? `일${item.daily}` : '';
+        const bufStr = `여유${item.buffer}`;
+        meta.textContent = [dailyStr, bufStr].filter(Boolean).join(' / ');
+
+        const inputRow = document.createElement('div');
+        inputRow.className = 'input-row';
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.inputMode = 'decimal';
+        input.step = '0.1';
+        input.placeholder = '재고';
+        input.value = stock;
+        input.setAttribute('data-item', item.name);
+        input.addEventListener('input', function() {
+          const val = this.value;
+          stockData[item.name] = val === '' ? '' : parseFloat(val);
+          updateCard(card, item, val === '' ? 0 : parseFloat(val), days);
+          updateSummary();
+        });
+
+        const unitSpan = document.createElement('span');
+        unitSpan.className = 'unit';
+        unitSpan.textContent = item.unit;
+
+        inputRow.appendChild(input);
+        inputRow.appendChild(unitSpan);
+
+        card.appendChild(badge);
+        card.appendChild(nameEl);
+        card.appendChild(meta);
+        card.appendChild(inputRow);
+        grid.appendChild(card);
+      });
+
+      container.appendChild(grid);
+    });
+  }
+
+  renderCategory(mainContainer, 'main', mainSubs);
+  renderCategory(etcContainer, 'etc', etcSubs);
+
+  updateSummary();
+}
+
+function updateCard(card, item, stockNum, days) {
+  const orderQty = calcOrderQty(item, stockNum, days);
+  const badge = card.querySelector('.badge');
+  badge.textContent = orderQty;
+  badge.className = 'badge ' + (orderQty > 0 ? 'red' : 'gray');
+  if (orderQty > 0) {
+    card.classList.add('needs-order');
+  } else {
+    card.classList.remove('needs-order');
+  }
+}
+
+function updateSummary() {
+  const days = parseInt(document.getElementById('orderDays').value);
+  let count = 0;
+  ALL_ITEMS.forEach(item => {
+    const stock = stockData[item.name] !== undefined && stockData[item.name] !== '' ? stockData[item.name] : 0;
+    const qty = calcOrderQty(item, stock, days);
+    if (qty > 0) count++;
+  });
+  const badge = document.getElementById('summaryBadge');
+  badge.textContent = `발주 필요 ${count}개`;
+  badge.className = 'summary-badge' + (count === 0 ? ' zero' : '');
+}
+
+// --- Tabs ---
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    currentTab = this.dataset.tab;
+    document.getElementById('mainTab').classList.toggle('hidden', currentTab !== 'main');
+    document.getElementById('etcTab').classList.toggle('hidden', currentTab !== 'etc');
+  });
+});
+
+// --- Order days change ---
+document.getElementById('orderDays').addEventListener('change', function() {
+  updateDayInfo();
+  renderItems();
+});
+
+// --- Search ---
+let searchTimer = null;
+document.getElementById('searchInput').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => renderItems(), 200);
+});
+
+// --- Firebase ---
+async function loadFromFirebase() {
+  try {
+    const res = await fetch(`${FB_URL}${FB_PATH}/stock.json`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        stockData = {};
+        Object.keys(data).forEach(key => {
+          stockData[key] = data[key];
+        });
+      }
+    }
+    // Load last saved time
+    const res2 = await fetch(`${FB_URL}${FB_PATH}/meta/lastSaved.json`);
+    if (res2.ok) {
+      const ts = await res2.json();
+      if (ts) {
+        const d = new Date(ts);
+        document.getElementById('lastSaved').textContent = '마지막 저장: ' + formatKST(d);
+      }
+    }
+  } catch (e) {
+    console.error('Firebase load error:', e);
+  }
+  renderItems();
+}
+
+function formatKST(date) {
+  const kst = new Date(date.getTime() + 9 * 3600000);
+  const m = (kst.getUTCMonth() + 1).toString().padStart(2, '0');
+  const d = kst.getUTCDate().toString().padStart(2, '0');
+  const h = kst.getUTCHours().toString().padStart(2, '0');
+  const min = kst.getUTCMinutes().toString().padStart(2, '0');
+  return `${m}/${d} ${h}:${min}`;
+}
+
+async function saveToFirebase() {
+  try {
+    // Clean stockData - only save items with actual values
+    const saveData = {};
+    Object.keys(stockData).forEach(key => {
+      if (stockData[key] !== '' && stockData[key] !== undefined) {
+        saveData[key] = stockData[key];
+      }
+    });
+
+    const now = Date.now();
+    await Promise.all([
+      fetch(`${FB_URL}${FB_PATH}/stock.json`, {
+        method: 'PUT',
+        body: JSON.stringify(Object.keys(saveData).length > 0 ? saveData : {_empty: true})
+      }),
+      fetch(`${FB_URL}${FB_PATH}/meta/lastSaved.json`, {
+        method: 'PUT',
+        body: JSON.stringify(now)
+      })
+    ]);
+
+    const d = new Date(now);
+    document.getElementById('lastSaved').textContent = '마지막 저장: ' + formatKST(d);
+    toast('저장 완료');
+  } catch (e) {
+    console.error('Firebase save error:', e);
+    toast('저장 실패!');
+  }
+}
+
+function showOrderList() {
+  const days = parseInt(document.getElementById('orderDays').value);
+  const content = document.getElementById('orderListContent');
+  content.innerHTML = '';
+
+  let items = [];
+  ALL_ITEMS.forEach(item => {
+    const stock = stockData[item.name] !== undefined && stockData[item.name] !== '' ? stockData[item.name] : 0;
+    const qty = calcOrderQty(item, stock, days);
+    if (qty > 0) {
+      items.push({ name: item.name, qty, orderUnit: item.orderUnit });
+    }
+  });
+
+  if (items.length === 0) {
+    content.innerHTML = '<div style="text-align:center;color:#888;padding:20px">발주 필요 품목 없음</div>';
+  } else {
+    items.forEach(it => {
+      const div = document.createElement('div');
+      div.className = 'modal-item';
+      div.innerHTML = `<span>${it.name}</span><span class="qty">${it.qty} ${it.orderUnit}</span>`;
+      content.appendChild(div);
+    });
+  }
+
+  document.getElementById('orderModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('orderModal').classList.remove('show');
+}
+
+// Close modal on overlay click
+document.getElementById('orderModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// --- Init data to Firebase ---
+function confirmInit() {
+  if (!confirm('품목 데이터를 Firebase에 초기화하시겠습니까?\n기존 재고 데이터는 유지됩니다.')) return;
+  initFirebase();
+}
+
+async function initFirebase() {
+  try {
+    const itemsData = {};
+    ALL_ITEMS.forEach((item, idx) => {
+      itemsData[idx] = {
+        name: item.name,
+        cat: item.cat,
+        sub: item.sub,
+        daily: item.daily,
+        buffer: item.buffer,
+        unit: item.unit,
+        orderUnit: item.orderUnit
+      };
+    });
+
+    await fetch(`${FB_URL}${FB_PATH}/items.json`, {
+      method: 'PUT',
+      body: JSON.stringify(itemsData)
+    });
+
+    toast('품목 데이터 초기화 완료');
+  } catch (e) {
+    console.error('Init error:', e);
+    toast('초기화 실패!');
+  }
+}
+
+// --- Init ---
+updateDayInfo();
+loadFromFirebase();
+</script>
+</body>
+</html>
