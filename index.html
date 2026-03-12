@@ -290,9 +290,105 @@ body {
 
 /* Hidden */
 .hidden { display: none !important; }
+
+/* PIN Screen */
+.pin-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+.pin-overlay.authed { display: none; }
+.pin-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--text);
+}
+.pin-dots {
+  display: flex;
+  gap: 12px;
+}
+.pin-dot {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--text-dim);
+  transition: all .2s;
+}
+.pin-dot.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.pin-dot.wrong {
+  border-color: #ff4444;
+  animation: shake .3s;
+}
+@keyframes shake {
+  25% { transform: translateX(-6px); }
+  50% { transform: translateX(6px); }
+  75% { transform: translateX(-4px); }
+  100% { transform: translateX(0); }
+}
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 72px);
+  gap: 12px;
+}
+.pin-key {
+  width: 72px; height: 56px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.pin-key:active { background: var(--accent2); }
+.pin-key.empty { visibility: hidden; }
+.pin-error {
+  font-size: 13px;
+  color: #ff4444;
+  height: 18px;
+}
 </style>
 </head>
 <body>
+
+<!-- PIN 잠금 화면 -->
+<div class="pin-overlay" id="pinOverlay">
+  <div class="pin-title">비밀번호 입력</div>
+  <div class="pin-dots" id="pinDots">
+    <div class="pin-dot"></div>
+    <div class="pin-dot"></div>
+    <div class="pin-dot"></div>
+    <div class="pin-dot"></div>
+  </div>
+  <div class="pin-error" id="pinError"></div>
+  <div class="pin-pad">
+    <div class="pin-key" data-key="1">1</div>
+    <div class="pin-key" data-key="2">2</div>
+    <div class="pin-key" data-key="3">3</div>
+    <div class="pin-key" data-key="4">4</div>
+    <div class="pin-key" data-key="5">5</div>
+    <div class="pin-key" data-key="6">6</div>
+    <div class="pin-key" data-key="7">7</div>
+    <div class="pin-key" data-key="8">8</div>
+    <div class="pin-key" data-key="9">9</div>
+    <div class="pin-key empty"></div>
+    <div class="pin-key" data-key="0">0</div>
+    <div class="pin-key" data-key="del">&#9003;</div>
+  </div>
+</div>
 
 <div class="header">
   <div style="display:flex;align-items:center;justify-content:space-between">
@@ -781,9 +877,72 @@ async function initFirebase() {
   }
 }
 
+// --- PIN Lock ---
+const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // sha256("1234")
+let pinInput = '';
+
+function hashPin(pin) {
+  // simple sha256 via SubtleCrypto
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin))
+    .then(buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join(''));
+}
+
+function updatePinDots() {
+  const dots = document.querySelectorAll('#pinDots .pin-dot');
+  dots.forEach((d, i) => {
+    d.classList.toggle('filled', i < pinInput.length);
+    d.classList.remove('wrong');
+  });
+}
+
+function pinWrong() {
+  const dots = document.querySelectorAll('#pinDots .pin-dot');
+  dots.forEach(d => d.classList.add('wrong'));
+  document.getElementById('pinError').textContent = '비밀번호가 틀렸습니다';
+  pinInput = '';
+  setTimeout(() => {
+    updatePinDots();
+    document.getElementById('pinError').textContent = '';
+  }, 800);
+}
+
+async function checkPin() {
+  const h = await hashPin(pinInput);
+  if (h === PIN_HASH) {
+    sessionStorage.setItem('bbq_auth', '1');
+    document.getElementById('pinOverlay').classList.add('authed');
+    loadFromFirebase();
+  } else {
+    pinWrong();
+  }
+}
+
+document.querySelectorAll('.pin-key').forEach(key => {
+  key.addEventListener('click', function() {
+    const k = this.dataset.key;
+    if (!k) return;
+    if (k === 'del') {
+      pinInput = pinInput.slice(0, -1);
+      updatePinDots();
+      return;
+    }
+    if (pinInput.length >= 4) return;
+    pinInput += k;
+    updatePinDots();
+    if (pinInput.length === 4) {
+      setTimeout(() => checkPin(), 150);
+    }
+  });
+});
+
 // --- Init ---
-updateDayInfo();
-loadFromFirebase();
+if (sessionStorage.getItem('bbq_auth') === '1') {
+  document.getElementById('pinOverlay').classList.add('authed');
+  updateDayInfo();
+  loadFromFirebase();
+} else {
+  updateDayInfo();
+}
 </script>
 </body>
 </html>
