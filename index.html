@@ -725,7 +725,13 @@ function showOrderList() {
     items.forEach(it => {
       const div = document.createElement('div');
       div.className = 'modal-item';
-      div.innerHTML = `<span>${it.name}</span><span class="qty">${it.qty} ${it.orderUnit}</span>`;
+      const span1 = document.createElement('span');
+      span1.textContent = it.name;
+      const span2 = document.createElement('span');
+      span2.className = 'qty';
+      span2.textContent = `${it.qty} ${it.orderUnit}`;
+      div.appendChild(span1);
+      div.appendChild(span2);
       content.appendChild(div);
     });
   }
