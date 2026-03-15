@@ -99,15 +99,7 @@ body {
   border-bottom-color: var(--tab-active);
 }
 
-/* Category sections */
-.section-title {
-  padding: 8px 16px;
-  font-size: 12px;
-  color: var(--text-dim);
-  background: rgba(0,0,0,.2);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
+/* Category sections - styles in progress section below */
 
 /* Grid */
 .grid {
@@ -288,6 +280,60 @@ body {
   font-size: 11px;
 }
 
+/* Progress bar */
+.progress-wrap {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.progress-text {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  min-width: 56px;
+}
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width .3s, background .3s;
+  width: 0%;
+}
+.progress-fill.done { background: var(--green); }
+
+/* Category count badge */
+.section-title {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: rgba(0,0,0,.2);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.cat-count {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.08);
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.cat-count.complete {
+  background: var(--green);
+  color: #fff;
+}
+
 /* Hidden */
 .hidden { display: none !important; }
 
@@ -397,6 +443,10 @@ body {
   </div>
   <div class="header-row">
     <span class="last-saved" id="lastSaved">저장 기록 없음</span>
+  </div>
+  <div class="progress-wrap">
+    <span class="progress-text" id="progressText">입력: 0/88</span>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
   </div>
 </div>
 
@@ -612,9 +662,25 @@ function renderItems() {
       const filtered = searchTerm ? items.filter(i => i.name.toLowerCase().includes(searchTerm)) : items;
       if (filtered.length === 0) return;
 
+      // Count filled items in this sub-category (all items, not just filtered)
+      const allSubItems = ALL_ITEMS.filter(i => i.cat === cat && i.sub === sub);
+      const filledCount = allSubItems.filter(i => stockData[i.name] !== undefined && stockData[i.name] !== '' && stockData[i.name] !== 0).length;
+      const totalCount = allSubItems.length;
+      const isComplete = filledCount === totalCount && totalCount > 0;
+
       const title = document.createElement('div');
       title.className = 'section-title';
-      title.textContent = sub;
+      title.setAttribute('data-sub', sub);
+
+      const titleText = document.createElement('span');
+      titleText.textContent = sub;
+
+      const countBadge = document.createElement('span');
+      countBadge.className = 'cat-count' + (isComplete ? ' complete' : '');
+      countBadge.textContent = `${filledCount}/${totalCount}`;
+
+      title.appendChild(titleText);
+      title.appendChild(countBadge);
       container.appendChild(title);
 
       const grid = document.createElement('div');
@@ -707,6 +773,35 @@ function updateSummary() {
   const badge = document.getElementById('summaryBadge');
   badge.textContent = `발주 필요 ${count}개`;
   badge.className = 'summary-badge' + (count === 0 ? ' zero' : '');
+
+  // Update progress bar
+  const totalItems = ALL_ITEMS.length;
+  const filledItems = ALL_ITEMS.filter(i => stockData[i.name] !== undefined && stockData[i.name] !== '' && stockData[i.name] !== 0).length;
+  const pct = totalItems > 0 ? Math.round(filledItems / totalItems * 100) : 0;
+  document.getElementById('progressText').textContent = `입력: ${filledItems}/${totalItems}`;
+  const fill = document.getElementById('progressFill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('done', pct === 100);
+
+  // Update category count badges
+  updateCategoryCounts();
+}
+
+function updateCategoryCounts() {
+  const sectionTitles = document.querySelectorAll('.section-title[data-sub]');
+  sectionTitles.forEach(title => {
+    const sub = title.getAttribute('data-sub');
+    const subItems = ALL_ITEMS.filter(i => i.sub === sub);
+    const filled = subItems.filter(i => stockData[i.name] !== undefined && stockData[i.name] !== '' && stockData[i.name] !== 0).length;
+    const total = subItems.length;
+    const isComplete = filled === total && total > 0;
+
+    const badge = title.querySelector('.cat-count');
+    if (badge) {
+      badge.textContent = `${filled}/${total}`;
+      badge.className = 'cat-count' + (isComplete ? ' complete' : '');
+    }
+  });
 }
 
 // --- Tabs ---
@@ -781,6 +876,27 @@ async function saveToFirebase() {
     });
 
     const now = Date.now();
+    const days = parseInt(document.getElementById('orderDays').value);
+
+    // Build calc.json data - only items with orderQty > 0
+    const calcItems = {};
+    ALL_ITEMS.forEach(item => {
+      const stock = stockData[item.name] !== undefined && stockData[item.name] !== '' ? stockData[item.name] : 0;
+      const orderQty = calcOrderQty(item, stock, days);
+      if (orderQty > 0) {
+        calcItems[item.name] = {
+          orderQty: orderQty,
+          stock: stock,
+          unit: item.orderUnit
+        };
+      }
+    });
+    const calcData = {
+      updatedAt: now,
+      orderDays: days,
+      items: Object.keys(calcItems).length > 0 ? calcItems : {_empty: true}
+    };
+
     await Promise.all([
       fetch(`${FB_URL}${FB_PATH}/stock.json`, {
         method: 'PUT',
@@ -789,6 +905,10 @@ async function saveToFirebase() {
       fetch(`${FB_URL}${FB_PATH}/meta/lastSaved.json`, {
         method: 'PUT',
         body: JSON.stringify(now)
+      }),
+      fetch(`${FB_URL}${FB_PATH}/calc.json`, {
+        method: 'PUT',
+        body: JSON.stringify(calcData)
       })
     ]);
 
