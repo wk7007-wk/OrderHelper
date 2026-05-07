@@ -2,1213 +2,574 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>BBQ 발주 도우미</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<title>BBQ 발주</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-:root {
-  --bg: #1a1a2e;
-  --card: #16213e;
-  --card-border: #0f3460;
-  --text: #e0e0e0;
-  --text-dim: #888;
-  --accent: #e94560;
-  --accent2: #0f3460;
-  --green: #27ae60;
-  --badge-red: #e94560;
-  --badge-gray: #555;
-  --input-bg: #0f3460;
-  --tab-active: #e94560;
-  --tab-inactive: #16213e;
-}
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, 'Noto Sans KR', sans-serif;
-  font-size: 14px;
-  padding-bottom: 80px;
-  -webkit-tap-highlight-color: transparent;
-}
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, 'Noto Sans KR', sans-serif; background: #1a1a2e; color: #e0e0e0; font-size: 13px; }
+  .top { position: sticky; top: 0; z-index: 10; background: #16213e; border-bottom: 1px solid #0f3460; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .top h1 { font-size: 16px; margin: 0; }
+  .badge { background: #e94560; color: #fff; padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }
+  .badge.zero { background: #27ae60; }
+  .top button { background: #0f3460; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
+  .top button.primary { background: #e94560; }
+  .top button.green { background: #27ae60; }
+  .meta { font-size: 11px; color: #888; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { position: sticky; top: 50px; background: #0f3460; z-index: 5; }
+  th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid #0f3460; white-space: nowrap; }
+  th { font-size: 11px; color: #ccc; font-weight: 600; }
+  tr.need td { background: rgba(233, 69, 96, 0.08); }
+  td.qty { text-align: right; font-variant-numeric: tabular-nums; }
+  td.name { max-width: 280px; white-space: normal; }
+  td input.cell { background: #0f3460; color: #fff; border: 1px solid #0f3460; border-radius: 4px; padding: 4px 6px; width: 60px; text-align: right; font-size: 13px; }
+  td input.cell:focus { outline: none; border-color: #e94560; }
+  .order-qty.pos { font-weight: bold; font-size: 14px; color: #e94560; }
+  .order-qty.dup { color: #888; font-weight: normal; font-size: 11px; }
+  td.actions { white-space: nowrap; }
+  td.actions button { background: transparent; border: 1px solid #0f3460; color: #888; border-radius: 4px; padding: 2px 6px; margin-right: 2px; cursor: pointer; font-size: 11px; }
+  td.actions button:hover { color: #e94560; border-color: #e94560; }
+  td.actions button.add { color: #27ae60; border-color: #27ae60; }
+  tr.dup-row td.name { font-style: italic; color: #aaa; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.85); color: #fff; padding: 8px 18px; border-radius: 16px; z-index: 200; opacity: 0; transition: opacity .3s; pointer-events: none; font-size: 12px; }
+  .toast.show { opacity: 1; }
 
-/* Header */
-.header {
-  position: sticky; top: 0; z-index: 100;
-  background: var(--card);
-  border-bottom: 1px solid var(--card-border);
-  padding: 12px 16px;
-}
-.header h1 { font-size: 18px; margin-bottom: 8px; }
-.header-row {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-}
-.summary-badge {
-  background: var(--badge-red);
-  color: #fff;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: bold;
-}
-.summary-badge.zero { background: var(--green); }
-.last-saved {
-  font-size: 11px; color: var(--text-dim); margin-left: auto;
-}
+  /* PIN 잠금 */
+  .pin-overlay { position: fixed; inset: 0; background: #1a1a2e; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+  .pin-overlay.authed { display: none; }
+  .pin-overlay h2 { margin: 0; font-size: 18px; }
+  .pin-overlay input { font-size: 28px; padding: 14px; width: 180px; text-align: center; background: #0f3460; color: #fff; border: 2px solid #0f3460; border-radius: 8px; letter-spacing: 8px; }
+  .pin-overlay input:focus { outline: none; border-color: #e94560; }
+  .pin-overlay button { padding: 12px 32px; font-size: 16px; background: #e94560; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+  .pin-error { color: #ff4444; height: 18px; font-size: 13px; }
 
-/* Controls */
-.controls {
-  display: flex; gap: 8px; align-items: center;
-  padding: 10px 16px;
-  background: var(--card);
-  border-bottom: 1px solid var(--card-border);
-}
-.controls label { font-size: 13px; color: var(--text-dim); }
-.controls select {
-  background: var(--input-bg);
-  color: var(--text);
-  border: 1px solid var(--card-border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 14px;
-}
-.controls .day-info {
-  font-size: 11px; color: var(--text-dim); margin-left: 4px;
-}
-
-/* Tabs */
-.tabs {
-  display: flex;
-  position: sticky; top: 72px; z-index: 99;
-  background: var(--bg);
-}
-.tab-btn {
-  flex: 1;
-  padding: 10px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: bold;
-  border: none;
-  cursor: pointer;
-  background: var(--tab-inactive);
-  color: var(--text-dim);
-  border-bottom: 3px solid transparent;
-  transition: all .2s;
-}
-.tab-btn.active {
-  color: #fff;
-  background: var(--card);
-  border-bottom-color: var(--tab-active);
-}
-
-/* Category sections - styles in progress section below */
-
-/* Grid */
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 8px;
-}
-
-/* Card */
-.card {
-  background: var(--card);
-  border: 1px solid var(--card-border);
-  border-radius: 10px;
-  padding: 10px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 90px;
-}
-.card.needs-order { border-color: var(--badge-red); }
-.card-name {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.3;
-  padding-right: 36px;
-  word-break: keep-all;
-}
-.card-meta {
-  font-size: 10px;
-  color: var(--text-dim);
-}
-.badge {
-  position: absolute;
-  top: 6px; right: 6px;
-  min-width: 28px;
-  height: 28px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: bold;
-  color: #fff;
-  padding: 0 6px;
-}
-.badge.red { background: var(--badge-red); }
-.badge.gray { background: var(--badge-gray); }
-.input-row {
-  display: flex; align-items: center; gap: 6px; margin-top: auto;
-}
-.input-row input {
-  width: 100%;
-  background: var(--input-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 6px;
-  color: var(--text);
-  padding: 8px;
-  font-size: 16px;
-  text-align: center;
-  -webkit-appearance: none;
-}
-.input-row input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.input-row .unit {
-  font-size: 11px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  min-width: 20px;
-}
-
-/* Footer buttons */
-.footer {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  display: flex;
-  gap: 0;
-  z-index: 100;
-  background: var(--card);
-  border-top: 1px solid var(--card-border);
-}
-.footer button {
-  flex: 1;
-  padding: 14px;
-  border: none;
-  font-size: 15px;
-  font-weight: bold;
-  cursor: pointer;
-  color: #fff;
-  transition: opacity .2s;
-}
-.footer button:active { opacity: .7; }
-.btn-save { background: var(--accent); }
-.btn-init { background: var(--accent2); }
-.btn-order-list { background: var(--green); }
-
-/* Toast */
-.toast {
-  position: fixed;
-  bottom: 80px;
-  left: 50%; transform: translateX(-50%);
-  background: rgba(0,0,0,.85);
-  color: #fff;
-  padding: 10px 24px;
-  border-radius: 20px;
-  font-size: 13px;
-  z-index: 200;
-  opacity: 0;
-  transition: opacity .3s;
-  pointer-events: none;
-}
-.toast.show { opacity: 1; }
-
-/* Order summary modal */
-.modal-overlay {
-  display: none;
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,.7);
-  z-index: 300;
-  justify-content: center;
-  align-items: center;
-}
-.modal-overlay.show { display: flex; }
-.modal {
-  background: var(--card);
-  border-radius: 14px;
-  width: 92%; max-width: 400px;
-  max-height: 80vh;
-  overflow-y: auto;
-  padding: 20px;
-}
-.modal h2 { font-size: 16px; margin-bottom: 12px; }
-.modal-item {
-  display: flex; justify-content: space-between;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--card-border);
-  font-size: 13px;
-}
-.modal-item .qty { color: var(--accent); font-weight: bold; }
-.modal-close {
-  margin-top: 14px;
-  width: 100%;
-  padding: 12px;
-  background: var(--accent2);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-/* Search */
-.search-wrap {
-  padding: 8px 16px;
-  background: var(--bg);
-}
-.search-wrap input {
-  width: 100%;
-  background: var(--card);
-  border: 1px solid var(--card-border);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 8px 12px;
-  font-size: 14px;
-}
-.search-wrap input:focus { outline: none; border-color: var(--accent); }
-
-/* Weekend indicator */
-.weekend-mark {
-  background: #ff6b35;
-  color: #fff;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-}
-
-/* Progress bar */
-.progress-wrap {
-  margin-top: 6px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.progress-text {
-  font-size: 12px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  min-width: 56px;
-}
-.progress-bar {
-  flex: 1;
-  height: 6px;
-  background: rgba(255,255,255,.1);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-  transition: width .3s, background .3s;
-  width: 0%;
-}
-.progress-fill.done { background: var(--green); }
-
-/* Category count badge */
-.section-title {
-  padding: 8px 16px;
-  font-size: 12px;
-  color: var(--text-dim);
-  background: rgba(0,0,0,.2);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.cat-count {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: rgba(255,255,255,.08);
-  color: var(--text-dim);
-  font-weight: 600;
-}
-.cat-count.complete {
-  background: var(--green);
-  color: #fff;
-}
-
-/* Hidden */
-.hidden { display: none !important; }
-
-/* PIN Screen */
-.pin-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: var(--bg);
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-}
-.pin-overlay.authed { display: none; }
-.pin-title {
-  font-size: 20px;
-  font-weight: bold;
-  color: var(--text);
-}
-.pin-dots {
-  display: flex;
-  gap: 12px;
-}
-.pin-dot {
-  width: 16px; height: 16px;
-  border-radius: 50%;
-  border: 2px solid var(--text-dim);
-  transition: all .2s;
-}
-.pin-dot.filled {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.pin-dot.wrong {
-  border-color: #ff4444;
-  animation: shake .3s;
-}
-@keyframes shake {
-  25% { transform: translateX(-6px); }
-  50% { transform: translateX(6px); }
-  75% { transform: translateX(-4px); }
-  100% { transform: translateX(0); }
-}
-.pin-pad {
-  display: grid;
-  grid-template-columns: repeat(3, 72px);
-  gap: 12px;
-}
-.pin-key {
-  width: 72px; height: 56px;
-  background: var(--card);
-  border: 1px solid var(--card-border);
-  border-radius: 12px;
-  color: var(--text);
-  font-size: 22px;
-  font-weight: bold;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background .1s;
-  -webkit-tap-highlight-color: transparent;
-}
-.pin-key:active { background: var(--accent2); }
-.pin-key.empty { visibility: hidden; }
-.pin-error {
-  font-size: 13px;
-  color: #ff4444;
-  height: 18px;
-}
+  /* 모바일 (폰) */
+  @media (max-width: 600px) {
+    body { font-size: 14px; padding-bottom: 40px; }
+    .top { padding: 8px; gap: 6px; }
+    .top h1 { font-size: 14px; }
+    .top button { padding: 8px 10px; font-size: 13px; }
+    th, td { padding: 6px 4px; font-size: 12px; }
+    td.name { max-width: 140px; word-break: keep-all; }
+    td input.cell { width: 56px; padding: 8px 4px; font-size: 16px; }
+    td.actions button { padding: 8px 10px; margin-right: 3px; font-size: 14px; min-width: 32px; }
+  }
 </style>
 </head>
 <body>
 
-<!-- PIN 잠금 화면 -->
 <div class="pin-overlay" id="pinOverlay">
-  <div class="pin-title">비밀번호 입력</div>
-  <div class="pin-dots" id="pinDots">
-    <div class="pin-dot"></div>
-    <div class="pin-dot"></div>
-    <div class="pin-dot"></div>
-    <div class="pin-dot"></div>
-  </div>
+  <h2>BBQ 발주</h2>
+  <input type="password" inputmode="numeric" pattern="[0-9]*" id="pinInput" maxlength="4" placeholder="PIN" autocomplete="off">
+  <button onclick="checkPin()">확인</button>
   <div class="pin-error" id="pinError"></div>
-  <div class="pin-pad">
-    <div class="pin-key" data-key="1">1</div>
-    <div class="pin-key" data-key="2">2</div>
-    <div class="pin-key" data-key="3">3</div>
-    <div class="pin-key" data-key="4">4</div>
-    <div class="pin-key" data-key="5">5</div>
-    <div class="pin-key" data-key="6">6</div>
-    <div class="pin-key" data-key="7">7</div>
-    <div class="pin-key" data-key="8">8</div>
-    <div class="pin-key" data-key="9">9</div>
-    <div class="pin-key empty"></div>
-    <div class="pin-key" data-key="0">0</div>
-    <div class="pin-key" data-key="del">&#9003;</div>
-  </div>
 </div>
 
-<div class="header">
-  <div style="display:flex;align-items:center;justify-content:space-between">
-    <h1>BBQ 발주 도우미</h1>
-    <span class="summary-badge" id="summaryBadge">발주 필요 0개</span>
-  </div>
-  <div class="header-row">
-    <span class="last-saved" id="lastSaved">저장 기록 없음</span>
-  </div>
-  <div class="progress-wrap">
-    <span class="progress-text" id="progressText">입력: 0/88</span>
-    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-  </div>
+<div class="top">
+  <h1>BBQ 발주</h1>
+  <span class="badge" id="badge">발주 0개</span>
+  <label style="font-size:12px;color:#aaa">발주일수
+    <select id="orderDays" style="background:#0f3460;color:#fff;border:1px solid #0f3460;border-radius:4px;padding:3px 6px;font-size:13px;margin-left:4px">
+      <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      <option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option>
+    </select>
+  </label>
+  <span class="meta" id="cycleHint"></span>
+  <button id="modeBtn" onclick="toggleMode()">출력 보기 (발주 D순)</button>
+  <button class="primary" onclick="saveToFB()">저장</button>
+  <span class="meta" id="lastSaved"></span>
 </div>
 
-<div class="controls">
-  <label>며칠치 발주?</label>
-  <select id="orderDays">
-    <option value="1">1일</option>
-    <option value="2" selected>2일</option>
-    <option value="3">3일</option>
-    <option value="4">4일</option>
-    <option value="5">5일</option>
-    <option value="6">6일</option>
-    <option value="7">7일</option>
-  </select>
-  <span class="day-info" id="dayInfo"></span>
-  <span class="weekend-mark hidden" id="weekendMark">금/토 할증</span>
-</div>
-
-<div class="search-wrap">
-  <input type="text" id="searchInput" placeholder="품목 검색...">
-</div>
-
-<div class="tabs">
-  <button class="tab-btn active" data-tab="main">+ 본사 발주</button>
-  <button class="tab-btn" data-tab="etc">- 기타/소모품</button>
-</div>
-
-<div id="mainTab"></div>
-<div id="etcTab" class="hidden"></div>
-
-<div class="footer">
-  <button class="btn-save" onclick="saveToFirebase()">저장</button>
-  <button class="btn-order-list" onclick="showOrderList()">발주 목록</button>
-  <button class="btn-init" onclick="confirmInit()">초기화</button>
-</div>
+<table>
+  <thead>
+    <tr id="thead">
+      <th id="thZone">구역</th>
+      <th>품목명</th>
+      <th>재고</th>
+      <th>여유</th>
+      <th>일사용</th>
+      <th>발주</th>
+      <th>단위</th>
+      <th id="thAct"></th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
 
 <div class="toast" id="toast"></div>
 
-<div class="modal-overlay" id="orderModal">
-  <div class="modal">
-    <h2>발주 필요 목록</h2>
-    <div id="orderListContent"></div>
-    <button class="modal-close" onclick="closeModal()">닫기</button>
-  </div>
-</div>
-
 <script>
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
-const FB_PATH = '/order';
+const FB_PATH = '/order_desk';
 
-// All items data
-const ALL_ITEMS = [
-  // --- 본사 발주 (+) ---
-  // 신선육
-  {name:'신선육(10호)-뼈한마리',cat:'main',sub:'신선육',daily:2.2,buffer:0.8,unit:'박',orderUnit:'박스'},
-  {name:'통다리바베큐,자메이카',cat:'main',sub:'신선육',daily:5,buffer:4,unit:'개',orderUnit:'개'},
-  {name:'신선순살(720g)',cat:'main',sub:'신선육',daily:1.7,buffer:1,unit:'박',orderUnit:'박스'},
-  {name:'신선북채(신)-다리',cat:'main',sub:'신선육',daily:2.4,buffer:1,unit:'팩',orderUnit:'팩'},
-  {name:'벌크신선통날개',cat:'main',sub:'신선육',daily:1.4,buffer:0.3,unit:'팩',orderUnit:'팩'},
-  // 냉동
-  {name:'냉동-핫윙,비비윙스',cat:'main',sub:'냉동',daily:2.7,buffer:3,unit:'개',orderUnit:'박스'},
-  {name:'냉동-닭껍데기(국내산)',cat:'main',sub:'냉동',daily:2,buffer:3,unit:'개',orderUnit:'개'},
-  {name:'냉동-떡볶이(16개)',cat:'main',sub:'냉동',daily:3,buffer:3,unit:'개',orderUnit:'박스'},
-  {name:'냉동-모둠감자튀김,모듬',cat:'main',sub:'냉동',daily:1,buffer:3,unit:'개',orderUnit:'개'},
-  {name:'냉동-오감볼',cat:'main',sub:'냉동',daily:1,buffer:3,unit:'개',orderUnit:'개'},
-  {name:'냉동-레귤러컷(감자튀김)',cat:'main',sub:'냉동',daily:0.4,buffer:0.4,unit:'봉',orderUnit:'봉'},
-  {name:'냉동-치즈볼-BBQ황금알치즈볼',cat:'main',sub:'냉동',daily:0.5,buffer:0.5,unit:'봉',orderUnit:'봉'},
-  {name:'냉동-치즈볼-더블치즈볼',cat:'main',sub:'냉동',daily:0.4,buffer:0.4,unit:'봉',orderUnit:'봉'},
-  {name:'냉동-치즈볼-BBQ치즈볼(크림)',cat:'main',sub:'냉동',daily:0.3,buffer:0.3,unit:'봉',orderUnit:'봉'},
-  {name:'냉동-멘보샤',cat:'main',sub:'냉동',daily:0.3,buffer:0.3,unit:'개',orderUnit:'박스'},
-  {name:'냉동-타르타르새우',cat:'main',sub:'냉동',daily:0.3,buffer:0.4,unit:'봉',orderUnit:'봉'},
-  {name:'냉동-BBQ소떡소떡',cat:'main',sub:'냉동',daily:0.2,buffer:0.3,unit:'봉',orderUnit:'봉'},
-  {name:'냉동-가지튀김',cat:'main',sub:'냉동',daily:0.2,buffer:0.3,unit:'봉',orderUnit:'봉'},
-  {name:'냉동-오징어튀김(오징어다리아님)',cat:'main',sub:'냉동',daily:0.2,buffer:0,unit:'봉',orderUnit:'봉'},
-  {name:'냉동-고추튀김',cat:'main',sub:'냉동',daily:0.19,buffer:0.2,unit:'개',orderUnit:'개'},
-  {name:'냉동-고로케',cat:'main',sub:'냉동',daily:0.12,buffer:0.2,unit:'팩',orderUnit:'팩'},
-  {name:'냉동-롱김말이',cat:'main',sub:'냉동',daily:0.11,buffer:0.5,unit:'봉',orderUnit:'봉'},
-  {name:'냉동-바사칸윙',cat:'main',sub:'냉동',daily:0,buffer:1,unit:'개',orderUnit:'박스'},
-  {name:'냉동-크런치너겟,순살크래커',cat:'main',sub:'냉동',daily:0,buffer:4,unit:'개',orderUnit:'박스'},
-  {name:'냉동-치즈스틱',cat:'main',sub:'냉동',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'냉동스팀고구마',cat:'main',sub:'냉동',daily:0.1,buffer:0.3,unit:'개',orderUnit:'개'},
-  {name:'BBQ싱싱옥수수콘립',cat:'main',sub:'냉동',daily:0.35,buffer:0.3,unit:'봉',orderUnit:'봉'},
-  // 소스
-  {name:'BBQ시크릿양념소스(주방용)',cat:'main',sub:'소스',daily:2,buffer:1.5,unit:'팩',orderUnit:'팩'},
-  {name:'BBQ시크릿양념소스(배달용)',cat:'main',sub:'소스',daily:0.6,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'통다리바베큐소스(1kg)',cat:'main',sub:'소스',daily:0.8,buffer:1,unit:'팩',orderUnit:'팩'},
-  {name:'골든크리스피배터믹스(맵소반죽)',cat:'main',sub:'소스',daily:0.55,buffer:1,unit:'팩',orderUnit:'팩'},
-  {name:'올리브치킨용배터믹스-파우다',cat:'main',sub:'소스',daily:2.5,buffer:2,unit:'팩',orderUnit:'팩'},
-  {name:'올리브마리네이드(신)',cat:'main',sub:'소스',daily:0.6,buffer:1.2,unit:'팩',orderUnit:'팩'},
-  {name:'(신)올리브오일',cat:'main',sub:'소스',daily:0.5,buffer:3.7,unit:'캔',orderUnit:'캔'},
-  {name:'핫앤크리스피마리네이드',cat:'main',sub:'소스',daily:0.2,buffer:0.3,unit:'팩',orderUnit:'팩'},
-  {name:'빠리배터믹스',cat:'main',sub:'소스',daily:0.1,buffer:0.4,unit:'팩',orderUnit:'팩'},
-  {name:'(신)스모크치킨',cat:'main',sub:'소스',daily:0.4,buffer:0.6,unit:'봉',orderUnit:'봉'},
-  {name:'맵소디소스',cat:'main',sub:'소스',daily:0.2,buffer:0.4,unit:'팩',orderUnit:'팩'},
-  {name:'땡쇼크소스',cat:'main',sub:'소스',daily:0.2,buffer:0.5,unit:'팩',orderUnit:'팩'},
-  {name:'배달소스-(신)스모크소스',cat:'main',sub:'소스',daily:0.1,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'파인마요',cat:'main',sub:'소스',daily:0.1,buffer:0.5,unit:'박스',orderUnit:'박스'},
-  {name:'치즈갈릭',cat:'main',sub:'소스',daily:2,buffer:1,unit:'박스',orderUnit:'박스'},
-  {name:'치킨간지',cat:'main',sub:'소스',daily:0.1,buffer:0.2,unit:'박스',orderUnit:'박스'},
-  {name:'BBQ뿜치킹시즈닝(25g)',cat:'main',sub:'소스',daily:0.1,buffer:0.5,unit:'개',orderUnit:'개'},
-  {name:'BBQ뿜치킹시즈닝(58g)',cat:'main',sub:'소스',daily:0.4,buffer:0.3,unit:'개',orderUnit:'개'},
-  {name:'볼케이노핫소스',cat:'main',sub:'소스',daily:0,buffer:1,unit:'박스',orderUnit:'박스'},
-  // 포장재
-  {name:'치킨무(배달용)',cat:'main',sub:'포장재',daily:1.5,buffer:1,unit:'박',orderUnit:'박스'},
-  {name:'BBQ박스패키지(대)',cat:'main',sub:'포장재',daily:0.2,buffer:0.3,unit:'박',orderUnit:'박스'},
-  {name:'BBQ박스패키지(중)',cat:'main',sub:'포장재',daily:0.55,buffer:0.5,unit:'박',orderUnit:'박스'},
-  {name:'BBQ박스패키지(소)',cat:'main',sub:'포장재',daily:0.2,buffer:0.2,unit:'박',orderUnit:'박스'},
-  {name:'트레이(중)',cat:'main',sub:'포장재',daily:0.55,buffer:0.6,unit:'박',orderUnit:'박스'},
-  {name:'트레이(소)',cat:'main',sub:'포장재',daily:0.6,buffer:0.5,unit:'박',orderUnit:'박스'},
-  {name:'비닐-(신규)BBQ비닐쇼핑백(중)',cat:'main',sub:'포장재',daily:0.6,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'비닐-BBQ비닐봉투(소)',cat:'main',sub:'포장재',daily:0.25,buffer:0.3,unit:'봉',orderUnit:'봉'},
-  {name:'소독저(젓가락)',cat:'main',sub:'포장재',daily:0.2,buffer:0.2,unit:'박',orderUnit:'박스'},
-  {name:'(신)위생장갑(200매)',cat:'main',sub:'포장재',daily:0.4,buffer:0.4,unit:'개',orderUnit:'개'},
-  {name:'JHP종이봉투(대)or(소)',cat:'main',sub:'포장재',daily:0.1,buffer:0.3,unit:'묶',orderUnit:'묶음'},
-  {name:'직사각용기1(190,감자),2(230,치즈스틱)',cat:'main',sub:'포장재',daily:0.1,buffer:0.5,unit:'묶',orderUnit:'묶음'},
-  {name:'알루미늄캔(뚜껑포함)',cat:'main',sub:'포장재',daily:0.1,buffer:0.5,unit:'개',orderUnit:'개'},
+// PIN 잠금 (sha256("1234")). PIN 변경하려면 새 PIN의 sha256 해시로 교체.
+const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
 
-  // --- 기타/소모품 (-) ---
-  {name:'두마리치킨,파더스',cat:'etc',sub:'기타',daily:0,buffer:2,unit:'개',orderUnit:'박스'},
-  {name:'배달소스-순살크래커소스',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'배달소스-(신)비비소스',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'극한갈비소스',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'치킨무(벌크)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'팩',orderUnit:'박스'},
-  {name:'종이쇼핑백',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'박',orderUnit:'박스'},
-  {name:'물티슈(500)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'내프킨',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'박스',orderUnit:'박스'},
-  {name:'여과지필터(320*535)(14)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'장',orderUnit:'장'},
-  {name:'BBQ블랙페퍼시즈닝(벌크)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'블랙페퍼시즈닝(15g)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'쉐킷쉐킷치즈맛시즈닝',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'시식용기(맛탕)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'산가측정페이퍼',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'비닐-(신규)BBQ비닐쇼핑백(대)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'(신)롤백(500매)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'스티커T/컷팅칼(떡볶이스티커)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'봉'},
-  {name:'안신스티커,BBQ테이프(N)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'일회용 케찹',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'박스',orderUnit:'박스'},
-  {name:'햇반',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'박스',orderUnit:'박스'},
-  {name:'먹태버터맛,매운맛',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'수제맥주-바이젠',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'삿포로',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'휴지',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'종이,쿠킹호일(25cm*50m)',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'30분 주차권',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'포스용지',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'봉',orderUnit:'봉'},
-  {name:'고추,가위,소금,종이호일,레몬보이,검정봉투',cat:'etc',sub:'기타',daily:0,buffer:1,unit:'개',orderUnit:'개'},
-  {name:'수제맥주 공케그(빈통)',cat:'etc',sub:'기타',daily:0,buffer:0,unit:'개',orderUnit:'개'},
+async function hashPin(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function checkPin() {
+  const inp = document.getElementById('pinInput');
+  const h = await hashPin(inp.value);
+  if (h === PIN_HASH) {
+    sessionStorage.setItem('bbq_desk_auth', '1');
+    document.getElementById('pinOverlay').classList.add('authed');
+    inp.value = '';
+  } else {
+    document.getElementById('pinError').textContent = '비밀번호 틀림';
+    inp.value = '';
+    setTimeout(() => { document.getElementById('pinError').textContent = ''; }, 1500);
+  }
+}
+if (sessionStorage.getItem('bbq_desk_auth') === '1') {
+  document.getElementById('pinOverlay').classList.add('authed');
+} else {
+  document.getElementById('pinInput').focus();
+}
+document.getElementById('pinInput').addEventListener('keypress', e => {
+  if (e.key === 'Enter') checkPin();
+});
+document.getElementById('pinInput').addEventListener('input', e => {
+  if (e.target.value.length === 4) checkPin();
+});
+
+// 87 품목 마스터 (Excel 발주리스트 2026-05-08 스냅샷, D 순 정렬)
+const MASTER = [
+  {sfaSeq:3,name:"(신)올리브오일",unit:"캔/캔",policy:"전부",buffer:3.7,daily:0.5},
+  {sfaSeq:3.3,name:"냉동-핫윙,비비윙스",unit:"개/박스",policy:"전부",buffer:3,daily:4},
+  {sfaSeq:5,name:"두마리치킨,파더스",unit:"개/박스",policy:"여유",buffer:2,daily:0},
+  {sfaSeq:5,name:"냉동-닭껍데기(국내산)",unit:"개/개",policy:"여유",buffer:2,daily:3},
+  {sfaSeq:6,name:"냉동-크런치너겟,순살크래커",unit:"개/박스",policy:"여유",buffer:4,daily:0},
+  {sfaSeq:6.1,name:"냉동-바사칸윙",unit:"개/박스",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:6.2,name:"냉동-롱김말이",unit:"봉/봉",policy:"여유",buffer:1,daily:0.2},
+  {sfaSeq:6.3,name:"냉동-가지튀김",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.2},
+  {sfaSeq:7.1,name:"냉동스팀고구마",unit:"",policy:"여유",buffer:0.3,daily:0.1},
+  {sfaSeq:8,name:"냉동-레귤러컷(감자튀김)",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.4},
+  {sfaSeq:9,name:"냉동-치즈볼-BBQ치즈볼(크림)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.3},
+  {sfaSeq:10,name:"냉동-치즈볼-BBQ황금알치즈볼",unit:"봉/봉",policy:"여유",buffer:0.5,daily:0.5},
+  {sfaSeq:11,name:"냉동-치즈볼-더블치즈볼",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.4},
+  {sfaSeq:11.2,name:"냉동-BBQ소떡소떡",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.2},
+  {sfaSeq:12,name:"냉동-모둠감자튀김,모듬",unit:"개/개",policy:"여유",buffer:0.8,daily:1.5},
+  {sfaSeq:12.4,name:"냉동-멘보샤",unit:"개/박스",policy:"전부",buffer:0.3,daily:0.3},
+  {sfaSeq:14,name:"냉동-오징어튀김(오징어다리아님)",unit:"봉/봉",policy:"여유",buffer:0,daily:0.2},
+  {sfaSeq:15,name:"냉동-오감볼",unit:"개/개",policy:"여유",buffer:2,daily:1},
+  {sfaSeq:15.1,name:"냉동-치즈스틱",unit:"개/개",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:16,name:"냉동-고로케",unit:"팩/팩",policy:"여유",buffer:0.2,daily:0.12},
+  {sfaSeq:17,name:"냉동-타르타르새우",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.3},
+  {sfaSeq:17.1,name:"냉동-고추튀김",unit:"개/개",policy:"여유",buffer:0.2,daily:0.19},
+  {sfaSeq:18,name:"BBQ싱싱옥수수콘립",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.35},
+  {sfaSeq:18.1,name:"냉동-떡볶이(16개)",unit:"개/박스",policy:"전부",buffer:3,daily:3},
+  {sfaSeq:19,name:"신선육(10호)-뼈한마리",unit:"박/박스",policy:"전부",buffer:0.8,daily:2},
+  {sfaSeq:20,name:"통다리바베큐,자메이카",unit:"개/개",policy:"전부",buffer:4,daily:6},
+  {sfaSeq:21,name:"신선순살(720g)",unit:"박/박스",policy:"전부",buffer:1,daily:2},
+  {sfaSeq:22,name:"신선북채(신)-다리",unit:"팩/팩",policy:"전부",buffer:1,daily:2.4},
+  {sfaSeq:23,name:"벌크신선통날개",unit:"팩/팩",policy:"전부",buffer:0.3,daily:1.1},
+  {sfaSeq:24,name:"(신)스모크치킨",unit:"봉/봉",policy:"전부",buffer:0.7,daily:0.6},
+  {sfaSeq:24.1,name:"파인마요",unit:"박스/박스",policy:"여유",buffer:0.5,daily:0.1},
+  {sfaSeq:24.2,name:"극한갈비소스",unit:"",policy:"",buffer:1,daily:0},
+  {sfaSeq:25,name:"배달소스-순살크래커소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:26,name:"맵소디소스",unit:"팩/팩",policy:"여유",buffer:0.2,daily:0.2},
+  {sfaSeq:27,name:"배달소스-(신)비비소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:28,name:"배달소스-(신)스모크소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0.1},
+  {sfaSeq:29,name:"볼케이노핫소스",unit:"박스/박스",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:29.5,name:"산가측정페이퍼",unit:"",policy:"전부",buffer:1,daily:0},
+  {sfaSeq:30,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1,daily:1.5},
+  {sfaSeq:30.1,name:"치킨무(벌크)",unit:"팩/박스",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:32,name:"햇반",unit:"박스/박스",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:33,name:"먹태버터맛,매운맛",unit:"봉/봉",policy:"전부",buffer:1,daily:0},
+  {sfaSeq:34,name:"핫앤크리스피마리네이드",unit:"팩/팩",policy:"여유",buffer:0.3,daily:0.3},
+  {sfaSeq:35,name:"블랙페퍼시즈닝(15g)",unit:"봉/봉",policy:"",buffer:1,daily:0},
+  {sfaSeq:36,name:"골든크리스피배터믹스(맵소반죽)",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.5},
+  {sfaSeq:37,name:"BBQ시크릿양념소스(주방용)",unit:"팩/팩",policy:"여유",buffer:1.5,daily:2},
+  {sfaSeq:39,name:"땡쇼크소스",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.2},
+  {sfaSeq:41,name:"올리브치킨용배터믹스-파우다",unit:"팩/팩",policy:"여유",buffer:2,daily:2.5},
+  {sfaSeq:42,name:"올리브마리네이드(신)",unit:"팩/팩",policy:"여유",buffer:1.2,daily:0.6},
+  {sfaSeq:43,name:"빠리배터믹스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.1},
+  {sfaSeq:44,name:"쉐킷쉐킷치즈맛시즈닝",unit:"",policy:"",buffer:1,daily:0},
+  {sfaSeq:45,name:"일회용 케찹",unit:"박스/박스",policy:"",buffer:1,daily:0},
+  {sfaSeq:46,name:"통다리바베큐소스(1kg)",unit:"팩/팩",policy:"여유",buffer:1,daily:0.8},
+  {sfaSeq:47,name:"BBQ박스패키지(대)",unit:"박/박스",policy:"여유",buffer:0.3,daily:0.2},
+  {sfaSeq:48,name:"BBQ박스패키지(중)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.5},
+  {sfaSeq:49,name:"BBQ박스패키지(소)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.2},
+  {sfaSeq:50,name:"트레이(중)",unit:"박/박스",policy:"여유",buffer:0.6,daily:0.55},
+  {sfaSeq:51,name:"트레이(소)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.6},
+  {sfaSeq:52,name:"비닐-BBQ비닐봉투(소)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.25},
+  {sfaSeq:53,name:"비닐-(신규)BBQ비닐쇼핑백(대)",unit:"봉/봉",policy:"전부",buffer:1,daily:0},
+  {sfaSeq:54,name:"비닐-(신규)BBQ비닐쇼핑백(중)",unit:"봉/봉",policy:"여유",buffer:1,daily:0.6},
+  {sfaSeq:54.1,name:"JHP종이봉투(대)or(소)",unit:"묶/묶음",policy:"여유",buffer:0.3,daily:0.1},
+  {sfaSeq:55,name:"종이쇼핑백",unit:"박/박스",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:56,name:"치킨간지",unit:"박스/박스",policy:"",buffer:0.2,daily:0.1},
+  {sfaSeq:56,name:"알루미늄캔(뚜껑포함)",unit:"",policy:"",buffer:0.5,daily:0.1},
+  {sfaSeq:58,name:"내프킨,냅킨",unit:"박스/박스",policy:"",buffer:1,daily:0},
+  {sfaSeq:58,name:"직사각용기1(190,감자),2(230,치즈스틱)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.1},
+  {sfaSeq:59,name:"물티슈(500)",unit:"",policy:"전부",buffer:1,daily:0},
+  {sfaSeq:59,name:"소독저(젓가락)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.2},
+  {sfaSeq:60,name:"안신스티커,BBQ테이프(N)",unit:"",policy:"",buffer:1,daily:0},
+  {sfaSeq:61,name:"(신)롤백(500매)",unit:"개",policy:"",buffer:1,daily:0},
+  {sfaSeq:62,name:"(신)위생장갑(200매)",unit:"개/개",policy:"전부",buffer:0.4,daily:0.4},
+  {sfaSeq:62.1,name:"시식용기(맛탕)",unit:"",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:62.2,name:"여과지필터(320*535)(14)",unit:"장",policy:"전부",buffer:1,daily:0},
+  {sfaSeq:63,name:"수제맥주 공케그(빈통)",unit:"",policy:"여유",buffer:0,daily:0},
+  {sfaSeq:63,name:"BBQ시크릿양념소스(배달용)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.3},
+  {sfaSeq:64,name:"스티커T/컷팅칼(떡볶이스티커)",unit:"개/봉",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:65,name:"BBQ뿜치킹시즈닝(58g)",unit:"",policy:"",buffer:0.3,daily:0.4},
+  {sfaSeq:66,name:"BBQ뿜치킹시즈닝(25g)",unit:"",policy:"전부",buffer:0.2,daily:0.1},
+  {sfaSeq:99,name:"30분 주차권",unit:"",policy:"",buffer:1,daily:0},
+  {sfaSeq:99,name:"종이,쿠킹호일(25cm*50m)",unit:"개/개",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:99,name:"삿포로, 스텔라",unit:"",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:99,name:"포스용지",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:99,name:"휴지",unit:"",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:9999,name:"BBQ블랙페퍼시즈닝(벌크)",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:9999,name:"고추,가위,소금,종이호일,레몬보이,검정봉투",unit:"",policy:"",buffer:1,daily:0},
+  {sfaSeq:9999,name:"치즈갈릭",unit:"박스/박스",policy:"여유",buffer:1,daily:2},
 ];
 
-let stockData = {}; // { itemName: stockQty }
-let currentTab = 'main';
-let dynamicDaily = {}; // { itemName: avgDaily } from history
-let activeItems = ALL_ITEMS; // Firebase items or fallback to ALL_ITEMS
+let entries = [];     // [{id, name, zone, stock}] — 한 품목이 N구역에 있으면 N entry
+let overrides = {};   // {name: {k?, l?}}  — 품목별 보정
+let viewMode = 'input';
 
-// --- Utility ---
+let nextId = 1;
+function newId() { return 'e' + (nextId++); }
+
+function getL(item) { return overrides[item.name]?.l ?? (item.daily || 0); }
+function getK(item) { return overrides[item.name]?.k ?? (item.buffer || 0); }
+function totalStock(name) {
+  return entries.filter(e => e.name === name)
+    .reduce((s, e) => s + (e.stock != null && e.stock !== '' ? Number(e.stock) : 0), 0);
+}
+function todayKST() {
+  const k = new Date(Date.now() + 9 * 3600000);
+  return k.toISOString().slice(0, 10);
+}
+function isItemHidden(name) {
+  const u = overrides[name]?.hideUntil;
+  if (!u) return false;
+  return todayKST() < u;
+}
+function daysUntilReturn(name) {
+  const u = overrides[name]?.hideUntil;
+  if (!u) return 0;
+  const now = new Date();
+  const ret = new Date(u + 'T00:00:00+09:00');
+  return Math.max(0, Math.ceil((ret - now) / 86400000));
+}
+function snoozeItem(name) {
+  const days = prompt(`"${name}" 며칠 동안 안 볼까요? (예: 5)`);
+  if (!days || isNaN(parseInt(days))) return;
+  const ret = new Date(Date.now() + 9 * 3600000);
+  ret.setUTCDate(ret.getUTCDate() + parseInt(days));
+  if (!overrides[name]) overrides[name] = {};
+  overrides[name].hideUntil = ret.toISOString().slice(0, 10);
+  saveLocal();
+  render();
+}
+function unsnoozeItem(name) {
+  if (overrides[name]) {
+    delete overrides[name].hideUntil;
+    if (Object.keys(overrides[name]).length === 0) delete overrides[name];
+  }
+  saveLocal();
+  render();
+}
+
+// G수식 (재고는 entries 합계 기준). 숨김 품목은 G=0.
+function calcG(item, days) {
+  if (isItemHidden(item.name)) return 0;
+  const L = getL(item);
+  const K = getK(item);
+  const E = totalStock(item.name);
+  if (E < L) return L * days + K - L;
+  return L * days - E + K;
+}
+
+function recommendedDays() {
+  const d = new Date().getDay();
+  if (d === 6 || d === 0 || d === 1) return 4;
+  return 3;
+}
+const dayName = d => ['일','월','화','수','목','금','토'][d];
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2000);
+  setTimeout(() => t.classList.remove('show'), 1800);
 }
 
-function getWeekendMultiplier(orderDays) {
-  // Check if any of the next orderDays includes Fri(5) or Sat(6)
-  const now = new Date();
-  // KST
-  const kst = new Date(now.getTime() + 9 * 3600000);
-  let hasFriSat = false;
-  for (let i = 0; i <= orderDays; i++) {
-    const d = new Date(kst.getTime() + i * 86400000);
-    const dow = d.getUTCDay();
-    if (dow === 5 || dow === 6) { hasFriSat = true; break; }
-  }
-  return hasFriSat ? 1.18 : 1.0;
+function fmt(n, dp=2) {
+  if (n === null || n === undefined || isNaN(n)) return '';
+  return (Math.round(n * Math.pow(10, dp)) / Math.pow(10, dp)).toString();
 }
 
-function getDaily(item) {
-  // dynamicDaily (이동평균) 우선, 없으면 하드코딩 fallback
-  if (dynamicDaily[item.name] !== undefined) return dynamicDaily[item.name];
-  return item.daily;
+function kstDateKey(ts) {
+  const k = new Date(ts + 9 * 3600000);
+  return k.getUTCFullYear().toString() +
+    (k.getUTCMonth()+1).toString().padStart(2,'0') +
+    k.getUTCDate().toString().padStart(2,'0');
 }
 
-function calcOrderQty(item, stock, orderDays) {
-  const mult = getWeekendMultiplier(orderDays);
-  const daily = getDaily(item);
-  const needed = daily * orderDays * mult + item.buffer - (stock || 0);
-  return Math.max(0, Math.ceil(needed));
-}
-
-function updateDayInfo() {
+function render() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
   const days = parseInt(document.getElementById('orderDays').value);
-  const mult = getWeekendMultiplier(days);
-  const info = document.getElementById('dayInfo');
-  const mark = document.getElementById('weekendMark');
-  if (mult > 1) {
-    mark.classList.remove('hidden');
-    info.textContent = `(x${mult})`;
+
+  // 발주 N개 (품목 단위)
+  let needCount = 0;
+  MASTER.forEach(it => { if (calcG(it, days) > 0) needCount++; });
+  document.getElementById('badge').textContent = '발주 ' + needCount + '개';
+  document.getElementById('badge').classList.toggle('zero', needCount === 0);
+
+  // 헤더 토글
+  document.getElementById('thZone').style.display = viewMode === 'input' ? '' : 'none';
+  document.getElementById('thAct').style.display = viewMode === 'input' ? '' : 'none';
+
+  if (viewMode === 'output') {
+    // 품목 단위 1행, G>0만, D순
+    const list = MASTER.filter(it => calcG(it, days) > 0)
+      .sort((a,b) => (a.sfaSeq||9999) - (b.sfaSeq||9999));
+    list.forEach(item => {
+      const g = calcG(item, days);
+      const E = totalStock(item.name);
+      const tr = document.createElement('tr');
+      tr.classList.add('need');
+      const seqStr = (item.sfaSeq && item.sfaSeq < 9999) ? item.sfaSeq : '';
+      tr.innerHTML = `
+        <td class="name">${item.name}</td>
+        <td class="qty">${fmt(E,2)}</td>
+        <td class="qty">${fmt(getK(item),2)}</td>
+        <td class="qty">${fmt(getL(item),2)}</td>
+        <td class="qty order-qty pos">${fmt(g,2)}</td>
+        <td>${item.unit||''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    return;
+  }
+
+  // 입력 모드 — entries 단위 행, 구역 정렬
+  const sorted = entries.slice().sort((a,b) => {
+    if (a.zone && !b.zone) return -1;
+    if (!a.zone && b.zone) return 1;
+    if (a.zone !== b.zone) return (a.zone||'').localeCompare(b.zone||'', 'ko');
+    const ai = MASTER.find(m => m.name === a.name)?.sfaSeq ?? 9999;
+    const bi = MASTER.find(m => m.name === b.name)?.sfaSeq ?? 9999;
+    return ai - bi;
+  });
+
+  // 같은 품목이 N entry — 첫 번째 entry에만 G 강조 표시, 나머지는 작게(중복 표시)
+  const firstShown = new Set();
+
+  sorted.forEach(ent => {
+    const item = MASTER.find(m => m.name === ent.name);
+    if (!item) return;
+    const isFirst = !firstShown.has(ent.name);
+    firstShown.add(ent.name);
+    const dupCount = entries.filter(e => e.name === ent.name).length;
+    const g = calcG(item, days);
+    const isNeed = g > 0;
+
+    const tr = document.createElement('tr');
+    if (isNeed && isFirst) tr.classList.add('need');
+    else if (!isNeed) tr.style.opacity = '0.55';
+    if (!isFirst) tr.classList.add('dup-row');
+
+    const safeName = item.name.replace(/"/g, '&quot;');
+    const nameDisplay = isFirst ? item.name : `↳ ${item.name}`;
+    const hidden = isItemHidden(item.name);
+    const daysLeft = hidden ? daysUntilReturn(item.name) : 0;
+    if (hidden) tr.style.opacity = '0.3';
+    const gCell = isFirst
+      ? (hidden
+          ? `<td class="qty order-qty dup">💤 ${daysLeft}일 후 복귀</td>`
+          : `<td class="qty order-qty ${isNeed?'pos':''}">${isNeed ? fmt(g,2) : ''}</td>`)
+      : `<td class="qty order-qty dup">${hidden ? '' : '합계반영'}</td>`;
+    const KL = isFirst
+      ? `<td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="k" value="${fmt(getK(item),2)}"></td>
+         <td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="l" value="${fmt(getL(item),2)}"></td>`
+      : `<td></td><td></td>`;
+    const snoozeBtn = isFirst
+      ? (hidden
+          ? `<button onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
+          : `<button onclick="snoozeItem('${safeName}')" title="N일 동안 안 봄">💤</button>`)
+      : '';
+
+    tr.innerHTML = `
+      <td><input class="cell zone" type="text" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}" style="width:60px;text-align:left"></td>
+      <td class="name">${nameDisplay}</td>
+      <td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
+      ${KL}
+      ${gCell}
+      <td>${item.unit||''}</td>
+      <td class="actions">
+        <button class="add" onclick="addRow('${ent.id}')" title="같은 품목 행 추가">+</button>
+        ${dupCount > 1 ? `<button onclick="deleteRow('${ent.id}')" title="이 행 삭제">×</button>` : ''}
+        ${snoozeBtn}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.querySelectorAll('input.cell').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const id = e.target.dataset.id;
+      const f = e.target.dataset.field;
+      const v = e.target.value;
+      const ent = entries.find(x => x.id === id);
+      if (!ent) return;
+      if (f === 'stock') {
+        ent.stock = v === '' ? null : parseFloat(v);
+        saveLocal();
+        updateGForName(ent.name);
+      } else if (f === 'zone') {
+        ent.zone = v;
+        saveLocal();
+      } else {
+        // k or l (overrides per name)
+        const n = ent.name;
+        if (!overrides[n]) overrides[n] = {};
+        const num = v === '' ? null : parseFloat(v);
+        if (num === null) delete overrides[n][f];
+        else overrides[n][f] = num;
+        if (Object.keys(overrides[n]).length === 0) delete overrides[n];
+        saveLocal();
+        updateGForName(n);
+      }
+    });
+    inp.addEventListener('change', e => {
+      if (e.target.dataset.field === 'zone') render();
+    });
+  });
+}
+
+function updateGForName(name) {
+  const item = MASTER.find(m => m.name === name);
+  if (!item) return;
+  const days = parseInt(document.getElementById('orderDays').value);
+  const g = calcG(item, days);
+  const isNeed = g > 0;
+  // 같은 품목 모든 행의 G 셀/배경 갱신
+  document.querySelectorAll('tr').forEach(tr => {
+    const cells = tr.querySelectorAll('td.name');
+    if (!cells.length) return;
+    const txt = cells[0].textContent.replace(/^↳\s*/, '');
+    if (txt !== name) return;
+    const gCell = tr.querySelector('td.order-qty');
+    if (gCell && !gCell.classList.contains('dup')) {
+      gCell.textContent = isNeed ? fmt(g,2) : '';
+      gCell.className = 'qty order-qty' + (isNeed ? ' pos' : '');
+    }
+    if (isNeed && !tr.classList.contains('dup-row')) tr.classList.add('need');
+    else tr.classList.remove('need');
+  });
+  let cnt = 0;
+  MASTER.forEach(it => { if (calcG(it, days) > 0) cnt++; });
+  document.getElementById('badge').textContent = '발주 ' + cnt + '개';
+  document.getElementById('badge').classList.toggle('zero', cnt === 0);
+}
+
+function addRow(fromId) {
+  const src = entries.find(x => x.id === fromId);
+  if (!src) return;
+  const newEntry = { id: newId(), name: src.name, zone: '', stock: null };
+  // 같은 품목 마지막 entry 뒤에 삽입
+  const idx = entries.map(e => e.name).lastIndexOf(src.name);
+  entries.splice(idx + 1, 0, newEntry);
+  saveLocal();
+  render();
+}
+
+function deleteRow(id) {
+  const idx = entries.findIndex(x => x.id === id);
+  if (idx < 0) return;
+  const sameNameCount = entries.filter(e => e.name === entries[idx].name).length;
+  if (sameNameCount <= 1) { toast('마지막 행은 삭제 불가'); return; }
+  entries.splice(idx, 1);
+  saveLocal();
+  render();
+}
+
+function toggleMode() {
+  viewMode = (viewMode === 'input') ? 'output' : 'input';
+  const btn = document.getElementById('modeBtn');
+  if (viewMode === 'input') {
+    btn.textContent = '출력 보기 (발주 D순)';
+    btn.className = '';
   } else {
-    mark.classList.add('hidden');
-    info.textContent = '';
+    btn.textContent = '입력 보기 (구역순)';
+    btn.className = 'green';
   }
+  render();
 }
 
-// --- Rendering ---
-function renderItems() {
-  const mainContainer = document.getElementById('mainTab');
-  const etcContainer = document.getElementById('etcTab');
-  mainContainer.innerHTML = '';
-  etcContainer.innerHTML = '';
+function saveLocal() {
+  localStorage.setItem('bbq_entries', JSON.stringify(entries));
+  localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
+}
 
+async function saveToFB() {
+  const now = Date.now();
+  const dateKey = kstDateKey(now);
   const days = parseInt(document.getElementById('orderDays').value);
-  const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-
-  const mainSubs = ['신선육','냉동','소스','포장재'];
-  const etcSubs = ['기타'];
-
-  let needOrderCount = 0;
-
-  function renderCategory(container, cat, subs) {
-    subs.forEach(sub => {
-      const items = activeItems.filter(i => i.cat === cat && i.sub === sub);
-      const filtered = searchTerm ? items.filter(i => i.name.toLowerCase().includes(searchTerm)) : items;
-      if (filtered.length === 0) return;
-
-      // Count filled items in this sub-category (all items, not just filtered)
-      const allSubItems = activeItems.filter(i => i.cat === cat && i.sub === sub);
-      const filledCount = allSubItems.filter(i => stockData[i.name] !== undefined && stockData[i.name] !== '' && stockData[i.name] !== 0).length;
-      const totalCount = allSubItems.length;
-      const isComplete = filledCount === totalCount && totalCount > 0;
-
-      const title = document.createElement('div');
-      title.className = 'section-title';
-      title.setAttribute('data-sub', sub);
-
-      const titleText = document.createElement('span');
-      titleText.textContent = sub;
-
-      const countBadge = document.createElement('span');
-      countBadge.className = 'cat-count' + (isComplete ? ' complete' : '');
-      countBadge.textContent = `${filledCount}/${totalCount}`;
-
-      title.appendChild(titleText);
-      title.appendChild(countBadge);
-      container.appendChild(title);
-
-      const grid = document.createElement('div');
-      grid.className = 'grid';
-
-      filtered.forEach(item => {
-        const stock = stockData[item.name] !== undefined ? stockData[item.name] : '';
-        const stockNum = stock === '' ? 0 : parseFloat(stock);
-        const orderQty = calcOrderQty(item, stockNum, days);
-        if (orderQty > 0) needOrderCount++;
-
-        const card = document.createElement('div');
-        card.className = 'card' + (orderQty > 0 ? ' needs-order' : '');
-        card.setAttribute('data-item', item.name);
-
-        const badge = document.createElement('div');
-        badge.className = 'badge ' + (orderQty > 0 ? 'red' : 'gray');
-        badge.textContent = orderQty;
-
-        const nameEl = document.createElement('div');
-        nameEl.className = 'card-name';
-        nameEl.textContent = item.name;
-
-        const meta = document.createElement('div');
-        meta.className = 'card-meta';
-        const daily = getDaily(item);
-        const dailyLabel = dynamicDaily[item.name] !== undefined ? '일(평균)' : '일';
-        const dailyStr = daily > 0 ? `${dailyLabel}${Math.round(daily*10)/10}` : '';
-        const bufStr = `여유${item.buffer}`;
-        meta.textContent = [dailyStr, bufStr].filter(Boolean).join(' / ');
-
-        const inputRow = document.createElement('div');
-        inputRow.className = 'input-row';
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.inputMode = 'decimal';
-        input.step = '0.1';
-        input.placeholder = '재고';
-        input.value = stock;
-        input.setAttribute('data-item', item.name);
-        input.addEventListener('input', function() {
-          const val = this.value;
-          stockData[item.name] = val === '' ? '' : parseFloat(val);
-          updateCard(card, item, val === '' ? 0 : parseFloat(val), days);
-          updateSummary();
-        });
-
-        const unitSpan = document.createElement('span');
-        unitSpan.className = 'unit';
-        unitSpan.textContent = item.unit;
-
-        inputRow.appendChild(input);
-        inputRow.appendChild(unitSpan);
-
-        card.appendChild(badge);
-        card.appendChild(nameEl);
-        card.appendChild(meta);
-        card.appendChild(inputRow);
-        grid.appendChild(card);
-      });
-
-      container.appendChild(grid);
-    });
-  }
-
-  renderCategory(mainContainer, 'main', mainSubs);
-  renderCategory(etcContainer, 'etc', etcSubs);
-
-  updateSummary();
-}
-
-function updateCard(card, item, stockNum, days) {
-  const orderQty = calcOrderQty(item, stockNum, days);
-  const badge = card.querySelector('.badge');
-  badge.textContent = orderQty;
-  badge.className = 'badge ' + (orderQty > 0 ? 'red' : 'gray');
-  if (orderQty > 0) {
-    card.classList.add('needs-order');
-  } else {
-    card.classList.remove('needs-order');
-  }
-}
-
-function updateSummary() {
-  const days = parseInt(document.getElementById('orderDays').value);
-  let count = 0;
-  activeItems.forEach(item => {
-    const stock = stockData[item.name] !== undefined && stockData[item.name] !== '' ? stockData[item.name] : 0;
-    const qty = calcOrderQty(item, stock, days);
-    if (qty > 0) count++;
+  const calc = {};
+  MASTER.forEach(item => {
+    const g = calcG(item, days);
+    if (g > 0) calc[item.name] = { qty: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
-  const badge = document.getElementById('summaryBadge');
-  badge.textContent = `발주 필요 ${count}개`;
-  badge.className = 'summary-badge' + (count === 0 ? ' zero' : '');
-
-  // Update progress bar
-  const totalItems = activeItems.length;
-  const filledItems = activeItems.filter(i => stockData[i.name] !== undefined && stockData[i.name] !== '' && stockData[i.name] !== 0).length;
-  const pct = totalItems > 0 ? Math.round(filledItems / totalItems * 100) : 0;
-  document.getElementById('progressText').textContent = `입력: ${filledItems}/${totalItems}`;
-  const fill = document.getElementById('progressFill');
-  fill.style.width = pct + '%';
-  fill.classList.toggle('done', pct === 100);
-
-  // Update category count badges
-  updateCategoryCounts();
-}
-
-function updateCategoryCounts() {
-  const sectionTitles = document.querySelectorAll('.section-title[data-sub]');
-  sectionTitles.forEach(title => {
-    const sub = title.getAttribute('data-sub');
-    const subItems = activeItems.filter(i => i.sub === sub);
-    const filled = subItems.filter(i => stockData[i.name] !== undefined && stockData[i.name] !== '' && stockData[i.name] !== 0).length;
-    const total = subItems.length;
-    const isComplete = filled === total && total > 0;
-
-    const badge = title.querySelector('.cat-count');
-    if (badge) {
-      badge.textContent = `${filled}/${total}`;
-      badge.className = 'cat-count' + (isComplete ? ' complete' : '');
-    }
-  });
-}
-
-// --- Tabs ---
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', function() {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    this.classList.add('active');
-    currentTab = this.dataset.tab;
-    document.getElementById('mainTab').classList.toggle('hidden', currentTab !== 'main');
-    document.getElementById('etcTab').classList.toggle('hidden', currentTab !== 'etc');
-  });
-});
-
-// --- Order days change ---
-document.getElementById('orderDays').addEventListener('change', function() {
-  updateDayInfo();
-  renderItems();
-});
-
-// --- Search ---
-let searchTimer = null;
-document.getElementById('searchInput').addEventListener('input', function() {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => renderItems(), 200);
-});
-
-// --- Firebase ---
-async function loadFromFirebase() {
+  const payload = { savedAt: now, orderDays: days, entries, overrides, calc };
   try {
-    // 1. 품목 데이터 Firebase에서 로드 (없으면 하드코딩 fallback)
-    const itemsRes = await fetch(`${FB_URL}${FB_PATH}/items.json`);
-    if (itemsRes.ok) {
-      const itemsData = await itemsRes.json();
-      if (itemsData && typeof itemsData === 'object' && !itemsData._empty) {
-        const loaded = [];
-        Object.keys(itemsData).forEach(key => {
-          const it = itemsData[key];
-          if (it && it.name) {
-            loaded.push({
-              name: it.name,
-              cat: it.cat || 'etc',
-              sub: it.sub || '기타',
-              daily: it.daily || 0,
-              buffer: it.buffer || 0,
-              unit: it.unit || '개',
-              orderUnit: it.orderUnit || '개'
-            });
-          }
-        });
-        if (loaded.length > 0) {
-          activeItems = loaded;
-          console.log('품목 Firebase 로드:', loaded.length);
-        }
-      }
-    }
-
-    // 2. 재고 + 메타 동시 로드
-    const [stockRes, metaRes] = await Promise.all([
-      fetch(`${FB_URL}${FB_PATH}/stock.json`),
-      fetch(`${FB_URL}${FB_PATH}/meta/lastSaved.json`)
-    ]);
-
-    if (stockRes.ok) {
-      const data = await stockRes.json();
-      if (data && typeof data === 'object') {
-        stockData = {};
-        Object.keys(data).forEach(key => {
-          if (key !== '_empty') stockData[key] = data[key];
-        });
-      }
-    }
-
-    if (metaRes.ok) {
-      const ts = await metaRes.json();
-      if (ts) {
-        const d = new Date(ts);
-        document.getElementById('lastSaved').textContent = '마지막 저장: ' + formatKST(d);
-      }
-    }
-
-    // 3. 이력 기반 daily 이동평균 계산 (비동기, 렌더링 차단 안 함)
-    loadDailyFromHistory();
-
-  } catch (e) {
-    console.error('Firebase load error:', e);
-  }
-  renderItems();
-}
-
-// --- Phase 3: 이력 기반 daily 이동평균 ---
-async function loadDailyFromHistory() {
-  try {
-    const res = await fetch(`${FB_URL}${FB_PATH}/history.json`);
-    if (!res.ok) return;
-    const history = await res.json();
-    if (!history || typeof history !== 'object') return;
-
-    // 최근 28일 필터링
-    const now = new Date();
-    const kst = new Date(now.getTime() + 9 * 3600000);
-    const today = kst.toISOString().slice(0,10).replace(/-/g,'');
-    const cutoffDate = new Date(kst.getTime() - 28 * 86400000);
-    const cutoff = cutoffDate.toISOString().slice(0,10).replace(/-/g,'');
-
-    // 품목별 발주량 합산
-    const orderSums = {}; // { itemName: { total: n, count: n } }
-    const dateKeys = Object.keys(history).filter(d => d >= cutoff && d < today).sort();
-
-    if (dateKeys.length < 2) {
-      console.log('이력 부족 (' + dateKeys.length + '일) - fallback daily 사용');
-      return;
-    }
-
-    dateKeys.forEach(dateKey => {
-      const entry = history[dateKey];
-      if (!entry || !entry.calc) return;
-      Object.keys(entry.calc).forEach(itemName => {
-        const c = entry.calc[itemName];
-        if (c && c.orderQty > 0) {
-          if (!orderSums[itemName]) orderSums[itemName] = { total: 0, count: 0 };
-          orderSums[itemName].total += c.orderQty;
-          orderSums[itemName].count++;
-        }
-      });
-    });
-
-    // 날짜 범위 (일수) 기준으로 일평균 계산
-    const daySpan = dateKeys.length;
-    let updated = 0;
-    Object.keys(orderSums).forEach(itemName => {
-      const avg = orderSums[itemName].total / daySpan;
-      if (avg > 0) {
-        dynamicDaily[itemName] = Math.round(avg * 100) / 100;
-        updated++;
-      }
-    });
-
-    if (updated > 0) {
-      console.log(`이동평균 daily 갱신: ${updated}개 품목 (${daySpan}일 이력)`);
-      renderItems(); // daily 변경 반영
-    }
-  } catch (e) {
-    console.error('History load error:', e);
-    // fallback: 하드코딩 daily 유지
-  }
-}
-
-function formatKST(date) {
-  const kst = new Date(date.getTime() + 9 * 3600000);
-  const m = (kst.getUTCMonth() + 1).toString().padStart(2, '0');
-  const d = kst.getUTCDate().toString().padStart(2, '0');
-  const h = kst.getUTCHours().toString().padStart(2, '0');
-  const min = kst.getUTCMinutes().toString().padStart(2, '0');
-  return `${m}/${d} ${h}:${min}`;
-}
-
-async function saveToFirebase() {
-  try {
-    // Clean stockData - only save items with actual values
-    const saveData = {};
-    Object.keys(stockData).forEach(key => {
-      if (stockData[key] !== '' && stockData[key] !== undefined) {
-        saveData[key] = stockData[key];
-      }
-    });
-
-    const now = Date.now();
-    const days = parseInt(document.getElementById('orderDays').value);
-
-    // Build calc data - only items with orderQty > 0
-    const calcItems = {};
-    activeItems.forEach(item => {
-      const stock = stockData[item.name] !== undefined && stockData[item.name] !== '' ? stockData[item.name] : 0;
-      const orderQty = calcOrderQty(item, stock, days);
-      if (orderQty > 0) {
-        calcItems[item.name] = {
-          orderQty: orderQty,
-          stock: stock,
-          unit: item.orderUnit
-        };
-      }
-    });
-    const calcData = {
-      updatedAt: now,
-      orderDays: days,
-      items: Object.keys(calcItems).length > 0 ? calcItems : {_empty: true}
-    };
-
-    // Phase 3: 이력 스냅샷 날짜키
-    const kstNow = new Date(now + 9 * 3600000);
-    const dateKey = kstNow.getUTCFullYear().toString() +
-      (kstNow.getUTCMonth() + 1).toString().padStart(2, '0') +
-      kstNow.getUTCDate().toString().padStart(2, '0');
-
-    // Phase 3: 이력 스냅샷 데이터
-    const historyEntry = {
-      savedAt: now,
-      stock: Object.keys(saveData).length > 0 ? saveData : {_empty: true},
-      calc: Object.keys(calcItems).length > 0 ? calcItems : {_empty: true}
-    };
-
-    // Phase 3: 품목 메타 데이터
-    const itemsMeta = {};
-    activeItems.forEach((item, idx) => {
-      itemsMeta[idx] = {
-        name: item.name,
-        cat: item.cat,
-        sub: item.sub,
-        daily: item.daily,
-        buffer: item.buffer,
-        unit: item.unit,
-        orderUnit: item.orderUnit
-      };
-    });
-
     await Promise.all([
-      fetch(`${FB_URL}${FB_PATH}/stock.json`, {
-        method: 'PUT',
-        body: JSON.stringify(Object.keys(saveData).length > 0 ? saveData : {_empty: true})
-      }),
-      fetch(`${FB_URL}${FB_PATH}/meta/lastSaved.json`, {
-        method: 'PUT',
-        body: JSON.stringify(now)
-      }),
-      fetch(`${FB_URL}${FB_PATH}/calc.json`, {
-        method: 'PUT',
-        body: JSON.stringify(calcData)
-      }),
-      // Phase 3: 이력 스냅샷 (같은 날 덮어쓰기)
-      fetch(`${FB_URL}${FB_PATH}/history/${dateKey}.json`, {
-        method: 'PUT',
-        body: JSON.stringify(historyEntry)
-      }),
-      // Phase 3: 품목 메타 저장
-      fetch(`${FB_URL}${FB_PATH}/items.json`, {
-        method: 'PUT',
-        body: JSON.stringify(itemsMeta)
-      })
+      fetch(`${FB_URL}${FB_PATH}/current.json`, { method: 'PUT', body: JSON.stringify(payload) }),
+      fetch(`${FB_URL}${FB_PATH}/history/${dateKey}.json`, { method: 'PUT', body: JSON.stringify(payload) })
     ]);
-
-    const d = new Date(now);
-    document.getElementById('lastSaved').textContent = '마지막 저장: ' + formatKST(d);
-    toast('저장 완료');
+    toast('저장 완료 (current + history/' + dateKey + ')');
+    document.getElementById('lastSaved').textContent = '저장 ' + new Date(now).toLocaleTimeString('ko-KR');
   } catch (e) {
-    console.error('Firebase save error:', e);
-    toast('저장 실패!');
+    toast('저장 실패: ' + e.message);
   }
 }
 
-function showOrderList() {
-  const days = parseInt(document.getElementById('orderDays').value);
-  const content = document.getElementById('orderListContent');
-  content.innerHTML = '';
+document.getElementById('orderDays').addEventListener('change', render);
 
-  let items = [];
-  activeItems.forEach(item => {
-    const stock = stockData[item.name] !== undefined && stockData[item.name] !== '' ? stockData[item.name] : 0;
-    const qty = calcOrderQty(item, stock, days);
-    if (qty > 0) {
-      items.push({ name: item.name, qty, orderUnit: item.orderUnit });
-    }
-  });
-
-  if (items.length === 0) {
-    content.innerHTML = '<div style="text-align:center;color:#888;padding:20px">발주 필요 품목 없음</div>';
+// 로컬 복원 (entries 우선, 없으면 옛날 stocks 마이그레이션, 없으면 빈 entries)
+try {
+  const eRaw = localStorage.getItem('bbq_entries');
+  if (eRaw) {
+    entries = JSON.parse(eRaw);
+    // nextId 재계산
+    let maxN = 0;
+    entries.forEach(e => { const m = /^e(\d+)$/.exec(e.id||''); if (m) maxN = Math.max(maxN, +m[1]); });
+    nextId = maxN + 1;
   } else {
-    items.forEach(it => {
-      const div = document.createElement('div');
-      div.className = 'modal-item';
-      const span1 = document.createElement('span');
-      span1.textContent = it.name;
-      const span2 = document.createElement('span');
-      span2.className = 'qty';
-      span2.textContent = `${it.qty} ${it.orderUnit}`;
-      div.appendChild(span1);
-      div.appendChild(span2);
-      content.appendChild(div);
-    });
+    const sRaw = localStorage.getItem('bbq_stocks');
+    let oldStocks = {};
+    if (sRaw) try { oldStocks = JSON.parse(sRaw); } catch {}
+    entries = MASTER.map(item => ({
+      id: newId(),
+      name: item.name,
+      zone: '',
+      stock: oldStocks[item.name] !== undefined ? oldStocks[item.name] : null
+    }));
   }
+  const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
+} catch {}
 
-  document.getElementById('orderModal').classList.add('show');
-}
-
-function closeModal() {
-  document.getElementById('orderModal').classList.remove('show');
-}
-
-// Close modal on overlay click
-document.getElementById('orderModal').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
+// MASTER에 있는데 entries에 없는 품목 보충 (마스터 갱신 대비)
+MASTER.forEach(item => {
+  if (!entries.some(e => e.name === item.name)) {
+    entries.push({ id: newId(), name: item.name, zone: '', stock: null });
+  }
 });
 
-// --- Init data to Firebase ---
-function confirmInit() {
-  if (!confirm('품목 데이터를 Firebase에 초기화하시겠습니까?\n기존 재고 데이터는 유지됩니다.')) return;
-  initFirebase();
-}
+// 발주일수 초기값
+const rec = recommendedDays();
+const sel = document.getElementById('orderDays');
+const savedDays = localStorage.getItem('bbq_orderDays');
+sel.value = savedDays ? savedDays : rec;
+sel.addEventListener('change', () => localStorage.setItem('bbq_orderDays', sel.value));
+document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
 
-async function initFirebase() {
-  try {
-    // 초기화 시에는 하드코딩 ALL_ITEMS 기준으로 복원
-    const itemsData = {};
-    ALL_ITEMS.forEach((item, idx) => {
-      itemsData[idx] = {
-        name: item.name,
-        cat: item.cat,
-        sub: item.sub,
-        daily: item.daily,
-        buffer: item.buffer,
-        unit: item.unit,
-        orderUnit: item.orderUnit
-      };
-    });
-
-    await fetch(`${FB_URL}${FB_PATH}/items.json`, {
-      method: 'PUT',
-      body: JSON.stringify(itemsData)
-    });
-
-    // activeItems도 원래 하드코딩으로 복원
-    activeItems = ALL_ITEMS;
-    dynamicDaily = {};
-    renderItems();
-    toast('품목 데이터 초기화 완료');
-  } catch (e) {
-    console.error('Init error:', e);
-    toast('초기화 실패!');
-  }
-}
-
-// --- PIN Lock ---
-const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // sha256("1234")
-let pinInput = '';
-
-function hashPin(pin) {
-  // simple sha256 via SubtleCrypto
-  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin))
-    .then(buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join(''));
-}
-
-function updatePinDots() {
-  const dots = document.querySelectorAll('#pinDots .pin-dot');
-  dots.forEach((d, i) => {
-    d.classList.toggle('filled', i < pinInput.length);
-    d.classList.remove('wrong');
-  });
-}
-
-function pinWrong() {
-  const dots = document.querySelectorAll('#pinDots .pin-dot');
-  dots.forEach(d => d.classList.add('wrong'));
-  document.getElementById('pinError').textContent = '비밀번호가 틀렸습니다';
-  pinInput = '';
-  setTimeout(() => {
-    updatePinDots();
-    document.getElementById('pinError').textContent = '';
-  }, 800);
-}
-
-async function checkPin() {
-  const h = await hashPin(pinInput);
-  if (h === PIN_HASH) {
-    sessionStorage.setItem('bbq_auth', '1');
-    document.getElementById('pinOverlay').classList.add('authed');
-    loadFromFirebase();
-  } else {
-    pinWrong();
-  }
-}
-
-document.querySelectorAll('.pin-key').forEach(key => {
-  key.addEventListener('click', function() {
-    const k = this.dataset.key;
-    if (!k) return;
-    if (k === 'del') {
-      pinInput = pinInput.slice(0, -1);
-      updatePinDots();
-      return;
-    }
-    if (pinInput.length >= 4) return;
-    pinInput += k;
-    updatePinDots();
-    if (pinInput.length === 4) {
-      setTimeout(() => checkPin(), 150);
-    }
-  });
-});
-
-// --- Init ---
-if (sessionStorage.getItem('bbq_auth') === '1') {
-  document.getElementById('pinOverlay').classList.add('authed');
-  updateDayInfo();
-  loadFromFirebase();
-} else {
-  updateDayInfo();
-}
+render();
 </script>
 </body>
 </html>
