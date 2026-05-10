@@ -116,7 +116,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260511-1';
+const APP_VERSION = '20260511-2';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 const FB_PATH = '/order_desk';
 
@@ -542,11 +542,15 @@ function toggleMode() {
 }
 
 let suppressAutoSave = false;
+let localDirty = false;
 function saveLocal() {
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
-  if (!suppressAutoSave && typeof scheduleAutoSave === 'function') scheduleAutoSave();
+  if (!suppressAutoSave) {
+    localDirty = true;
+    if (typeof scheduleAutoSave === 'function') scheduleAutoSave();
+  }
 }
 
 function renderSalesInputs() {
@@ -614,6 +618,7 @@ async function saveToFB() {
       fetch(`${FB_URL}${FB_PATH}/history/${dateKey}.json`, { method: 'PUT', body: JSON.stringify(payload) })
     ]);
     localStorage.setItem('bbq_savedAt', String(now));
+    localDirty = false;
     toast('저장 완료 (current + history/' + dateKey + ')');
     document.getElementById('lastSaved').textContent = '저장 ' + new Date(now).toLocaleTimeString('ko-KR');
   } catch (e) {
@@ -641,32 +646,8 @@ document.addEventListener('focusout', e => {
 
 function applyFBData(data) {
   if (!data || !data.savedAt) return;
-
-  // 로컬 entries 보존: id 매칭 시 로컬 zone 우선, 로컬에만 있는 entry도 유지
-  if (data.entries) {
-    const localById = new Map();
-    entries.forEach(e => localById.set(e.id, e));
-    const fbIds = new Set();
-    const merged = [];
-    data.entries.forEach(fbE => {
-      fbIds.add(fbE.id);
-      const local = localById.get(fbE.id);
-      if (local) {
-        merged.push({
-          ...fbE,
-          // 로컬에 zone 있으면 그대로 보존, 없으면 FB값 사용
-          zone: (local.zone && local.zone.trim()) ? local.zone : (fbE.zone || '')
-        });
-      } else {
-        merged.push(fbE);
-      }
-    });
-    // 로컬에만 있는 entries (다른 기기가 모르는 것) 보존
-    entries.forEach(e => {
-      if (!fbIds.has(e.id)) merged.push(e);
-    });
-    entries = merged;
-  }
+  // FB가 source of truth: 그대로 교체. 로컬 변경 보호는 autoLoadFromFB의 localDirty 체크가 담당
+  if (data.entries) entries = data.entries;
   if (data.overrides) overrides = data.overrides;
   if (data.dailySales) dailySales = data.dailySales;
   let maxN = 0;
@@ -695,6 +676,7 @@ async function autoLoadFromFB(silent) {
     if (!data || !data.savedAt) return;
     const localSavedAt = parseInt(localStorage.getItem('bbq_savedAt') || '0');
     if (data.savedAt <= localSavedAt) return;
+    if (localDirty) return; // 로컬에 미저장 변경 있음 → 보호. 저장 후 다시 폴링.
     if (inputFocused) {
       pendingFBData = data;
       return;
