@@ -116,7 +116,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260511-3';
+const APP_VERSION = '20260511-4';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 const FB_PATH = '/order/desk';  // /order_desk → permission denied (rule만 /order/* 공개)
 
@@ -476,6 +476,8 @@ function render() {
       }
     });
     inp.addEventListener('change', e => {
+      // blur/Enter — pending autosave 즉시 flush
+      flushAutoSave();
       if (e.target.dataset.field === 'zone') render();
     });
   });
@@ -584,6 +586,7 @@ function renderSalesInputs() {
       // G만 갱신 (재정렬 없이)
       MASTER.forEach(it => updateGForName(it.name));
     });
+    inp.addEventListener('change', () => flushAutoSave());
     block.appendChild(lbl);
     block.appendChild(inp);
     wrap.appendChild(block);
@@ -688,11 +691,14 @@ async function autoLoadFromFB(silent) {
   }
 }
 
-// 자동저장 (debounce 2초)
+// 자동저장 (debounce 1초, blur/change 시 즉시)
 let autoSaveTimer = null;
 function scheduleAutoSave() {
   clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => saveToFB(), 2000);
+  autoSaveTimer = setTimeout(() => { autoSaveTimer = null; saveToFB(); }, 1000);
+}
+function flushAutoSave() {
+  if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; saveToFB(); }
 }
 
 document.getElementById('orderDays').addEventListener('change', () => { renderSalesInputs(); render(); });
