@@ -116,9 +116,9 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260511-2';
+const APP_VERSION = '20260511-3';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
-const FB_PATH = '/order_desk';
+const FB_PATH = '/order/desk';  // /order_desk → permission denied (rule만 /order/* 공개)
 
 // PIN 잠금 (sha256("1234")). PIN 변경하려면 새 PIN의 sha256 해시로 교체.
 const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
