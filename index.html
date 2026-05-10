@@ -605,7 +605,15 @@ function updateSalesAvg() {
   el.textContent = '평균 ' + avg.toFixed(0) + '만 → 가중치 적용';
 }
 
+// single-flight + pending bit + 지수 backoff (5/10/20s, 3회). 진행 중 새 호출은 pending 만 set, 끝난 직후 최신 entries 로 한 번만 재발사 → 구버전 덮어쓰기 방지.
+let saveInFlight = false;
+let pendingSave = false;
+let saveRetryTimer = null;
+let saveAttempt = 0;
+const SAVE_BACKOFF = [5000, 10000, 20000];
 async function saveToFB() {
+  if (saveInFlight) { pendingSave = true; return; }
+  saveInFlight = true;
   const now = Date.now();
   const dateKey = kstDateKey(now);
   const days = parseInt(document.getElementById('orderDays').value);
@@ -616,6 +624,18 @@ async function saveToFB() {
   });
   const payload = { savedAt: now, orderDays: days, entries, overrides, dailySales, calc };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
+  const scheduleRetry = (label) => {
+    if (saveAttempt >= SAVE_BACKOFF.length) {
+      saveAttempt = 0;
+      toast('저장 반복 실패 — 다시 입력하시면 재시도됩니다');
+      console.error('[saveToFB] retries exhausted after', label);
+      return;
+    }
+    const delay = SAVE_BACKOFF[saveAttempt++];
+    if (saveRetryTimer) clearTimeout(saveRetryTimer);
+    saveRetryTimer = setTimeout(() => { saveRetryTimer = null; saveToFB(); }, delay);
+    console.warn('[saveToFB] retry in', delay, 'ms after', label);
+  };
   try {
     const [r1, r2] = await Promise.all([
       fetch(`${FB_URL}${FB_PATH}/current.json`, { method: 'PUT', body: JSON.stringify(payload) }),
@@ -624,17 +644,31 @@ async function saveToFB() {
     if (!r1.ok || !r2.ok) {
       const t1 = await r1.text().catch(()=>''); const t2 = await r2.text().catch(()=>'');
       console.error('[saveToFB] FAIL', { current: r1.status, history: r2.status, body1: t1, body2: t2 });
-      toast('저장 실패: HTTP ' + r1.status + '/' + r2.status);
+      const nextDelay = SAVE_BACKOFF[Math.min(saveAttempt, SAVE_BACKOFF.length - 1)] / 1000;
+      toast('저장 실패: HTTP ' + r1.status + '/' + r2.status + ' — ' + nextDelay + '초 후 재시도');
+      scheduleRetry('HTTP ' + r1.status + '/' + r2.status);
       return;
     }
+    saveAttempt = 0;
+    if (saveRetryTimer) { clearTimeout(saveRetryTimer); saveRetryTimer = null; }
     localStorage.setItem('bbq_savedAt', String(now));
-    localDirty = false;
-    console.log('[saveToFB] OK savedAt=', now);
+    // pendingSave=true 면 진행 중 추가 입력 있었음 → localDirty 유지(다음 PUT 가 최신 entries 로 재발사). pendingSave=false 면 PUT payload == 현재 entries → dirty 해제.
+    if (!pendingSave) localDirty = false;
+    console.log('[saveToFB] OK savedAt=', now, 'pendingSave=', pendingSave);
     toast('저장 완료 (' + new Date(now).toLocaleTimeString('ko-KR') + ')');
     document.getElementById('lastSaved').textContent = '저장 ' + new Date(now).toLocaleTimeString('ko-KR');
   } catch (e) {
     console.error('[saveToFB] EXCEPTION', e);
-    toast('저장 실패: ' + e.message);
+    const nextDelay = SAVE_BACKOFF[Math.min(saveAttempt, SAVE_BACKOFF.length - 1)] / 1000;
+    toast('저장 실패: ' + e.message + ' — ' + nextDelay + '초 후 재시도');
+    scheduleRetry('EXCEPTION');
+  } finally {
+    saveInFlight = false;
+    if (pendingSave) {
+      pendingSave = false;
+      // 단일 이벤트 루프 — setTimeout 0 콜백과 사용자 이벤트 핸들러가 동일 틱에 겹치지 않으므로 재진입 race 없음.
+      setTimeout(() => saveToFB(), 0);
+    }
   }
 }
 
