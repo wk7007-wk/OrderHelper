@@ -600,16 +600,50 @@ async function saveToFB() {
     const g = calcG(item, days);
     if (g > 0) calc[item.name] = { qty: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
-  const payload = { savedAt: now, orderDays: days, entries, overrides, calc };
+  const payload = { savedAt: now, orderDays: days, entries, overrides, dailySales, calc };
   try {
     await Promise.all([
       fetch(`${FB_URL}${FB_PATH}/current.json`, { method: 'PUT', body: JSON.stringify(payload) }),
       fetch(`${FB_URL}${FB_PATH}/history/${dateKey}.json`, { method: 'PUT', body: JSON.stringify(payload) })
     ]);
+    localStorage.setItem('bbq_savedAt', String(now));
     toast('저장 완료 (current + history/' + dateKey + ')');
     document.getElementById('lastSaved').textContent = '저장 ' + new Date(now).toLocaleTimeString('ko-KR');
   } catch (e) {
     toast('저장 실패: ' + e.message);
+  }
+}
+
+// 페이지 열 때마다 Firebase 자동 불러오기 (다른 기기 동기화)
+async function autoLoadFromFB() {
+  try {
+    const res = await fetch(`${FB_URL}${FB_PATH}/current.json?_=` + Date.now());
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || !data.savedAt) return;
+    const localSavedAt = parseInt(localStorage.getItem('bbq_savedAt') || '0');
+    if (data.savedAt <= localSavedAt) return; // 이미 최신
+    if (data.entries) entries = data.entries;
+    if (data.overrides) overrides = data.overrides;
+    if (data.dailySales) dailySales = data.dailySales;
+    // nextId 재계산
+    let maxN = 0;
+    entries.forEach(e => { const m = /^e(\d+)$/.exec(e.id||''); if (m) maxN = Math.max(maxN, +m[1]); });
+    nextId = maxN + 1;
+    // MASTER 보충
+    MASTER.forEach(item => {
+      if (!entries.some(e => e.name === item.name)) {
+        entries.push({ id: newId(), name: item.name, zone: '', stock: null });
+      }
+    });
+    localStorage.setItem('bbq_savedAt', String(data.savedAt));
+    saveLocal();
+    renderSalesInputs();
+    render();
+    document.getElementById('lastSaved').textContent = '동기화 ' + new Date(data.savedAt).toLocaleTimeString('ko-KR');
+    toast('다른 기기 데이터 불러옴 (' + new Date(data.savedAt).toLocaleTimeString('ko-KR') + ')');
+  } catch (e) {
+    console.error('FB auto-load failed:', e);
   }
 }
 
@@ -656,6 +690,8 @@ document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay(
 
 renderSalesInputs();
 render();
+// 디바이스 간 동기화: 페이지 열 때마다 Firebase에서 최신 가져옴
+autoLoadFromFB();
 </script>
 </body>
 </html>
