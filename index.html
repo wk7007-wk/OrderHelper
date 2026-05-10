@@ -227,7 +227,7 @@ const MASTER = [
   {sfaSeq:62.2,name:"여과지필터(320*535)(14)",unit:"장",policy:"전부",buffer:1,daily:0},
   {sfaSeq:63,name:"수제맥주 공케그(빈통)",unit:"",policy:"여유",buffer:0,daily:0},
   {sfaSeq:63,name:"BBQ시크릿양념소스(배달용)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.3},
-  {sfaSeq:64,name:"스티커T/컷팅칼(떡볶이스티커)",unit:"개/봉",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:64,name:"스티커T_컷팅칼(떡볶이스티커)",unit:"개/봉",policy:"여유",buffer:1,daily:0},
   {sfaSeq:65,name:"BBQ뿜치킹시즈닝(58g)",unit:"",policy:"",buffer:0.3,daily:0.4},
   {sfaSeq:66,name:"BBQ뿜치킹시즈닝(25g)",unit:"",policy:"전부",buffer:0.2,daily:0.1},
   {sfaSeq:99,name:"30분 주차권",unit:"",policy:"",buffer:1,daily:0},
@@ -696,6 +696,9 @@ function applyFBData(data) {
   if (data.entries) entries = data.entries;
   if (data.overrides) overrides = data.overrides;
   if (data.dailySales) dailySales = data.dailySales;
+  // 마이그레이션: FB 데이터에 MASTER 에서 사라진 이름 잔존 시 정리 (구 이름 / 등 RTDB 키 사고 방지)
+  entries = entries.filter(e => MASTER.some(m => m.name === e.name));
+  Object.keys(overrides).forEach(k => { if (!MASTER.some(m => m.name === k)) delete overrides[k]; });
   let maxN = 0;
   entries.forEach(e => { const m = /^e(\d+)$/.exec(e.id||''); if (m) maxN = Math.max(maxN, +m[1]); });
   nextId = maxN + 1;
@@ -769,6 +772,10 @@ try {
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
   const ds = localStorage.getItem('bbq_dailySales'); if (ds) dailySales = JSON.parse(ds);
 } catch {}
+
+// 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 (구 이름 정합성, 0510 RTDB 키 sanitize 대응)
+entries = entries.filter(e => MASTER.some(m => m.name === e.name));
+Object.keys(overrides).forEach(k => { if (!MASTER.some(m => m.name === k)) delete overrides[k]; });
 
 // MASTER에 있는데 entries에 없는 품목 보충 (마스터 갱신 대비)
 MASTER.forEach(item => {
