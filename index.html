@@ -636,7 +636,32 @@ document.addEventListener('focusout', e => {
 
 function applyFBData(data) {
   if (!data || !data.savedAt) return;
-  if (data.entries) entries = data.entries;
+
+  // 로컬 entries 보존: id 매칭 시 로컬 zone 우선, 로컬에만 있는 entry도 유지
+  if (data.entries) {
+    const localById = new Map();
+    entries.forEach(e => localById.set(e.id, e));
+    const fbIds = new Set();
+    const merged = [];
+    data.entries.forEach(fbE => {
+      fbIds.add(fbE.id);
+      const local = localById.get(fbE.id);
+      if (local) {
+        merged.push({
+          ...fbE,
+          // 로컬에 zone 있으면 그대로 보존, 없으면 FB값 사용
+          zone: (local.zone && local.zone.trim()) ? local.zone : (fbE.zone || '')
+        });
+      } else {
+        merged.push(fbE);
+      }
+    });
+    // 로컬에만 있는 entries (다른 기기가 모르는 것) 보존
+    entries.forEach(e => {
+      if (!fbIds.has(e.id)) merged.push(e);
+    });
+    entries = merged;
+  }
   if (data.overrides) overrides = data.overrides;
   if (data.dailySales) dailySales = data.dailySales;
   let maxN = 0;
