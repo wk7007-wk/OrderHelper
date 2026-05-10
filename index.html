@@ -116,7 +116,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260511-4';
+const APP_VERSION = '20260511-5';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 const FB_PATH = '/order/desk';  // /order_desk → permission denied (rule만 /order/* 공개)
 
@@ -615,16 +615,25 @@ async function saveToFB() {
     if (g > 0) calc[item.name] = { qty: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
   const payload = { savedAt: now, orderDays: days, entries, overrides, dailySales, calc };
+  console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   try {
-    await Promise.all([
+    const [r1, r2] = await Promise.all([
       fetch(`${FB_URL}${FB_PATH}/current.json`, { method: 'PUT', body: JSON.stringify(payload) }),
       fetch(`${FB_URL}${FB_PATH}/history/${dateKey}.json`, { method: 'PUT', body: JSON.stringify(payload) })
     ]);
+    if (!r1.ok || !r2.ok) {
+      const t1 = await r1.text().catch(()=>''); const t2 = await r2.text().catch(()=>'');
+      console.error('[saveToFB] FAIL', { current: r1.status, history: r2.status, body1: t1, body2: t2 });
+      toast('저장 실패: HTTP ' + r1.status + '/' + r2.status);
+      return;
+    }
     localStorage.setItem('bbq_savedAt', String(now));
     localDirty = false;
-    toast('저장 완료 (current + history/' + dateKey + ')');
+    console.log('[saveToFB] OK savedAt=', now);
+    toast('저장 완료 (' + new Date(now).toLocaleTimeString('ko-KR') + ')');
     document.getElementById('lastSaved').textContent = '저장 ' + new Date(now).toLocaleTimeString('ko-KR');
   } catch (e) {
+    console.error('[saveToFB] EXCEPTION', e);
     toast('저장 실패: ' + e.message);
   }
 }
@@ -674,7 +683,7 @@ function applyFBData(data) {
 async function autoLoadFromFB(silent) {
   try {
     const res = await fetch(`${FB_URL}${FB_PATH}/current.json?_=` + Date.now());
-    if (!res.ok) return;
+    if (!res.ok) { console.warn('[autoLoad] HTTP', res.status); return; }
     const data = await res.json();
     if (!data || !data.savedAt) return;
     const localSavedAt = parseInt(localStorage.getItem('bbq_savedAt') || '0');
