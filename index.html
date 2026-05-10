@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>BBQ 발주</title>
 <style>
   * { box-sizing: border-box; }
@@ -85,6 +88,7 @@
   <button id="modeBtn" onclick="toggleMode()">출력 보기 (발주 D순)</button>
   <button class="primary" onclick="saveToFB()">저장</button>
   <span class="meta" id="lastSaved"></span>
+  <span class="meta" id="appVer"></span>
 </div>
 
 <div class="sales-row">
@@ -112,6 +116,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
+const APP_VERSION = '20260511-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 const FB_PATH = '/order_desk';
 
@@ -749,6 +754,7 @@ sel.value = savedDays ? savedDays : rec;
 sel.addEventListener('change', () => localStorage.setItem('bbq_orderDays', sel.value));
 document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
 
+document.getElementById('appVer').textContent = 'v' + APP_VERSION;
 renderSalesInputs();
 render();
 // 디바이스 간 동기화: 페이지 열 때마다 + 5초 간격 폴링
