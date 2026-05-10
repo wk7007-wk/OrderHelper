@@ -33,6 +33,11 @@
   tr.dup-row td.name { font-style: italic; color: #aaa; }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.85); color: #fff; padding: 8px 18px; border-radius: 16px; z-index: 200; opacity: 0; transition: opacity .3s; pointer-events: none; font-size: 12px; }
   .toast.show { opacity: 1; }
+  .sales-row { padding: 6px 14px; background: #16213e; border-bottom: 1px solid #0f3460; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+  .sales-row .day-label { font-size: 10px; color: #888; margin-right: 2px; }
+  .sales-row input.sales { width: 50px; background: #0f3460; color: #fff; border: 1px solid #0f3460; border-radius: 4px; padding: 4px 6px; text-align: right; font-size: 12px; }
+  .sales-row .day-block { display: inline-flex; align-items: center; gap: 2px; }
+  .sales-row .day-block.lost { opacity: 0.5; }
 
   /* PIN 잠금 */
   .pin-overlay { position: fixed; inset: 0; background: #1a1a2e; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
@@ -78,6 +83,12 @@
   <button id="modeBtn" onclick="toggleMode()">출력 보기 (발주 D순)</button>
   <button class="primary" onclick="saveToFB()">저장</button>
   <span class="meta" id="lastSaved"></span>
+</div>
+
+<div class="sales-row">
+  <span class="meta">예상매출 (만)</span>
+  <span id="salesInputs"></span>
+  <span class="meta" id="salesAvg"></span>
 </div>
 
 <table>
@@ -227,6 +238,7 @@ const MASTER = [
 
 let entries = [];     // [{id, name, zone, stock}] — 한 품목이 N구역에 있으면 N entry
 let overrides = {};   // {name: {k?, l?}}  — 품목별 보정
+let dailySales = [];  // [number?] 길이 = days, 매출(만). null이면 1.0 weight
 let viewMode = 'input';
 
 let nextId = 1;
@@ -273,20 +285,46 @@ function unsnoozeItem(name) {
   render();
 }
 
-// G수식 (재고는 entries 합계 기준). 숨김 품목은 G=0.
+// G수식 (lostDays + 일별 매출 가중치 반영). 숨김 품목은 G=0.
+// weight_d = sales_d / avg(filled sales). 비어있으면 1.
+// usage_lost = L × sum(weights for first `lost` days)
+// usage_eff = L × sum(weights for remaining days)
+// usableE = max(0, E − usage_lost)
+// G = usage_eff + K − usableE
+function dailyWeights(days) {
+  const ds = [];
+  for (let i = 0; i < days; i++) ds.push(dailySales[i] != null ? dailySales[i] : null);
+  const filled = ds.filter(x => x != null && x > 0);
+  if (filled.length === 0) return ds.map(() => 1);
+  const avg = filled.reduce((a,b) => a+b, 0) / filled.length;
+  return ds.map(x => (x != null && x > 0) ? x / avg : 1);
+}
 function calcG(item, days) {
   if (isItemHidden(item.name)) return 0;
   const L = getL(item);
   const K = getK(item);
   const E = totalStock(item.name);
-  if (E < L) return L * days + K - L;
-  return L * days - E + K;
+  const lost = recommendedLostDays();
+  const weights = dailyWeights(days);
+  const sumW = (a, b) => weights.slice(a, b).reduce((s, w) => s + w, 0);
+  const usageLost = L * sumW(0, lost);
+  const usageEff = L * sumW(lost, days);
+  const usableE = Math.max(0, E - usageLost);
+  return usageEff + K - usableE;
 }
 
 function recommendedDays() {
   const d = new Date().getDay();
   if (d === 6 || d === 0 || d === 1) return 4;
   return 3;
+}
+// 발주 후 물류 도착 전까지 lost 일수 (그 동안 사용량 0)
+// 토/일/월 사이클(4일치): 오늘+내일까지 lost (내일 저녁 도착) → 2일
+// 화/수/목/금 사이클(3일치): 도착이 다음날 새벽이라 거의 lost 없음 → 0일
+function recommendedLostDays() {
+  const d = new Date().getDay();
+  if (d === 6 || d === 0 || d === 1) return 2;
+  return 0;
 }
 const dayName = d => ['일','월','화','수','목','금','토'][d];
 
@@ -505,6 +543,56 @@ function toggleMode() {
 function saveLocal() {
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
+  localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
+}
+
+function renderSalesInputs() {
+  const days = parseInt(document.getElementById('orderDays').value);
+  const lost = recommendedLostDays();
+  const wrap = document.getElementById('salesInputs');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const today = new Date();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today.getTime() + i * 86400000);
+    const wd = ['일','월','화','수','목','금','토'][d.getDay()];
+    const isLost = i < lost;
+    const block = document.createElement('span');
+    block.className = 'day-block' + (isLost ? ' lost' : '');
+    const lbl = document.createElement('span');
+    lbl.className = 'day-label';
+    lbl.textContent = (i === 0 ? '오늘' : '+' + i) + '(' + wd + ')';
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.className = 'sales';
+    inp.placeholder = '-';
+    inp.value = dailySales[i] != null ? dailySales[i] : '';
+    inp.dataset.idx = i;
+    inp.addEventListener('input', e => {
+      const v = e.target.value;
+      const num = v === '' ? null : parseFloat(v);
+      dailySales[parseInt(e.target.dataset.idx)] = num;
+      saveLocal();
+      updateSalesAvg();
+      // G만 갱신 (재정렬 없이)
+      MASTER.forEach(it => updateGForName(it.name));
+    });
+    block.appendChild(lbl);
+    block.appendChild(inp);
+    wrap.appendChild(block);
+  }
+  updateSalesAvg();
+}
+
+function updateSalesAvg() {
+  const days = parseInt(document.getElementById('orderDays').value);
+  const filled = [];
+  for (let i = 0; i < days; i++) if (dailySales[i] != null && dailySales[i] > 0) filled.push(dailySales[i]);
+  const el = document.getElementById('salesAvg');
+  if (!el) return;
+  if (filled.length === 0) { el.textContent = '(균등 가중치)'; return; }
+  const avg = filled.reduce((a,b)=>a+b,0) / filled.length;
+  el.textContent = '평균 ' + avg.toFixed(0) + '만 → 가중치 적용';
 }
 
 async function saveToFB() {
@@ -529,7 +617,7 @@ async function saveToFB() {
   }
 }
 
-document.getElementById('orderDays').addEventListener('change', render);
+document.getElementById('orderDays').addEventListener('change', () => { renderSalesInputs(); render(); });
 
 // 로컬 복원 (entries 우선, 없으면 옛날 stocks 마이그레이션, 없으면 빈 entries)
 try {
@@ -552,6 +640,7 @@ try {
     }));
   }
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
+  const ds = localStorage.getItem('bbq_dailySales'); if (ds) dailySales = JSON.parse(ds);
 } catch {}
 
 // MASTER에 있는데 entries에 없는 품목 보충 (마스터 갱신 대비)
@@ -567,8 +656,9 @@ const sel = document.getElementById('orderDays');
 const savedDays = localStorage.getItem('bbq_orderDays');
 sel.value = savedDays ? savedDays : rec;
 sel.addEventListener('change', () => localStorage.setItem('bbq_orderDays', sel.value));
-document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
+document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일 (lost ${recommendedLostDays()}일)`;
 
+renderSalesInputs();
 render();
 </script>
 </body>
