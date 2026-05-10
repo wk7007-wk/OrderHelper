@@ -285,12 +285,11 @@ function unsnoozeItem(name) {
   render();
 }
 
-// G수식 (lostDays + 일별 매출 가중치 반영). 숨김 품목은 G=0.
+// G수식 (Excel 동등 + 일별 매출 가중치 일반화). 숨김 품목은 G=0.
 // weight_d = sales_d / avg(filled sales). 비어있으면 1.
-// usage_lost = L × sum(weights for first `lost` days)
-// usage_eff = L × sum(weights for remaining days)
-// usableE = max(0, E − usage_lost)
-// G = usage_eff + K − usableE
+// 기본(가중치 모두 1): Excel과 동일 IF(E<M, SUM-M+K, SUM-E+K)
+//   M = L × weight_0, SUM = L × Σweight
+// 가중치 입력 시: 첫날 lost 등을 weight=0으로 표현하면 자연스럽게 처리됨
 function dailyWeights(days) {
   const ds = [];
   for (let i = 0; i < days; i++) ds.push(dailySales[i] != null ? dailySales[i] : null);
@@ -304,13 +303,11 @@ function calcG(item, days) {
   const L = getL(item);
   const K = getK(item);
   const E = totalStock(item.name);
-  const lost = recommendedLostDays();
   const weights = dailyWeights(days);
-  const sumW = (a, b) => weights.slice(a, b).reduce((s, w) => s + w, 0);
-  const usageLost = L * sumW(0, lost);
-  const usageEff = L * sumW(lost, days);
-  const usableE = Math.max(0, E - usageLost);
-  return usageEff + K - usableE;
+  const M = L * (weights[0] || 0);
+  const totalUsage = L * weights.reduce((a, b) => a + b, 0);
+  if (E < M) return totalUsage - M + K;
+  return totalUsage - E + K;
 }
 
 function recommendedDays() {
@@ -656,7 +653,7 @@ const sel = document.getElementById('orderDays');
 const savedDays = localStorage.getItem('bbq_orderDays');
 sel.value = savedDays ? savedDays : rec;
 sel.addEventListener('change', () => localStorage.setItem('bbq_orderDays', sel.value));
-document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일 (lost ${recommendedLostDays()}일)`;
+document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
 
 renderSalesInputs();
 render();
