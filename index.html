@@ -42,6 +42,18 @@
   .sales-row input.sales { width: 50px; background: #0f3460; color: #fff; border: 1px solid #0f3460; border-radius: 4px; padding: 4px 6px; text-align: right; font-size: 12px; }
   .sales-row .day-block { display: inline-flex; align-items: center; gap: 2px; }
   .sales-row .day-block.lost { opacity: 0.5; }
+  .input-tools { padding: 8px 14px 10px; background: #16213e; border-bottom: 1px solid #0f3460; display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+  .input-tools.hidden { display: none; }
+  .input-tools button { background: #6b2d5c; color: #fff; border: none; border-radius: 6px; padding: 7px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
+  .save-log-wrap { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 220px; }
+  .save-log-title { font-size: 11px; color: #888; }
+  .save-log { display: flex; gap: 6px; flex-wrap: wrap; }
+  .save-chip { background: rgba(15, 52, 96, 0.9); color: #cfd8e3; border: 1px solid #214268; border-radius: 999px; padding: 4px 9px; font-size: 11px; }
+  .save-chip.success { border-color: #2d6a4f; color: #d8f3dc; }
+  .save-chip.warn { border-color: #b08900; color: #ffe8a3; }
+  .save-chip.error { border-color: #9d0208; color: #ffd6d6; }
+  .save-chip.sync { border-color: #1d4ed8; color: #dbeafe; }
+  .save-chip.muted { color: #9aa7b7; }
 
   /* PIN 잠금 */
   .pin-overlay { position: fixed; inset: 0; background: #1a1a2e; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
@@ -63,6 +75,9 @@
     td input.cell { width: 56px; padding: 8px 4px; font-size: 16px; }
     td input.cell.zone { width: 90px; }
     td.actions button { padding: 8px 10px; margin-right: 3px; font-size: 14px; min-width: 32px; }
+    .input-tools { padding: 8px; }
+    .input-tools button { width: 100%; padding: 10px 12px; font-size: 13px; }
+    .save-log-wrap { min-width: 100%; }
   }
 </style>
 </head>
@@ -86,7 +101,7 @@
   </label>
   <span class="meta" id="cycleHint"></span>
   <button id="modeBtn" onclick="toggleMode()">출력 보기 (발주 D순)</button>
-  <button class="primary" onclick="saveToFB()">저장</button>
+  <button class="primary" onclick="flushAutoSave('manual')">저장</button>
   <span class="meta" id="lastSaved"></span>
   <span class="meta" id="appVer"></span>
 </div>
@@ -95,6 +110,14 @@
   <span class="meta">예상매출 (만)</span>
   <span id="salesInputs"></span>
   <span class="meta" id="salesAvg"></span>
+</div>
+
+<div class="input-tools" id="inputTools">
+  <button type="button" onclick="resetStocks()">재고 리셋</button>
+  <div class="save-log-wrap">
+    <span class="save-log-title">자동저장 기록</span>
+    <div class="save-log" id="saveLog"></div>
+  </div>
 </div>
 
 <table>
@@ -270,8 +293,11 @@ let entries = [];     // [{id, name, zone, stock}] — 한 품목이 N구역에 
 let overrides = {};   // {name: {k?, l?}}  — 품목별 보정
 let dailySales = [];  // [number?] 길이 = days, 매출(만). null이면 1.0 weight
 let viewMode = 'input';
+let saveLogs = [];
 
 let nextId = 1;
+const SAVE_LOG_LIMIT = 8;
+const SAVE_LOG_STORAGE_KEY = 'bbq_save_logs';
 function newId() { return 'e' + (nextId++); }
 
 function getL(item) { return overrides[item.name]?.l ?? (item.daily || 0); }
@@ -362,6 +388,83 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 1800);
 }
 
+function saveReasonLabel(reason) {
+  if (reason === 'manual') return '수동저장';
+  if (reason === 'reset') return '재고 리셋 저장';
+  return '자동저장';
+}
+
+function lastSavedLabel(reason) {
+  if (reason === 'manual') return '저장';
+  if (reason === 'reset') return '리셋저장';
+  return '자동저장';
+}
+
+function pushSaveLog(message, tone = 'success', ts = Date.now()) {
+  saveLogs.unshift({ ts, message, tone });
+  saveLogs = saveLogs.slice(0, SAVE_LOG_LIMIT);
+  localStorage.setItem(SAVE_LOG_STORAGE_KEY, JSON.stringify(saveLogs));
+  renderSaveLogs();
+}
+
+function saveLogTime(ts) {
+  return new Date(ts).toLocaleTimeString('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+}
+
+function renderSaveLogs() {
+  const tools = document.getElementById('inputTools');
+  const wrap = document.getElementById('saveLog');
+  if (!tools || !wrap) return;
+  const isInput = viewMode === 'input';
+  tools.classList.toggle('hidden', !isInput);
+  if (!isInput) return;
+  wrap.innerHTML = '';
+  if (saveLogs.length === 0) {
+    const chip = document.createElement('span');
+    chip.className = 'save-chip muted';
+    chip.textContent = '기록 없음';
+    wrap.appendChild(chip);
+    return;
+  }
+  saveLogs.forEach(log => {
+    const chip = document.createElement('span');
+    chip.className = 'save-chip ' + (log.tone || '');
+    chip.textContent = `${saveLogTime(log.ts)} ${log.message}`;
+    wrap.appendChild(chip);
+  });
+}
+
+function renderHeader() {
+  const thead = document.getElementById('thead');
+  if (!thead) return;
+  if (viewMode === 'output') {
+    thead.innerHTML = `
+      <th>품목명</th>
+      <th>발주</th>
+      <th>재고</th>
+      <th>여유</th>
+      <th>일사용</th>
+      <th>단위</th>
+    `;
+    return;
+  }
+  thead.innerHTML = `
+    <th id="thZone">구역</th>
+    <th>품목명</th>
+    <th>재고</th>
+    <th>여유</th>
+    <th>일사용</th>
+    <th>발주</th>
+    <th>단위</th>
+    <th id="thAct"></th>
+  `;
+}
+
 function fmt(n, dp=2) {
   if (n === null || n === undefined || isNaN(n)) return '';
   return (Math.round(n * Math.pow(10, dp)) / Math.pow(10, dp)).toString();
@@ -377,6 +480,8 @@ function kstDateKey(ts) {
 function render() {
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
+  renderHeader();
+  renderSaveLogs();
   const days = parseInt(document.getElementById('orderDays').value);
 
   // 발주 N개 (품목 단위)
@@ -384,10 +489,6 @@ function render() {
   MASTER.forEach(it => { if (calcG(it, days) > 0) needCount++; });
   document.getElementById('badge').textContent = '발주 ' + needCount + '개';
   document.getElementById('badge').classList.toggle('zero', needCount === 0);
-
-  // 헤더 토글
-  document.getElementById('thZone').style.display = viewMode === 'input' ? '' : 'none';
-  document.getElementById('thAct').style.display = viewMode === 'input' ? '' : 'none';
 
   if (viewMode === 'output') {
     // 품목 단위 1행, G>0만, D순
@@ -398,13 +499,12 @@ function render() {
       const E = totalStock(item.name);
       const tr = document.createElement('tr');
       tr.classList.add('need');
-      const seqStr = (item.sfaSeq && item.sfaSeq < 9999) ? item.sfaSeq : '';
       tr.innerHTML = `
         <td class="name">${item.name}</td>
+        <td class="qty order-qty pos">${fmt(g,2)}</td>
         <td class="qty">${fmt(E,2)}</td>
         <td class="qty">${fmt(getK(item),2)}</td>
         <td class="qty">${fmt(getL(item),2)}</td>
-        <td class="qty order-qty pos">${fmt(g,2)}</td>
         <td>${item.unit||''}</td>
       `;
       tbody.appendChild(tr);
@@ -569,15 +669,28 @@ function toggleMode() {
   render();
 }
 
+function resetStocks() {
+  if (!confirm('모든 재고 값을 비울까요? 구역, 여유, 일사용은 유지됩니다.')) return;
+  entries.forEach(ent => { ent.stock = null; });
+  saveLocal('reset');
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+  }
+  render();
+  pushSaveLog('재고 리셋', 'muted');
+  saveToFB('reset');
+}
+
 let suppressAutoSave = false;
 let localDirty = false;
-function saveLocal() {
+function saveLocal(reason = 'auto') {
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
   if (!suppressAutoSave) {
     localDirty = true;
-    if (typeof scheduleAutoSave === 'function') scheduleAutoSave();
+    if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
   }
 }
 
@@ -634,12 +747,18 @@ function updateSalesAvg() {
 // single-flight + pending bit + 지수 backoff (5/10/20s, 3회). 진행 중 새 호출은 pending 만 set, 끝난 직후 최신 entries 로 한 번만 재발사 → 구버전 덮어쓰기 방지.
 let saveInFlight = false;
 let pendingSave = false;
+let pendingSaveReason = 'auto';
 let saveRetryTimer = null;
 let saveAttempt = 0;
 const SAVE_BACKOFF = [5000, 10000, 20000];
-async function saveToFB() {
-  if (saveInFlight) { pendingSave = true; return; }
+async function saveToFB(reason = 'manual') {
+  if (saveInFlight) {
+    pendingSave = true;
+    pendingSaveReason = reason;
+    return;
+  }
   saveInFlight = true;
+  const activeReason = reason;
   const now = Date.now();
   const dateKey = kstDateKey(now);
   const days = parseInt(document.getElementById('orderDays').value);
@@ -653,13 +772,15 @@ async function saveToFB() {
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
       saveAttempt = 0;
+      pushSaveLog(saveReasonLabel(activeReason) + ' 실패', 'error');
       toast('저장 반복 실패 — 다시 입력하시면 재시도됩니다');
       console.error('[saveToFB] retries exhausted after', label);
       return;
     }
     const delay = SAVE_BACKOFF[saveAttempt++];
     if (saveRetryTimer) clearTimeout(saveRetryTimer);
-    saveRetryTimer = setTimeout(() => { saveRetryTimer = null; saveToFB(); }, delay);
+    pushSaveLog(`${saveReasonLabel(activeReason)} 재시도 ${delay/1000}초`, 'warn');
+    saveRetryTimer = setTimeout(() => { saveRetryTimer = null; saveToFB(activeReason); }, delay);
     console.warn('[saveToFB] retry in', delay, 'ms after', label);
   };
   try {
@@ -681,19 +802,23 @@ async function saveToFB() {
     // pendingSave=true 면 진행 중 추가 입력 있었음 → localDirty 유지(다음 PUT 가 최신 entries 로 재발사). pendingSave=false 면 PUT payload == 현재 entries → dirty 해제.
     if (!pendingSave) localDirty = false;
     console.log('[saveToFB] OK savedAt=', now, 'pendingSave=', pendingSave);
-    toast('저장 완료 (' + new Date(now).toLocaleTimeString('ko-KR') + ')');
-    document.getElementById('lastSaved').textContent = '저장 ' + new Date(now).toLocaleTimeString('ko-KR');
+    pushSaveLog(saveReasonLabel(activeReason) + ' 완료', 'success', now);
+    toast(saveReasonLabel(activeReason) + ' 완료 (' + new Date(now).toLocaleTimeString('ko-KR') + ')');
+    document.getElementById('lastSaved').textContent = lastSavedLabel(activeReason) + ' ' + new Date(now).toLocaleTimeString('ko-KR');
   } catch (e) {
     console.error('[saveToFB] EXCEPTION', e);
+    pushSaveLog(saveReasonLabel(activeReason) + ' 실패', 'error');
     const nextDelay = SAVE_BACKOFF[Math.min(saveAttempt, SAVE_BACKOFF.length - 1)] / 1000;
     toast('저장 실패: ' + e.message + ' — ' + nextDelay + '초 후 재시도');
     scheduleRetry('EXCEPTION');
   } finally {
     saveInFlight = false;
     if (pendingSave) {
+      const nextReason = pendingSaveReason || 'auto';
       pendingSave = false;
+      pendingSaveReason = 'auto';
       // 단일 이벤트 루프 — setTimeout 0 콜백과 사용자 이벤트 핸들러가 동일 틱에 겹치지 않으므로 재진입 race 없음.
-      setTimeout(() => saveToFB(), 0);
+      setTimeout(() => saveToFB(nextReason), 0);
     }
   }
 }
@@ -757,6 +882,7 @@ async function autoLoadFromFB(silent) {
       return;
     }
     applyFBData(data);
+    pushSaveLog('다른 기기 저장 반영', 'sync', data.savedAt);
     if (!silent) toast('동기화 (' + new Date(data.savedAt).toLocaleTimeString('ko-KR') + ')');
   } catch (e) {
     console.error('FB auto-load failed:', e);
@@ -765,12 +891,28 @@ async function autoLoadFromFB(silent) {
 
 // 자동저장 (debounce 1초, blur/change 시 즉시)
 let autoSaveTimer = null;
-function scheduleAutoSave() {
+let queuedSaveReason = 'auto';
+function scheduleAutoSave(reason = 'auto') {
+  queuedSaveReason = reason;
   clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => { autoSaveTimer = null; saveToFB(); }, 1000);
+  autoSaveTimer = setTimeout(() => {
+    autoSaveTimer = null;
+    const reasonToSave = queuedSaveReason || 'auto';
+    queuedSaveReason = 'auto';
+    saveToFB(reasonToSave);
+  }, 1000);
 }
-function flushAutoSave() {
-  if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; saveToFB(); }
+function flushAutoSave(reason) {
+  const hasPendingTimer = !!autoSaveTimer;
+  const explicitRequest = reason != null;
+  if (!hasPendingTimer && !explicitRequest) return;
+  const reasonToSave = reason || queuedSaveReason || 'auto';
+  queuedSaveReason = 'auto';
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+  }
+  saveToFB(reasonToSave);
 }
 
 document.getElementById('orderDays').addEventListener('change', () => { renderSalesInputs(); render(); });
@@ -797,6 +939,8 @@ try {
   }
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
   const ds = localStorage.getItem('bbq_dailySales'); if (ds) dailySales = JSON.parse(ds);
+  const sl = localStorage.getItem(SAVE_LOG_STORAGE_KEY);
+  if (sl) saveLogs = JSON.parse(sl);
 } catch {}
 
 // 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 (구 이름 정합성, 0510 RTDB 키 sanitize 대응)
