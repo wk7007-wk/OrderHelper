@@ -465,6 +465,16 @@ function renderHeader() {
   `;
 }
 
+function focusNextStockInput(currentId) {
+  const stockInputs = Array.from(document.querySelectorAll('input.cell[data-field="stock"]'));
+  const idx = stockInputs.findIndex(inp => inp.dataset.id === currentId);
+  if (idx < 0) return;
+  const next = stockInputs[idx + 1];
+  if (!next) return;
+  next.focus();
+  next.select();
+}
+
 function fmt(n, dp=2) {
   if (n === null || n === undefined || isNaN(n)) return '';
   return (Math.round(n * Math.pow(10, dp)) / Math.pow(10, dp)).toString();
@@ -605,6 +615,13 @@ function render() {
       // blur/Enter — pending autosave 즉시 flush
       flushAutoSave();
       if (e.target.dataset.field === 'zone') render();
+    });
+    inp.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      if (e.target.dataset.field !== 'stock') return;
+      e.preventDefault();
+      flushAutoSave();
+      focusNextStockInput(e.target.dataset.id);
     });
   });
 }
