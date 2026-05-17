@@ -9,6 +9,7 @@
 <title>BBQ 발주</title>
 <style>
   * { box-sizing: border-box; }
+  :root { --sticky-top: 52px; }
   body { margin: 0; font-family: -apple-system, 'Noto Sans KR', sans-serif; background: #1a1a2e; color: #e0e0e0; font-size: 13px; }
   .top { position: sticky; top: 0; z-index: 10; background: #16213e; border-bottom: 1px solid #0f3460; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .top h1 { font-size: 16px; margin: 0; }
@@ -18,8 +19,15 @@
   .top button.primary { background: #e94560; }
   .top button.green { background: #27ae60; }
   .meta { font-size: 11px; color: #888; }
-  table { width: 100%; border-collapse: collapse; }
-  thead { position: sticky; top: 50px; background: #0f3460; z-index: 5; }
+  .status-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.01em; }
+  .status-pill.idle { background: rgba(59, 130, 246, 0.16); color: #bfdbfe; border: 1px solid rgba(59, 130, 246, 0.35); }
+  .status-pill.dirty { background: rgba(245, 158, 11, 0.16); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.35); }
+  .status-pill.saving { background: rgba(168, 85, 247, 0.16); color: #e9d5ff; border: 1px solid rgba(168, 85, 247, 0.35); }
+  .status-pill.saved { background: rgba(34, 197, 94, 0.16); color: #bbf7d0; border: 1px solid rgba(34, 197, 94, 0.35); }
+  .status-pill.error { background: rgba(239, 68, 68, 0.16); color: #fecaca; border: 1px solid rgba(239, 68, 68, 0.35); }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; min-width: 760px; border-collapse: collapse; }
+  thead { position: sticky; top: var(--sticky-top); background: #0f3460; z-index: 5; }
   th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid #0f3460; white-space: nowrap; }
   th { font-size: 11px; color: #ccc; font-weight: 600; }
   tr.need td { background: rgba(233, 69, 96, 0.08); }
@@ -54,6 +62,9 @@
   tr.dup-row td.name::before { content: '↳'; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #8fb2d8; }
   tr.row-hidden td.name,
   tr.row-hidden.dup-row td.name { color: #94a3b8; }
+  .dup-meta { color: #93a4bb; font-size: 11px; }
+  .section-row td { padding: 8px 10px; background: #0b1729; color: #dbeafe; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .zone-row td { padding: 7px 10px; background: rgba(15, 52, 96, 0.85); color: #cfe7ff; font-size: 12px; font-weight: 700; }
   .input-tools { padding: 8px 14px 10px; background: #16213e; border-bottom: 1px solid #0f3460; display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
   .input-tools.hidden { display: none; }
   .input-tools button { background: #6b2d5c; color: #fff; border: none; border-radius: 6px; padding: 7px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
@@ -79,17 +90,19 @@
   /* 모바일 (폰) */
   @media (max-width: 600px) {
     body { font-size: 14px; padding-bottom: 40px; }
-    .top { padding: 8px; gap: 6px; }
+    .top { padding: 8px; gap: 6px; align-items: flex-start; }
     .top h1 { font-size: 14px; }
     .top button { padding: 8px 10px; font-size: 13px; }
+    .status-pill { min-height: 30px; }
     th, td { padding: 6px 4px; font-size: 12px; }
-    td.name { max-width: 140px; word-break: keep-all; }
+    td.name { max-width: 160px; min-width: 160px; word-break: keep-all; }
     td input.cell { width: 56px; padding: 8px 4px; font-size: 16px; }
     td input.cell.zone { width: 90px; }
     td.actions button { padding: 8px 10px; margin-right: 3px; font-size: 14px; min-width: 32px; }
     .input-tools { padding: 8px; }
     .input-tools button { width: 100%; padding: 10px 12px; font-size: 13px; }
     .save-log-wrap { min-width: 100%; }
+    .table-wrap { border-top: 1px solid #0f3460; }
   }
 </style>
 </head>
@@ -114,6 +127,7 @@
   <span class="meta" id="cycleHint"></span>
   <button id="modeBtn" onclick="toggleMode()">출력 보기 (발주 D순)</button>
   <button class="primary" onclick="flushAutoSave('manual')">저장</button>
+  <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
   <span class="meta" id="appVer"></span>
 </div>
@@ -132,21 +146,23 @@
   </div>
 </div>
 
-<table>
-  <thead>
-    <tr id="thead">
-      <th id="thZone">구역</th>
-      <th>품목명</th>
-      <th>재고</th>
-      <th>여유</th>
-      <th>일사용</th>
-      <th>발주</th>
-      <th>단위</th>
-      <th id="thAct"></th>
-    </tr>
-  </thead>
-  <tbody id="tbody"></tbody>
-</table>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr id="thead">
+        <th id="thZone">구역</th>
+        <th>품목명</th>
+        <th>재고</th>
+        <th>여유</th>
+        <th>일사용</th>
+        <th>발주</th>
+        <th>단위</th>
+        <th id="thAct"></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -401,6 +417,14 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 1800);
 }
 
+function renderSaveState(label, tone = 'idle') {
+  const el = document.getElementById('saveState');
+  if (!el) return;
+  el.textContent = label;
+  el.className = `status-pill ${tone}`;
+  updateStickyOffsets();
+}
+
 function saveReasonLabel(reason) {
   if (reason === 'manual') return '수동저장';
   if (reason === 'reset') return '재고 리셋 저장';
@@ -450,6 +474,12 @@ function renderSaveLogs() {
     chip.textContent = `${saveLogTime(log.ts)} ${log.message}`;
     wrap.appendChild(chip);
   });
+}
+
+function updateStickyOffsets() {
+  const topBar = document.querySelector('.top');
+  if (!topBar) return;
+  document.documentElement.style.setProperty('--sticky-top', `${Math.ceil(topBar.getBoundingClientRect().height)}px`);
 }
 
 function renderHeader() {
@@ -576,6 +606,7 @@ function render() {
       `;
       tbody.appendChild(tr);
     });
+    updateStickyOffsets();
     return;
   }
 
@@ -587,6 +618,8 @@ function render() {
   }).filter(Boolean).sort(compareInputRows);
 
   const shownItems = new Set();
+  let lastSection = '';
+  let lastZone = '';
   orderedRows.forEach(({ entry: ent, item, hidden }) => {
     const isFirst = !shownItems.has(item.name);
     shownItems.add(item.name);
@@ -594,6 +627,26 @@ function render() {
     const g = calcG(item, days);
     const isNeed = g > 0;
     const isChecked = isStockChecked(ent);
+    const sectionKey = hidden ? 'hidden' : (isChecked ? 'checked' : 'pending');
+    const sectionLabel = hidden ? '숨김 품목' : (isChecked ? '입력 완료' : '입력 필요');
+    const zoneLabel = normalizedZone(ent.zone) || '미지정 구역';
+
+    if (sectionKey !== lastSection) {
+      const sectionRow = document.createElement('tr');
+      sectionRow.className = 'section-row';
+      sectionRow.innerHTML = `<td colspan="8">${sectionLabel}</td>`;
+      tbody.appendChild(sectionRow);
+      lastSection = sectionKey;
+      lastZone = '';
+    }
+
+    if (zoneLabel !== lastZone) {
+      const zoneRow = document.createElement('tr');
+      zoneRow.className = 'zone-row';
+      zoneRow.innerHTML = `<td colspan="8">${zoneLabel}</td>`;
+      tbody.appendChild(zoneRow);
+      lastZone = zoneLabel;
+    }
 
     const tr = document.createElement('tr');
     if (isNeed && isFirst) tr.classList.add('need');
@@ -609,11 +662,11 @@ function render() {
       ? (hidden
           ? `<td class="qty order-qty dup">💤 ${daysLeft}일 후 복귀</td>`
           : `<td class="qty order-qty ${isNeed?'pos':''}">${isNeed ? fmt(g,2) : ''}</td>`)
-      : `<td class="qty order-qty dup">${hidden ? '' : '합계반영'}</td>`;
+      : `<td class="qty order-qty dup">${hidden ? '' : fmt(g,2)}</td>`;
     const KL = isFirst
       ? `<td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="k" value="${fmt(getK(item),2)}"></td>
          <td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="l" value="${fmt(getL(item),2)}"></td>`
-      : `<td></td><td></td>`;
+      : `<td class="qty dup-meta">${fmt(getK(item),2)}</td><td class="qty dup-meta">${fmt(getL(item),2)}</td>`;
     const snoozeBtn = isFirst
       ? (hidden
           ? `<button onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
@@ -686,6 +739,7 @@ function render() {
       focusStockInputById(nextId);
     });
   });
+  updateStickyOffsets();
 }
 
 function updateGForName(name) {
@@ -769,6 +823,7 @@ function saveLocal(reason = 'auto') {
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
   if (!suppressAutoSave) {
     localDirty = true;
+    renderSaveState('저장 대기', 'dirty');
     if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
   }
 }
@@ -837,6 +892,7 @@ async function saveToFB(reason = 'manual') {
     return;
   }
   saveInFlight = true;
+  renderSaveState(saveReasonLabel(reason) + ' 중', 'saving');
   const activeReason = reason;
   const now = Date.now();
   const dateKey = kstDateKey(now);
@@ -852,6 +908,7 @@ async function saveToFB(reason = 'manual') {
     if (saveAttempt >= SAVE_BACKOFF.length) {
       saveAttempt = 0;
       pushSaveLog(saveReasonLabel(activeReason) + ' 실패', 'error');
+      renderSaveState('저장 실패', 'error');
       toast('저장 반복 실패 — 다시 입력하시면 재시도됩니다');
       console.error('[saveToFB] retries exhausted after', label);
       return;
@@ -882,11 +939,13 @@ async function saveToFB(reason = 'manual') {
     if (!pendingSave) localDirty = false;
     console.log('[saveToFB] OK savedAt=', now, 'pendingSave=', pendingSave);
     pushSaveLog(saveReasonLabel(activeReason) + ' 완료', 'success', now);
+    renderSaveState('저장됨', 'saved');
     toast(saveReasonLabel(activeReason) + ' 완료 (' + new Date(now).toLocaleTimeString('ko-KR') + ')');
     document.getElementById('lastSaved').textContent = lastSavedLabel(activeReason) + ' ' + new Date(now).toLocaleTimeString('ko-KR');
   } catch (e) {
     console.error('[saveToFB] EXCEPTION', e);
     pushSaveLog(saveReasonLabel(activeReason) + ' 실패', 'error');
+    renderSaveState('저장 실패', 'error');
     const nextDelay = SAVE_BACKOFF[Math.min(saveAttempt, SAVE_BACKOFF.length - 1)] / 1000;
     toast('저장 실패: ' + e.message + ' — ' + nextDelay + '초 후 재시도');
     scheduleRetry('EXCEPTION');
@@ -943,6 +1002,7 @@ function applyFBData(data) {
   suppressAutoSave = false;
   renderSalesInputs();
   render();
+  renderSaveState('동기화됨', 'idle');
   document.getElementById('lastSaved').textContent = '동기화 ' + new Date(data.savedAt).toLocaleTimeString('ko-KR');
 }
 
@@ -1044,6 +1104,7 @@ document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay(
 document.getElementById('appVer').textContent = 'v' + APP_VERSION;
 renderSalesInputs();
 render();
+window.addEventListener('resize', updateStickyOffsets);
 // 디바이스 간 동기화: 페이지 열 때마다 + 5초 간격 폴링
 autoLoadFromFB(true);
 setInterval(() => autoLoadFromFB(true), 5000);
