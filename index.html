@@ -506,15 +506,35 @@ function isStockChecked(entry) {
   return entry && entry.stock !== null && entry.stock !== '' && !Number.isNaN(Number(entry.stock));
 }
 
-function inputGroupPriority(group) {
-  if (group.hidden) return 2;
-  if (group.uncheckedCount === 0) return 1;
+function inputRowPriority(entry, hidden) {
+  if (hidden) return 2;
+  if (isStockChecked(entry)) return 1;
   return 0;
 }
 
 function fmt(n, dp=2) {
   if (n === null || n === undefined || isNaN(n)) return '';
   return (Math.round(n * Math.pow(10, dp)) / Math.pow(10, dp)).toString();
+}
+
+function normalizedZone(zone) {
+  return String(zone || '').trim();
+}
+
+function compareInputRows(left, right) {
+  const pri = inputRowPriority(left.entry, left.hidden) - inputRowPriority(right.entry, right.hidden);
+  if (pri !== 0) return pri;
+
+  const leftZone = normalizedZone(left.entry.zone);
+  const rightZone = normalizedZone(right.entry.zone);
+  if (leftZone && !rightZone) return -1;
+  if (!leftZone && rightZone) return 1;
+  if (leftZone !== rightZone) return leftZone.localeCompare(rightZone, 'ko', { numeric: true, sensitivity: 'base' });
+
+  const seqDiff = (left.item.sfaSeq || 9999) - (right.item.sfaSeq || 9999);
+  if (seqDiff !== 0) return seqDiff;
+
+  return (left.entry.id || '').localeCompare(right.entry.id || '', 'en');
 }
 
 function kstDateKey(ts) {
@@ -559,76 +579,61 @@ function render() {
     return;
   }
 
-  // 입력 모드 — 품목 단위 그룹 정렬
-  const groups = MASTER.map(item => {
-    const itemEntries = entries.filter(e => e.name === item.name);
-    if (itemEntries.length === 0) return null;
-    const hidden = isItemHidden(item.name);
-    const sortedEntries = itemEntries.slice().sort((a, b) => {
-      const aChecked = isStockChecked(a) ? 1 : 0;
-      const bChecked = isStockChecked(b) ? 1 : 0;
-      if (aChecked !== bChecked) return aChecked - bChecked;
-      if (a.zone && !b.zone) return -1;
-      if (!a.zone && b.zone) return 1;
-      return (a.zone || '').localeCompare(b.zone || '', 'ko');
-    });
-    const uncheckedCount = sortedEntries.filter(e => !isStockChecked(e)).length;
-    return { item, hidden, uncheckedCount, entries: sortedEntries };
-  }).filter(Boolean).sort((a, b) => {
-    const pri = inputGroupPriority(a) - inputGroupPriority(b);
-    if (pri !== 0) return pri;
-    return (a.item.sfaSeq || 9999) - (b.item.sfaSeq || 9999);
-  });
+  // 입력 모드 — 미입력 우선 + 구역 묶음. 완료/숨김은 아래로 내려 입력 동선을 보존.
+  const orderedRows = entries.map(ent => {
+    const item = MASTER.find(m => m.name === ent.name);
+    if (!item) return null;
+    return { entry: ent, item, hidden: isItemHidden(item.name) };
+  }).filter(Boolean).sort(compareInputRows);
 
-  groups.forEach(group => {
-    const { item, hidden, entries: groupEntries, uncheckedCount } = group;
-    const allChecked = uncheckedCount === 0;
-    groupEntries.forEach((ent, idx) => {
-      const isFirst = idx === 0;
-      const dupCount = groupEntries.length;
+  const shownItems = new Set();
+  orderedRows.forEach(({ entry: ent, item, hidden }) => {
+    const isFirst = !shownItems.has(item.name);
+    shownItems.add(item.name);
+    const dupCount = entries.filter(e => e.name === item.name).length;
     const g = calcG(item, days);
     const isNeed = g > 0;
+    const isChecked = isStockChecked(ent);
 
     const tr = document.createElement('tr');
-      if (isNeed && isFirst) tr.classList.add('need');
-      if (hidden) tr.classList.add('row-hidden');
-      else if (allChecked) tr.classList.add('row-checked');
-      else tr.classList.add('row-pending');
-      if (!isFirst) tr.classList.add('dup-row');
+    if (isNeed && isFirst) tr.classList.add('need');
+    if (hidden) tr.classList.add('row-hidden');
+    else if (isChecked) tr.classList.add('row-checked');
+    else tr.classList.add('row-pending');
+    if (!isFirst) tr.classList.add('dup-row');
 
     const safeName = item.name.replace(/"/g, '&quot;');
-      const nameDisplay = item.name;
+    const nameDisplay = item.name;
     const daysLeft = hidden ? daysUntilReturn(item.name) : 0;
-      const gCell = isFirst
-        ? (hidden
-            ? `<td class="qty order-qty dup">💤 ${daysLeft}일 후 복귀</td>`
-            : `<td class="qty order-qty ${isNeed?'pos':''}">${isNeed ? fmt(g,2) : ''}</td>`)
-        : `<td class="qty order-qty dup">${hidden ? '' : '합계반영'}</td>`;
-      const KL = isFirst
-        ? `<td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="k" value="${fmt(getK(item),2)}"></td>
-           <td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="l" value="${fmt(getL(item),2)}"></td>`
-        : `<td></td><td></td>`;
-      const snoozeBtn = isFirst
-        ? (hidden
-            ? `<button onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
-            : `<button onclick="snoozeItem('${safeName}')" title="N일 동안 안 봄">💤</button>`)
-        : '';
+    const gCell = isFirst
+      ? (hidden
+          ? `<td class="qty order-qty dup">💤 ${daysLeft}일 후 복귀</td>`
+          : `<td class="qty order-qty ${isNeed?'pos':''}">${isNeed ? fmt(g,2) : ''}</td>`)
+      : `<td class="qty order-qty dup">${hidden ? '' : '합계반영'}</td>`;
+    const KL = isFirst
+      ? `<td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="k" value="${fmt(getK(item),2)}"></td>
+         <td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="l" value="${fmt(getL(item),2)}"></td>`
+      : `<td></td><td></td>`;
+    const snoozeBtn = isFirst
+      ? (hidden
+          ? `<button onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
+          : `<button onclick="snoozeItem('${safeName}')" title="N일 동안 안 봄">💤</button>`)
+      : '';
 
-      tr.innerHTML = `
-        <td><input class="cell zone" type="text" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
-        <td class="name">${nameDisplay}</td>
-        <td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
-        ${KL}
-        ${gCell}
-        <td>${item.unit||''}</td>
-        <td class="actions">
-          <button class="add" onclick="addRow('${ent.id}')" title="같은 품목 행 추가">+</button>
-          ${dupCount > 1 ? `<button onclick="deleteRow('${ent.id}')" title="이 행 삭제">×</button>` : ''}
-          ${snoozeBtn}
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
+    tr.innerHTML = `
+      <td><input class="cell zone" type="text" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
+      <td class="name">${nameDisplay}</td>
+      <td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
+      ${KL}
+      ${gCell}
+      <td>${item.unit||''}</td>
+      <td class="actions">
+        <button class="add" onclick="addRow('${ent.id}')" title="같은 품목 행 추가">+</button>
+        ${dupCount > 1 ? `<button onclick="deleteRow('${ent.id}')" title="이 행 삭제">×</button>` : ''}
+        ${snoozeBtn}
+      </td>
+    `;
+    tbody.appendChild(tr);
   });
 
   document.querySelectorAll('input.cell').forEach(inp => {
