@@ -28,6 +28,7 @@
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; min-width: 760px; border-collapse: collapse; }
   thead { position: sticky; top: var(--sticky-top); background: #0f3460; z-index: 5; }
+  body.output-mode thead { position: static; }
   th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid #0f3460; white-space: nowrap; }
   th { font-size: 11px; color: #ccc; font-weight: 600; }
   tr.need td { background: rgba(233, 69, 96, 0.08); }
@@ -48,6 +49,7 @@
   .sales-row { padding: 6px 14px; background: #16213e; border-bottom: 1px solid #0f3460; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
   .sales-row .day-label { font-size: 10px; color: #888; margin-right: 2px; }
   .sales-row input.sales { width: 50px; background: #0f3460; color: #fff; border: 1px solid #0f3460; border-radius: 4px; padding: 4px 6px; text-align: right; font-size: 12px; }
+  .sales-row .base-sales-control { display: inline-flex; align-items: center; gap: 2px; padding-right: 4px; border-right: 1px solid rgba(148, 163, 184, 0.28); }
   .sales-row .day-block { display: inline-flex; align-items: center; gap: 2px; }
   .sales-row .day-block.lost { opacity: 0.5; }
   tr.row-pending td { background: rgba(233, 69, 96, 0.14); }
@@ -134,6 +136,11 @@
 
 <div class="sales-row">
   <span class="meta">예상매출 (만)</span>
+  <label class="base-sales-control">
+    <span class="day-label">기준</span>
+    <input id="baseSalesInput" class="sales" type="number" placeholder="300">
+    <span class="day-label">만</span>
+  </label>
   <span id="salesInputs"></span>
   <span class="meta" id="salesAvg"></span>
 </div>
@@ -167,10 +174,11 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260511-6';
+const APP_VERSION = '20260526-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
+const DEFAULT_BASE_SALES = 300;
 
 // PIN 잠금 (sha256("1234")). PIN 변경하려면 새 PIN의 sha256 해시로 교체.
 const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
@@ -320,6 +328,7 @@ const MASTER = [
 let entries = [];     // [{id, name, zone, stock}] — 한 품목이 N구역에 있으면 N entry
 let overrides = {};   // {name: {k?, l?}}  — 품목별 보정
 let dailySales = [];  // [number?] 길이 = days, 매출(만). null이면 1.0 weight
+let baseSales = DEFAULT_BASE_SALES;  // 매출대비 하루사용량 기준 매출(만)
 let viewMode = 'input';
 let saveLogs = [];
 let skipStockRenderOnceId = null;
@@ -371,17 +380,24 @@ function unsnoozeItem(name) {
 }
 
 // G수식 (Excel 동등 + 일별 매출 가중치 일반화). 숨김 품목은 G=0.
-// weight_d = sales_d / avg(filled sales). 비어있으면 1.
+// weight_d = sales_d / baseSales. 비어있으면 1, 0이면 그날 사용량 0.
 // 기본(가중치 모두 1): Excel과 동일 IF(E<M, SUM-M+K, SUM-E+K)
 //   M = L × weight_0, SUM = L × Σweight
-// 가중치 입력 시: 첫날 lost 등을 weight=0으로 표현하면 자연스럽게 처리됨
+// 기준매출 대비 예상매출이 높으면 L(하루사용량)이 발주 기간 전체에 그대로 할증됨.
+function getBaseSales() {
+  const n = Number(baseSales);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_BASE_SALES;
+}
 function dailyWeights(days) {
   const ds = [];
   for (let i = 0; i < days; i++) ds.push(dailySales[i] != null ? dailySales[i] : null);
-  const filled = ds.filter(x => x != null && x > 0);
-  if (filled.length === 0) return ds.map(() => 1);
-  const avg = filled.reduce((a,b) => a+b, 0) / filled.length;
-  return ds.map(x => (x != null && x > 0) ? x / avg : 1);
+  const base = getBaseSales();
+  return ds.map(x => {
+    if (x == null) return 1;
+    const n = Number(x);
+    if (!Number.isFinite(n)) return 1;
+    return Math.max(0, n) / base;
+  });
 }
 function calcG(item, days) {
   if (isItemHidden(item.name)) return 0;
@@ -511,11 +527,12 @@ function renderHeader() {
 function focusNextStockInput(currentId) {
   const stockInputs = Array.from(document.querySelectorAll('input.cell[data-field="stock"]'));
   const idx = stockInputs.findIndex(inp => inp.dataset.id === currentId);
-  if (idx < 0) return;
+  if (idx < 0) return false;
   const next = stockInputs[idx + 1];
-  if (!next) return;
+  if (!next) return false;
   next.focus();
   next.select();
+  return true;
 }
 
 function getNextStockInputId(currentId) {
@@ -575,6 +592,7 @@ function kstDateKey(ts) {
 }
 
 function render() {
+  document.body.classList.toggle('output-mode', viewMode === 'output');
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
   renderHeader();
@@ -732,11 +750,9 @@ function render() {
       if (e.key !== 'Enter') return;
       if (e.target.dataset.field !== 'stock') return;
       e.preventDefault();
-      const nextId = getNextStockInputId(e.target.dataset.id);
       skipStockRenderOnceId = e.target.dataset.id;
       flushAutoSave();
-      render();
-      focusStockInputById(nextId);
+      if (!focusNextStockInput(e.target.dataset.id)) render();
     });
   });
   updateStickyOffsets();
@@ -821,11 +837,34 @@ function saveLocal(reason = 'auto') {
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
+  if (baseSales == null) localStorage.removeItem('bbq_baseSales');
+  else localStorage.setItem('bbq_baseSales', JSON.stringify(baseSales));
   if (!suppressAutoSave) {
     localDirty = true;
     renderSaveState('저장 대기', 'dirty');
     if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
   }
+}
+
+function setBaseSalesInputValue() {
+  const inp = document.getElementById('baseSalesInput');
+  if (!inp || document.activeElement === inp) return;
+  inp.value = baseSales != null ? baseSales : '';
+}
+
+function bindBaseSalesInput() {
+  const inp = document.getElementById('baseSalesInput');
+  if (!inp) return;
+  setBaseSalesInputValue();
+  inp.addEventListener('input', e => {
+    const v = e.target.value;
+    const n = v === '' ? null : parseFloat(v);
+    baseSales = Number.isFinite(n) && n > 0 ? n : null;
+    saveLocal();
+    updateSalesAvg();
+    MASTER.forEach(it => updateGForName(it.name));
+  });
+  inp.addEventListener('change', () => flushAutoSave());
 }
 
 function renderSalesInputs() {
@@ -869,13 +908,21 @@ function renderSalesInputs() {
 
 function updateSalesAvg() {
   const days = parseInt(document.getElementById('orderDays').value);
-  const filled = [];
-  for (let i = 0; i < days; i++) if (dailySales[i] != null && dailySales[i] > 0) filled.push(dailySales[i]);
+  const explicit = [];
+  for (let i = 0; i < days; i++) {
+    const n = Number(dailySales[i]);
+    if (dailySales[i] != null && Number.isFinite(n)) explicit.push(n);
+  }
   const el = document.getElementById('salesAvg');
   if (!el) return;
-  if (filled.length === 0) { el.textContent = '(균등 가중치)'; return; }
-  const avg = filled.reduce((a,b)=>a+b,0) / filled.length;
-  el.textContent = '평균 ' + avg.toFixed(0) + '만 → 가중치 적용';
+  const base = getBaseSales();
+  if (explicit.length === 0) {
+    el.textContent = `기준 ${base.toFixed(0)}만 / 균등 1.00배`;
+    return;
+  }
+  const weights = dailyWeights(days);
+  const total = weights.reduce((a,b)=>a+b,0);
+  el.textContent = `기준 ${base.toFixed(0)}만 → 오늘 ${weights[0].toFixed(2)}배 / 총 ${total.toFixed(2)}일분`;
 }
 
 // single-flight + pending bit + 지수 backoff (5/10/20s, 3회). 진행 중 새 호출은 pending 만 set, 끝난 직후 최신 entries 로 한 번만 재발사 → 구버전 덮어쓰기 방지.
@@ -902,7 +949,8 @@ async function saveToFB(reason = 'manual') {
     const g = calcG(item, days);
     if (g > 0) calc[item.name] = { qty: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
-  const payload = { savedAt: now, orderDays: days, entries, overrides, dailySales, calc };
+  const salesWeights = dailyWeights(days).map(x => Math.round(x * 1000) / 1000);
+  const payload = { savedAt: now, orderDays: days, entries, overrides, dailySales, baseSales: getBaseSales(), salesWeights, calc };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
@@ -985,6 +1033,10 @@ function applyFBData(data) {
   if (data.entries) entries = data.entries;
   if (data.overrides) overrides = data.overrides;
   if (data.dailySales) dailySales = data.dailySales;
+  if (Object.prototype.hasOwnProperty.call(data, 'baseSales')) {
+    const n = Number(data.baseSales);
+    baseSales = Number.isFinite(n) && n > 0 ? n : DEFAULT_BASE_SALES;
+  }
   // 마이그레이션: FB 데이터에 MASTER 에서 사라진 이름 잔존 시 정리 (구 이름 / 등 RTDB 키 사고 방지)
   entries = entries.filter(e => MASTER.some(m => m.name === e.name));
   Object.keys(overrides).forEach(k => { if (!MASTER.some(m => m.name === k)) delete overrides[k]; });
@@ -1000,6 +1052,7 @@ function applyFBData(data) {
   suppressAutoSave = true;
   saveLocal();
   suppressAutoSave = false;
+  setBaseSalesInputValue();
   renderSalesInputs();
   render();
   renderSaveState('동기화됨', 'idle');
@@ -1078,6 +1131,7 @@ try {
   }
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
   const ds = localStorage.getItem('bbq_dailySales'); if (ds) dailySales = JSON.parse(ds);
+  const bs = localStorage.getItem('bbq_baseSales'); if (bs) baseSales = JSON.parse(bs);
   const sl = localStorage.getItem(SAVE_LOG_STORAGE_KEY);
   if (sl) saveLogs = JSON.parse(sl);
 } catch {}
@@ -1102,6 +1156,7 @@ sel.addEventListener('change', () => localStorage.setItem('bbq_orderDays', sel.v
 document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
 
 document.getElementById('appVer').textContent = 'v' + APP_VERSION;
+bindBaseSalesInput();
 renderSalesInputs();
 render();
 window.addEventListener('resize', updateStickyOffsets);
