@@ -64,8 +64,6 @@
   tr.row-hidden td.name,
   tr.row-hidden.dup-row td.name { color: #94a3b8; }
   .dup-meta { color: #93a4bb; font-size: 11px; }
-  .section-row td { padding: 8px 10px; background: #0b1729; color: #dbeafe; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-  .zone-row td { padding: 7px 10px; background: rgba(15, 52, 96, 0.85); color: #cfe7ff; font-size: 12px; font-weight: 700; }
   .input-tools { padding: 8px 14px 10px; background: #16213e; border-bottom: 1px solid #0f3460; display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
   .input-tools.hidden { display: none; }
   .input-tools button { background: #6b2d5c; color: #fff; border: none; border-radius: 6px; padding: 7px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
@@ -173,7 +171,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260526-3';
+const APP_VERSION = '20260526-4';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -636,8 +634,6 @@ function render() {
   }).filter(Boolean).sort(compareInputRows);
 
   const shownItems = new Set();
-  let lastSection = '';
-  let lastZone = '';
   orderedRows.forEach(({ entry: ent, item, hidden }) => {
     const isFirst = !shownItems.has(item.name);
     shownItems.add(item.name);
@@ -645,27 +641,6 @@ function render() {
     const g = calcG(item, days);
     const isNeed = g > 0;
     const isChecked = isStockChecked(ent);
-    const sectionKey = hidden ? 'hidden' : (isChecked ? 'checked' : 'pending');
-    const sectionLabel = hidden ? '숨김 품목' : (isChecked ? '입력 완료' : '입력 필요');
-    const zoneLabel = normalizedZone(ent.zone) || '미지정 구역';
-
-    if (sectionKey !== lastSection) {
-      const sectionRow = document.createElement('tr');
-      sectionRow.className = 'section-row';
-      sectionRow.innerHTML = `<td colspan="8">${sectionLabel}</td>`;
-      tbody.appendChild(sectionRow);
-      lastSection = sectionKey;
-      lastZone = '';
-    }
-
-    if (zoneLabel !== lastZone) {
-      const zoneRow = document.createElement('tr');
-      zoneRow.className = 'zone-row';
-      zoneRow.innerHTML = `<td colspan="8">${zoneLabel}</td>`;
-      tbody.appendChild(zoneRow);
-      lastZone = zoneLabel;
-    }
-
     const tr = document.createElement('tr');
     if (isNeed && isFirst) tr.classList.add('need');
     if (hidden) tr.classList.add('row-hidden');
