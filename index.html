@@ -138,7 +138,7 @@
   <span class="meta">예상매출 (만)</span>
   <label class="base-sales-control">
     <span class="day-label">기준</span>
-    <input id="baseSalesInput" class="sales" type="number" placeholder="300">
+    <input id="baseSalesInput" class="sales" type="number" placeholder="280">
     <span class="day-label">만</span>
   </label>
   <span id="salesInputs"></span>
@@ -174,11 +174,12 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260526-1';
+const APP_VERSION = '20260526-2';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
-const DEFAULT_BASE_SALES = 300;
+const DEFAULT_BASE_SALES = 280;
+const BASE_SALES_STORAGE_VERSION = 'formula-280';
 
 // PIN 잠금 (sha256("1234")). PIN 변경하려면 새 PIN의 sha256 해시로 교체.
 const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
@@ -838,7 +839,10 @@ function saveLocal(reason = 'auto') {
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
   if (baseSales == null) localStorage.removeItem('bbq_baseSales');
-  else localStorage.setItem('bbq_baseSales', JSON.stringify(baseSales));
+  else {
+    localStorage.setItem('bbq_baseSales', JSON.stringify(baseSales));
+    localStorage.setItem('bbq_baseSalesVersion', BASE_SALES_STORAGE_VERSION);
+  }
   if (!suppressAutoSave) {
     localDirty = true;
     renderSaveState('저장 대기', 'dirty');
@@ -1131,7 +1135,9 @@ try {
   }
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
   const ds = localStorage.getItem('bbq_dailySales'); if (ds) dailySales = JSON.parse(ds);
-  const bs = localStorage.getItem('bbq_baseSales'); if (bs) baseSales = JSON.parse(bs);
+  const bs = localStorage.getItem('bbq_baseSales');
+  const bsv = localStorage.getItem('bbq_baseSalesVersion');
+  if (bs && bsv === BASE_SALES_STORAGE_VERSION) baseSales = JSON.parse(bs);
   const sl = localStorage.getItem(SAVE_LOG_STORAGE_KEY);
   if (sl) saveLogs = JSON.parse(sl);
 } catch {}
