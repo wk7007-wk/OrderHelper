@@ -171,7 +171,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260526-5';
+const APP_VERSION = '20260528-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -533,6 +533,20 @@ function focusNextStockInput(currentId) {
   return true;
 }
 
+function advanceStockInput(currentId, source = 'manual') {
+  const moved = focusNextStockInput(currentId);
+  if (!moved) render();
+  console.debug('[stock-enter]', source, currentId, moved ? 'next' : 'end');
+  return moved;
+}
+
+function shouldFallbackAdvanceFromChange(target) {
+  const active = document.activeElement;
+  if (!active || active === document.body) return true;
+  if (active === target) return true;
+  return false;
+}
+
 function getNextStockInputId(currentId) {
   const stockInputs = Array.from(document.querySelectorAll('input.cell[data-field="stock"]'));
   const idx = stockInputs.findIndex(inp => inp.dataset.id === currentId);
@@ -718,9 +732,8 @@ function render() {
           return;
         }
         setTimeout(() => {
-          const active = document.activeElement;
-          if (active && active !== document.body && active.matches?.('input, button, select, textarea')) return;
-          focusNextStockInput(currentId);
+          if (!shouldFallbackAdvanceFromChange(e.target)) return;
+          advanceStockInput(currentId, 'change');
         }, 0);
         return;
       }
@@ -732,7 +745,7 @@ function render() {
       e.preventDefault();
       skipStockRenderOnceId = e.target.dataset.id;
       flushAutoSave();
-      if (!focusNextStockInput(e.target.dataset.id)) render();
+      advanceStockInput(e.target.dataset.id, 'keydown');
     });
   });
   updateStickyOffsets();

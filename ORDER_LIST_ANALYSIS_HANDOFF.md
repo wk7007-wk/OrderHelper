@@ -18,6 +18,14 @@
   - `OrderHelper` 웹 UI 구조 파악됨
   - BBQ SFA 발주창은 별도 자동입력 대상이며, 아직 구현 전 조사 단계
 
+## 2026-05-28 엔터 문제
+- 상태: **미해결 보고 후 진단/보강 진행**. 실기기에서 확인되기 전까지 해결 완료로 쓰지 않는다.
+- 최근 이력: `c636ff4 발주 모바일 엔터 이동 보강` 이후에도 현장에서는 엔터/다음 이동 문제가 남았다고 보고됨.
+- 현재 가설: 모바일 숫자 키보드가 `keydown Enter`를 보내지 않고 `change`만 보내면, 기존 `change` 핸들러가 현재 입력칸이 active라는 이유로 다음 재고칸 이동을 스킵할 수 있었다.
+- 2026-05-28 보강: `index.html` `APP_VERSION=20260528-1`. `advanceStockInput()` 공통 헬퍼와 `change` fallback을 추가해, active가 현재 재고칸이면 다음 재고칸으로 이동하게 함.
+- 테스트: `node tests/orderhelper_static_checks.js` 로 JS 문법, 버전, Enter/change fallback 연결을 확인한다.
+- 실기기 확인 기준: PIN 통과 → 첫 재고칸 입력 → 모바일 키보드 `다음/엔터` → 다음 재고칸 focus+select → 저장 상태가 `저장 대기/저장됨`으로 이어지는지 확인.
+
 ## 원본 기준
 - 엑셀 원본: `/sdcard/Download/출근260414.xlsm`
 - 시트명: `발주리스트`
@@ -36,34 +44,23 @@
 
 ## 웹 구조
 - 메인 파일은 단일 페이지: `/root/OrderHelper/index.html`
-- 헤더:
-  - 앱 제목 `BBQ 발주 도우미`
-  - 요약 배지 `발주 필요 N개`
-  - 입력 진행도
-- 상단 제어:
-  - `며칠치 발주?` 선택
-  - 검색 입력
-  - 탭 2개:
-    - `+ 본사 발주`
-    - `- 기타/소모품`
-- 하단 액션:
-  - `저장`
-  - `발주 목록`
-  - `초기화`
-- 모달:
-  - `발주 필요 목록`
+- 현재 버전 표시는 `APP_VERSION` 상수 기준.
+- 헤더: 앱 제목, 발주 개수 배지, 발주일수 선택, 입력/출력 전환, 저장 버튼, 저장 상태.
+- 매출 행: 기준매출, 일자별 예상매출, 가중 평균.
+- 입력 화면: `미입력 → 입력완료 → 숨김` 우선순위와 `구역` 기준으로 재고 입력칸을 보여준다.
+- 출력 화면: 발주량 있는 항목만 `발주 D순`으로 보여준다.
+- 재고 입력 Enter 이동 핵심 구간: `focusNextStockInput()`, `advanceStockInput()`, `shouldFallbackAdvanceFromChange()`, `input.cell[data-field="stock"]` 이벤트 바인딩.
 
 ## 데이터 구조
-- Firebase 경로: `/order/`
-- 품목 정의는 현재 `index.html` 안의 `ALL_ITEMS` 상수에 하드코딩되어 있다.
+- Firebase 경로: `/order/desk_q7m9r3a8`
+- 품목 정의는 현재 `index.html` 안의 `MASTER` 상수에 하드코딩되어 있다.
 - 각 품목은 대체로 아래 필드를 가진다.
   - `name`
-  - `cat`
-  - `sub`
-  - `daily`
-  - `buffer`
+  - `sfaSeq`
   - `unit`
-  - `orderUnit`
+  - `policy`
+  - `buffer`
+  - `daily`
 - 현재 구조상 계산 로직은 엑셀을 읽는 방식이 아니라 웹 내부 품목 정의 + 입력 재고 기반 계산에 가깝다.
 
 ## 발주리스트와 웹의 대응
@@ -98,13 +95,16 @@
 
 ## Claude가 바로 볼 포인트
 - `index.html`에서 확인할 구간:
-  - 헤더/탭/발주 목록 UI
-  - `ALL_ITEMS`
+  - 헤더/매출 입력/저장 상태 UI
+  - `MASTER`
+  - `focusNextStockInput()` / `advanceStockInput()` / stock input 이벤트 바인딩
   - 계산 로직
-  - `showOrderList()`
   - Firebase 저장/로드 함수
+- `tests/orderhelper_static_checks.js`:
+  - JS 문법과 Enter fallback 연결 정적 검증
 - `AI_HANDOFF.md`에서 확인할 구간:
   - `BBQ 발주 자동화 조사`
+  - `OrderHelper 엔터 이동 미해결`
 - `CODEMAP.txt`에서 확인할 구간:
   - `13. BBQ 발주 자동화 조사 (2026-05-06)`
 
