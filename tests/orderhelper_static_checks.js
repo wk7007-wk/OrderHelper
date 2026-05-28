@@ -14,7 +14,7 @@ function mustMatch(pattern, message) {
   assert(pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260528-1';/, 'APP_VERSION must be bumped for enter fallback');
+mustMatch(/const APP_VERSION = '20260529-1';/, 'APP_VERSION must be bumped for enter fallback');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function shouldFallbackAdvanceFromChange\(target\)/, 'change fallback guard missing');
 mustMatch(/if \(active === target\) return true;/, 'mobile change while focused must advance');
