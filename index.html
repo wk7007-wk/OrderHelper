@@ -185,7 +185,7 @@
     <div class="snooze-title" id="snoozeTitle">숨김</div>
     <label class="snooze-field">
       <span>안 볼 일수</span>
-      <input id="snoozeDaysInput" type="number" inputmode="numeric" min="1" max="365" step="1" value="5">
+      <input id="snoozeDaysInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" value="5" oninput="sanitizeSnoozeDaysInput(this)">
     </label>
     <div class="snooze-actions">
       <button type="button" onclick="closeSnoozeDialog()">취소</button>
@@ -195,7 +195,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260529-8';
+const APP_VERSION = '20260529-9';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -390,8 +390,15 @@ function daysUntilReturn(name) {
   return Math.max(0, Math.ceil((ret - now) / 86400000));
 }
 
+function sanitizeSnoozeDaysInput(input) {
+  if (!input) return '';
+  const digits = String(input.value || '').replace(/\D/g, '').slice(0, 3);
+  if (input.value !== digits) input.value = digits;
+  return digits;
+}
+
 function parseSnoozeDays(value) {
-  const days = parseInt(value, 10);
+  const days = parseInt(String(value || '').replace(/\D/g, ''), 10);
   if (!Number.isFinite(days) || days < 1) return null;
   return Math.min(days, MAX_SNOOZE_DAYS);
 }
@@ -429,7 +436,7 @@ function applySnoozeItem(name, days) {
 function confirmSnooze(event) {
   event?.preventDefault();
   const input = document.getElementById('snoozeDaysInput');
-  const days = parseSnoozeDays(input?.value);
+  const days = parseSnoozeDays(sanitizeSnoozeDaysInput(input));
   if (!days) {
     if (input) {
       input.value = String(DEFAULT_SNOOZE_DAYS);
