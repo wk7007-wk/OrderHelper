@@ -171,7 +171,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260529-1';
+const APP_VERSION = '20260529-3';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -533,18 +533,47 @@ function focusNextStockInput(currentId) {
   return true;
 }
 
+function stockEventLabel(e, phase) {
+  const target = e?.target;
+  const id = target?.dataset?.id || '-';
+  const field = target?.dataset?.field || '-';
+  const value = target?.value ?? '';
+  const key = e?.key || '-';
+  const code = e?.code || '-';
+  const inputType = e?.inputType || '-';
+  const keyCode = e?.keyCode || e?.which || '-';
+  const active = document.activeElement;
+  const activeId = active?.dataset?.id || active?.tagName || '-';
+  const activeField = active?.dataset?.field || '-';
+  return `${phase} id=${id} field=${field} key=${key} code=${code} kc=${keyCode} input=${inputType} val=${value} active=${activeId}/${activeField}`;
+}
+
+function logStockEvent(e, phase) {
+  const msg = stockEventLabel(e, phase);
+  console.info('[stock-key]', msg);
+  pushSaveLog('키 ' + msg, 'warn');
+}
+
 function advanceStockInput(currentId, source = 'manual') {
   const moved = focusNextStockInput(currentId);
   if (!moved) render();
-  console.debug('[stock-enter]', source, currentId, moved ? 'next' : 'end');
+  const msg = `${source} id=${currentId} result=${moved ? 'next' : 'end'}`;
+  console.debug('[stock-enter]', msg);
+  pushSaveLog('이동 ' + msg, moved ? 'sync' : 'warn');
   return moved;
 }
 
-function shouldFallbackAdvanceFromChange(target) {
+function shouldFallbackAdvanceFromChange(target, currentId) {
   const active = document.activeElement;
   if (!active || active === document.body) return true;
   if (active === target) return true;
-  return false;
+  const nextStockId = getNextStockInputId(currentId);
+  const activeField = active?.dataset?.field || '';
+  const activeId = active?.dataset?.id || '';
+  if (activeField === 'stock' && activeId === nextStockId) return false;
+  console.info('[stock-key]', `change correction current=${currentId} active=${activeId}/${activeField} nextStock=${nextStockId || '-'}`);
+  pushSaveLog(`보정 current=${currentId} active=${activeId}/${activeField || '-'} nextStock=${nextStockId || '-'}`, 'warn');
+  return true;
 }
 
 function getNextStockInputId(currentId) {
@@ -704,6 +733,7 @@ function render() {
       const ent = entries.find(x => x.id === id);
       if (!ent) return;
       if (f === 'stock') {
+        logStockEvent(e, 'input');
         ent.stock = v === '' ? null : parseFloat(v);
         saveLocal();
         updateGForName(ent.name);
@@ -724,22 +754,25 @@ function render() {
     });
     inp.addEventListener('change', e => {
       // blur/Enter — pending autosave 즉시 flush
-      flushAutoSave();
       if (e.target.dataset.field === 'stock') {
+        logStockEvent(e, 'change');
+        flushAutoSave();
         const currentId = e.target.dataset.id;
         if (skipStockRenderOnceId === e.target.dataset.id) {
           skipStockRenderOnceId = null;
           return;
         }
         setTimeout(() => {
-          if (!shouldFallbackAdvanceFromChange(e.target)) return;
+          if (!shouldFallbackAdvanceFromChange(e.target, currentId)) return;
           advanceStockInput(currentId, 'change');
         }, 0);
         return;
       }
+      flushAutoSave();
       if (e.target.dataset.field === 'zone') render();
     });
     inp.addEventListener('keydown', e => {
+      if (e.target.dataset.field === 'stock') logStockEvent(e, 'keydown');
       if (e.key !== 'Enter') return;
       if (e.target.dataset.field !== 'stock') return;
       e.preventDefault();
@@ -946,7 +979,7 @@ async function saveToFB(reason = 'manual') {
     if (g > 0) calc[item.name] = { qty: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
   const salesWeights = dailyWeights(days).map(x => Math.round(x * 1000) / 1000);
-  const payload = { savedAt: now, orderDays: days, entries, overrides, dailySales, baseSales: getBaseSales(), salesWeights, calc };
+  const payload = { savedAt: now, orderDays: days, entries, overrides, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: saveLogs.slice(0, SAVE_LOG_LIMIT) };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
