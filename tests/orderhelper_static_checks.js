@@ -14,16 +14,34 @@ function mustMatch(pattern, message) {
   assert(pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260529-3';/, 'APP_VERSION must be bumped for enter fallback');
+function mustNotMatch(pattern, message) {
+  assert(!pattern.test(html), message);
+}
+
+mustMatch(/const APP_VERSION = '20260529-5';/, 'APP_VERSION must be bumped for stock sort/focus fix');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
+mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
+mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
 mustMatch(/function stockEventLabel\(e, phase\)/, 'stock key event label missing');
 mustMatch(/function logStockEvent\(e, phase\)/, 'stock key event logger missing');
+mustMatch(/let debugLogs = \[\];/, 'debug logs state missing');
+mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local storage key missing');
+mustMatch(/function pushDebugLog\(message, tone = 'debug', ts = Date\.now\(\)\)/, 'internal debug logger missing');
+mustMatch(/debugLogs: debugLogs\.slice\(0, DEBUG_LOG_LIMIT\)/, 'debug logs must be included in Firebase payload');
+mustMatch(/pushDebugLog\('키 ' \+ msg, 'warn'\)/, 'stock key logs must be analysis-only');
 mustMatch(/function shouldFallbackAdvanceFromChange\(target, currentId\)/, 'change fallback guard missing');
 mustMatch(/if \(active === target\) return true;/, 'mobile change while focused must advance');
 mustMatch(/activeField === 'stock' && activeId === nextStockId/, 'already-correct next stock focus must not be overridden');
 mustMatch(/change correction current=\$\{currentId\}/, 'wrong active focus must be logged');
+mustMatch(/dateKey, orderDays: days/, 'daily history payload must include KST date key');
+mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'daily history path must be saved');
+mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must render sorted rows and restore focus');
 mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
 mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');
-mustMatch(/debugLogs: saveLogs\.slice\(0, SAVE_LOG_LIMIT\)/, 'debug logs must be included in Firebase payload');
+mustMatch(/sortStockRowsAndKeepFlow\(currentId, 'change'\)/, 'change with already-correct focus must still sort rows');
+mustMatch(/flushAutoSave\('auto'\)/, 'stock logs and sorted state must be saved immediately');
+mustNotMatch(/pushSaveLog\('키 /, 'stock key logs must not be visible user logs');
+mustNotMatch(/pushSaveLog\(`보정 /, 'focus correction logs must not be visible user logs');
+mustNotMatch(/pushSaveLog\('정렬이동 /, 'sort/focus logs must not be visible user logs');
 
 console.log('OrderHelper static checks OK');

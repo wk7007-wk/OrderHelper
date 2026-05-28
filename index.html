@@ -171,7 +171,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260529-3';
+const APP_VERSION = '20260529-5';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -329,11 +329,14 @@ let dailySales = [];  // [number?] 길이 = days, 매출(만). null이면 1.0 we
 let baseSales = DEFAULT_BASE_SALES;  // 매출대비 하루사용량 기준 매출(만)
 let viewMode = 'input';
 let saveLogs = [];
+let debugLogs = [];
 let skipStockRenderOnceId = null;
 
 let nextId = 1;
 const SAVE_LOG_LIMIT = 8;
 const SAVE_LOG_STORAGE_KEY = 'bbq_save_logs';
+const DEBUG_LOG_LIMIT = 40;
+const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';
 function newId() { return 'e' + (nextId++); }
 
 function getL(item) { return overrides[item.name]?.l ?? (item.daily || 0); }
@@ -452,10 +455,24 @@ function lastSavedLabel(reason) {
 }
 
 function pushSaveLog(message, tone = 'success', ts = Date.now()) {
+  if (isInternalDebugMessage(message)) {
+    pushDebugLog(message, tone, ts);
+    return;
+  }
   saveLogs.unshift({ ts, message, tone });
   saveLogs = saveLogs.slice(0, SAVE_LOG_LIMIT);
   localStorage.setItem(SAVE_LOG_STORAGE_KEY, JSON.stringify(saveLogs));
   renderSaveLogs();
+}
+
+function isInternalDebugMessage(message) {
+  return /^(키|보정|정렬이동|이동) /.test(String(message || ''));
+}
+
+function pushDebugLog(message, tone = 'debug', ts = Date.now()) {
+  debugLogs.unshift({ ts, message, tone });
+  debugLogs = debugLogs.slice(0, DEBUG_LOG_LIMIT);
+  localStorage.setItem(DEBUG_LOG_STORAGE_KEY, JSON.stringify(debugLogs));
 }
 
 function saveLogTime(ts) {
@@ -475,14 +492,15 @@ function renderSaveLogs() {
   tools.classList.toggle('hidden', !isInput);
   if (!isInput) return;
   wrap.innerHTML = '';
-  if (saveLogs.length === 0) {
+  const visibleLogs = saveLogs.filter(log => !isInternalDebugMessage(log.message));
+  if (visibleLogs.length === 0) {
     const chip = document.createElement('span');
     chip.className = 'save-chip muted';
     chip.textContent = '기록 없음';
     wrap.appendChild(chip);
     return;
   }
-  saveLogs.forEach(log => {
+  visibleLogs.forEach(log => {
     const chip = document.createElement('span');
     chip.className = 'save-chip ' + (log.tone || '');
     chip.textContent = `${saveLogTime(log.ts)} ${log.message}`;
@@ -523,14 +541,7 @@ function renderHeader() {
 }
 
 function focusNextStockInput(currentId) {
-  const stockInputs = Array.from(document.querySelectorAll('input.cell[data-field="stock"]'));
-  const idx = stockInputs.findIndex(inp => inp.dataset.id === currentId);
-  if (idx < 0) return false;
-  const next = stockInputs[idx + 1];
-  if (!next) return false;
-  next.focus();
-  next.select();
-  return true;
+  return focusStockInputById(getNextStockInputId(currentId));
 }
 
 function stockEventLabel(e, phase) {
@@ -551,16 +562,12 @@ function stockEventLabel(e, phase) {
 function logStockEvent(e, phase) {
   const msg = stockEventLabel(e, phase);
   console.info('[stock-key]', msg);
-  pushSaveLog('키 ' + msg, 'warn');
+  pushDebugLog('키 ' + msg, 'warn');
 }
 
 function advanceStockInput(currentId, source = 'manual') {
-  const moved = focusNextStockInput(currentId);
-  if (!moved) render();
-  const msg = `${source} id=${currentId} result=${moved ? 'next' : 'end'}`;
-  console.debug('[stock-enter]', msg);
-  pushSaveLog('이동 ' + msg, moved ? 'sync' : 'warn');
-  return moved;
+  const nextId = getNextStockInputId(currentId);
+  return renderAndFocusStock(nextId, source, currentId);
 }
 
 function shouldFallbackAdvanceFromChange(target, currentId) {
@@ -572,7 +579,7 @@ function shouldFallbackAdvanceFromChange(target, currentId) {
   const activeId = active?.dataset?.id || '';
   if (activeField === 'stock' && activeId === nextStockId) return false;
   console.info('[stock-key]', `change correction current=${currentId} active=${activeId}/${activeField} nextStock=${nextStockId || '-'}`);
-  pushSaveLog(`보정 current=${currentId} active=${activeId}/${activeField || '-'} nextStock=${nextStockId || '-'}`, 'warn');
+  pushDebugLog(`보정 current=${currentId} active=${activeId}/${activeField || '-'} nextStock=${nextStockId || '-'}`, 'warn');
   return true;
 }
 
@@ -583,11 +590,32 @@ function getNextStockInputId(currentId) {
 }
 
 function focusStockInputById(id) {
-  if (!id) return;
+  if (!id) return false;
   const target = document.querySelector(`input.cell[data-field="stock"][data-id="${id}"]`);
-  if (!target) return;
+  if (!target) return false;
   target.focus();
   target.select();
+  return true;
+}
+
+function currentStockFocusId() {
+  const active = document.activeElement;
+  return active?.dataset?.field === 'stock' ? active.dataset.id || null : null;
+}
+
+function renderAndFocusStock(nextId, source, currentId) {
+  render();
+  const moved = focusStockInputById(nextId);
+  const msg = `${source} current=${currentId || '-'} next=${nextId || '-'} result=${moved ? 'focused' : 'end'}`;
+  console.debug('[stock-sort]', msg);
+  pushDebugLog('정렬이동 ' + msg, moved ? 'sync' : 'warn');
+  return moved;
+}
+
+function sortStockRowsAndKeepFlow(currentId, source = 'sort') {
+  const activeNextId = currentStockFocusId();
+  const nextId = activeNextId && activeNextId !== currentId ? activeNextId : getNextStockInputId(currentId);
+  return renderAndFocusStock(nextId, source, currentId);
 }
 
 function isStockChecked(entry) {
@@ -756,15 +784,18 @@ function render() {
       // blur/Enter — pending autosave 즉시 flush
       if (e.target.dataset.field === 'stock') {
         logStockEvent(e, 'change');
-        flushAutoSave();
         const currentId = e.target.dataset.id;
         if (skipStockRenderOnceId === e.target.dataset.id) {
           skipStockRenderOnceId = null;
           return;
         }
         setTimeout(() => {
-          if (!shouldFallbackAdvanceFromChange(e.target, currentId)) return;
-          advanceStockInput(currentId, 'change');
+          if (shouldFallbackAdvanceFromChange(e.target, currentId)) {
+            advanceStockInput(currentId, 'change');
+          } else {
+            sortStockRowsAndKeepFlow(currentId, 'change');
+          }
+          flushAutoSave('auto');
         }, 0);
         return;
       }
@@ -777,8 +808,8 @@ function render() {
       if (e.target.dataset.field !== 'stock') return;
       e.preventDefault();
       skipStockRenderOnceId = e.target.dataset.id;
-      flushAutoSave();
       advanceStockInput(e.target.dataset.id, 'keydown');
+      flushAutoSave('auto');
     });
   });
   updateStickyOffsets();
@@ -979,7 +1010,7 @@ async function saveToFB(reason = 'manual') {
     if (g > 0) calc[item.name] = { qty: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
   const salesWeights = dailyWeights(days).map(x => Math.round(x * 1000) / 1000);
-  const payload = { savedAt: now, orderDays: days, entries, overrides, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: saveLogs.slice(0, SAVE_LOG_LIMIT) };
+  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
@@ -1163,8 +1194,19 @@ try {
   const bs = localStorage.getItem('bbq_baseSales');
   const bsv = localStorage.getItem('bbq_baseSalesVersion');
   if (bs && bsv === BASE_SALES_STORAGE_VERSION) baseSales = JSON.parse(bs);
+  const dl = localStorage.getItem(DEBUG_LOG_STORAGE_KEY);
+  if (dl) debugLogs = JSON.parse(dl).slice(0, DEBUG_LOG_LIMIT);
   const sl = localStorage.getItem(SAVE_LOG_STORAGE_KEY);
-  if (sl) saveLogs = JSON.parse(sl);
+  if (sl) {
+    const loadedSaveLogs = JSON.parse(sl);
+    const oldDebugLogs = loadedSaveLogs.filter(log => isInternalDebugMessage(log.message));
+    saveLogs = loadedSaveLogs.filter(log => !isInternalDebugMessage(log.message)).slice(0, SAVE_LOG_LIMIT);
+    if (oldDebugLogs.length) {
+      debugLogs = oldDebugLogs.concat(debugLogs).slice(0, DEBUG_LOG_LIMIT);
+      localStorage.setItem(DEBUG_LOG_STORAGE_KEY, JSON.stringify(debugLogs));
+      localStorage.setItem(SAVE_LOG_STORAGE_KEY, JSON.stringify(saveLogs));
+    }
+  }
 } catch {}
 
 // 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 (구 이름 정합성, 0510 RTDB 키 sanitize 대응)

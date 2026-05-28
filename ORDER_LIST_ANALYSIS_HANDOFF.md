@@ -22,8 +22,9 @@
 - 상태: **미해결 보고 후 진단/보강 진행**. 실기기에서 확인되기 전까지 해결 완료로 쓰지 않는다.
 - 최근 이력: `c636ff4 발주 모바일 엔터 이동 보강` 이후에도 현장에서는 엔터/다음 이동 문제가 남았다고 보고됨.
 - 현재 가설: 모바일 숫자 키보드가 `keydown Enter`를 보내지 않고 `change`만 보내면, 기존 `change` 핸들러가 현재 입력칸이 active라는 이유로 다음 재고칸 이동을 스킵할 수 있었다.
-- 2026-05-29 보강: `index.html` `APP_VERSION=20260529-3`. `advanceStockInput()` 공통 헬퍼와 `change` fallback을 추가해, active가 현재 재고칸이면 다음 재고칸으로 이동하게 함.
-- 2026-05-29 추가 진단: Enter 후 오른쪽 `여유/일사용` 등 다른 input으로 먼저 이동하는 케이스를 잡기 위해 `keydown/input/change/보정/이동` 로그를 화면 `자동저장 기록`과 Firebase `current.debugLogs`에 남김.
+- 2026-05-29 보강: `index.html` `APP_VERSION=20260529-5`. `advanceStockInput()` 공통 헬퍼와 `change` fallback을 추가해, active가 현재 재고칸이면 다음 재고칸으로 이동하게 함. 추가로 입력 확정 후 `render()`를 다시 실행해 `미입력 → 입력완료 → 숨김` 정렬을 즉시 반영하고, 정렬로 DOM이 바뀐 뒤에도 원래 가야 할 다음 재고칸을 다시 focus/select 한다.
+- 2026-05-29 추가 진단: Enter 후 오른쪽 `여유/일사용` 등 다른 input으로 먼저 이동하는 케이스를 잡기 위해 `keydown/input/change/보정/정렬이동` 로그를 Firebase `current.debugLogs`/`history/{KST날짜}.debugLogs`에 남김. 사용자 화면 `자동저장 기록`에는 디버그 로그를 표시하지 않는다.
+- 일별 기록: 저장 시 `/order/desk_q7m9r3a8/history/{KST날짜}` 에 `dateKey`, 입력값, 계산 발주량, debugLogs를 함께 남긴다.
 - 테스트: `node tests/orderhelper_static_checks.js` 로 JS 문법, 버전, Enter/change fallback 연결을 확인한다.
 - 실기기 확인 기준: PIN 통과 → 첫 재고칸 입력 → 모바일 키보드 `다음/엔터` → 다음 재고칸 focus+select → 저장 상태가 `저장 대기/저장됨`으로 이어지는지 확인.
 
