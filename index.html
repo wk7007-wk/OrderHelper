@@ -76,6 +76,16 @@
   .save-chip.error { border-color: #9d0208; color: #ffd6d6; }
   .save-chip.sync { border-color: #1d4ed8; color: #dbeafe; }
   .save-chip.muted { color: #9aa7b7; }
+  .snooze-overlay { position: fixed; inset: 0; z-index: 500; background: rgba(5, 10, 20, 0.72); display: flex; align-items: center; justify-content: center; padding: 18px; }
+  .snooze-overlay.hidden { display: none; }
+  .snooze-panel { width: min(320px, 100%); background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.38); }
+  .snooze-title { font-size: 15px; font-weight: 700; color: #fff; }
+  .snooze-field { display: grid; gap: 6px; font-size: 12px; color: #aaa; }
+  .snooze-field input { width: 100%; background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 10px 12px; font-size: 22px; text-align: right; }
+  .snooze-field input:focus { outline: none; border-color: #e94560; }
+  .snooze-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .snooze-actions button { border: 0; border-radius: 6px; padding: 10px 14px; font-weight: 700; color: #fff; background: #0f3460; }
+  .snooze-actions button.primary { background: #e94560; }
 
   /* PIN 잠금 */
   .pin-overlay { position: fixed; inset: 0; background: #1a1a2e; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
@@ -170,13 +180,29 @@
 
 <div class="toast" id="toast"></div>
 
+<div class="snooze-overlay hidden" id="snoozeOverlay" role="dialog" aria-modal="true" aria-labelledby="snoozeTitle">
+  <form class="snooze-panel" onsubmit="confirmSnooze(event)">
+    <div class="snooze-title" id="snoozeTitle">숨김</div>
+    <label class="snooze-field">
+      <span>안 볼 일수</span>
+      <input id="snoozeDaysInput" type="number" inputmode="numeric" min="1" max="365" step="1" value="5">
+    </label>
+    <div class="snooze-actions">
+      <button type="button" onclick="closeSnoozeDialog()">취소</button>
+      <button type="submit" class="primary">적용</button>
+    </div>
+  </form>
+</div>
+
 <script>
-const APP_VERSION = '20260529-7';
+const APP_VERSION = '20260529-8';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
 const DEFAULT_BASE_SALES = 280;
 const BASE_SALES_STORAGE_VERSION = 'formula-280';
+const DEFAULT_SNOOZE_DAYS = 5;
+const MAX_SNOOZE_DAYS = 365;
 
 // PIN 잠금 (sha256("1234")). PIN 변경하려면 새 PIN의 sha256 해시로 교체.
 const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
@@ -332,6 +358,7 @@ let viewMode = 'input';
 let saveLogs = [];
 let debugLogs = [];
 let skipStockRenderOnceId = null;
+let pendingSnoozeName = null;
 
 let nextId = 1;
 const SAVE_LOG_LIMIT = 8;
@@ -362,16 +389,63 @@ function daysUntilReturn(name) {
   const ret = new Date(u + 'T00:00:00+09:00');
   return Math.max(0, Math.ceil((ret - now) / 86400000));
 }
-function snoozeItem(name) {
-  const days = prompt(`"${name}" 며칠 동안 안 볼까요? (예: 5)`);
-  if (!days || isNaN(parseInt(days))) return;
+
+function parseSnoozeDays(value) {
+  const days = parseInt(value, 10);
+  if (!Number.isFinite(days) || days < 1) return null;
+  return Math.min(days, MAX_SNOOZE_DAYS);
+}
+
+function openSnoozeDialog(name) {
+  pendingSnoozeName = name;
+  const overlay = document.getElementById('snoozeOverlay');
+  const title = document.getElementById('snoozeTitle');
+  const input = document.getElementById('snoozeDaysInput');
+  if (!overlay || !title || !input) return;
+  title.textContent = `${name} 숨김`;
+  input.value = String(DEFAULT_SNOOZE_DAYS);
+  overlay.classList.remove('hidden');
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 0);
+}
+
+function closeSnoozeDialog() {
+  pendingSnoozeName = null;
+  document.getElementById('snoozeOverlay')?.classList.add('hidden');
+}
+
+function applySnoozeItem(name, days) {
+  if (!name) return;
   const ret = new Date(Date.now() + 9 * 3600000);
-  ret.setUTCDate(ret.getUTCDate() + parseInt(days));
+  ret.setUTCDate(ret.getUTCDate() + days);
   if (!overrides[name]) overrides[name] = {};
   overrides[name].hideUntil = ret.toISOString().slice(0, 10);
   saveLocal();
   render();
 }
+
+function confirmSnooze(event) {
+  event?.preventDefault();
+  const input = document.getElementById('snoozeDaysInput');
+  const days = parseSnoozeDays(input?.value);
+  if (!days) {
+    if (input) {
+      input.value = String(DEFAULT_SNOOZE_DAYS);
+      input.focus();
+      input.select();
+    }
+    return;
+  }
+  applySnoozeItem(pendingSnoozeName, days);
+  closeSnoozeDialog();
+}
+
+function snoozeItem(name) {
+  openSnoozeDialog(name);
+}
+
 function unsnoozeItem(name) {
   if (overrides[name]) {
     delete overrides[name].hideUntil;
@@ -1169,6 +1243,14 @@ function flushAutoSave(reason) {
 }
 
 document.getElementById('orderDays').addEventListener('change', () => { renderSalesInputs(); render(); });
+document.getElementById('snoozeOverlay')?.addEventListener('click', e => {
+  if (e.target.id === 'snoozeOverlay') closeSnoozeDialog();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !document.getElementById('snoozeOverlay')?.classList.contains('hidden')) {
+    closeSnoozeDialog();
+  }
+});
 
 // 로컬 복원 (entries 우선, 없으면 옛날 stocks 마이그레이션, 없으면 빈 entries)
 try {

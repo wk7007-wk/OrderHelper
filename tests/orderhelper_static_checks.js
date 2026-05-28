@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260529-7';/, 'APP_VERSION must be bumped for stock sort/focus fix');
+mustMatch(/const APP_VERSION = '20260529-8';/, 'APP_VERSION must be bumped for snooze numeric input');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -32,6 +32,14 @@ mustMatch(/pushDebugLog\('키 ' \+ msg, 'warn'\)/, 'stock key logs must be analy
 mustMatch(/name:"배달소스-\(신\)비비소스",unit:"봉\/봉",policy:"여유",buffer:1,daily:0/, 'BB sauce baseline missing');
 mustMatch(/name:"레몬보이",unit:"봉\/봉",policy:"여유",buffer:1,daily:0/, 'Lemonboy must match BB sauce baseline');
 mustMatch(/name:"고추,가위,소금,종이호일,레몬보이,검정봉투"/, 'existing combined Lemonboy misc item must remain');
+mustMatch(/const DEFAULT_SNOOZE_DAYS = 5;/, 'snooze default days must be 5');
+mustMatch(/const MAX_SNOOZE_DAYS = 365;/, 'snooze max guard missing');
+mustMatch(/id="snoozeDaysInput" type="number" inputmode="numeric" min="1" max="365" step="1" value="5"/, 'snooze dialog must use numeric input with default value');
+mustMatch(/function openSnoozeDialog\(name\)/, 'snooze dialog opener missing');
+mustMatch(/function confirmSnooze\(event\)/, 'snooze dialog submit handler missing');
+mustMatch(/function applySnoozeItem\(name, days\)/, 'snooze apply helper missing');
+mustMatch(/function snoozeItem\(name\) \{\s*openSnoozeDialog\(name\);\s*\}/, 'snooze button must open numeric dialog');
+mustNotMatch(/prompt\(/, 'snooze must not use browser prompt');
 mustMatch(/function shouldFallbackAdvanceFromChange\(target, currentId\)/, 'change fallback guard missing');
 mustMatch(/if \(active === target\) return true;/, 'mobile change while focused must advance');
 mustMatch(/activeField === 'stock' && activeId === nextStockId/, 'already-correct next stock focus must not be overridden');
