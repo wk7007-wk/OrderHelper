@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260529-5';/, 'APP_VERSION must be bumped for stock sort/focus fix');
+mustMatch(/const APP_VERSION = '20260529-6';/, 'APP_VERSION must be bumped for stock sort/focus fix');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -35,6 +35,12 @@ mustMatch(/activeField === 'stock' && activeId === nextStockId/, 'already-correc
 mustMatch(/change correction current=\$\{currentId\}/, 'wrong active focus must be logged');
 mustMatch(/dateKey, orderDays: days/, 'daily history payload must include KST date key');
 mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'daily history path must be saved');
+mustMatch(/data-field="k" value="\$\{fmt\(getK\(item\),2\)\}"/, 'k field must still render');
+mustMatch(/data-field="l" value="\$\{fmt\(getL\(item\),2\)\}"/, 'l field must still render');
+mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="k"/, 'k field must be skipped by keyboard next navigation');
+mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="l"/, 'l field must be skipped by keyboard next navigation');
+mustMatch(/class="cell zone" type="text" tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');
+mustMatch(/<button class="add" tabindex="-1"/, 'row action buttons must be skipped by keyboard next navigation');
 mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must render sorted rows and restore focus');
 mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
 mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');

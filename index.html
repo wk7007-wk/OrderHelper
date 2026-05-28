@@ -171,7 +171,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const APP_VERSION = '20260529-5';
+const APP_VERSION = '20260529-6';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -728,25 +728,25 @@ function render() {
           : `<td class="qty order-qty ${isNeed?'pos':''}">${isNeed ? fmt(g,2) : ''}</td>`)
       : `<td class="qty order-qty dup">${hidden ? '' : fmt(g,2)}</td>`;
     const KL = isFirst
-      ? `<td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="k" value="${fmt(getK(item),2)}"></td>
-         <td><input class="cell" type="number" step="0.1" data-id="${ent.id}" data-field="l" value="${fmt(getL(item),2)}"></td>`
+      ? `<td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="k" value="${fmt(getK(item),2)}"></td>
+         <td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="l" value="${fmt(getL(item),2)}"></td>`
       : `<td class="qty dup-meta">${fmt(getK(item),2)}</td><td class="qty dup-meta">${fmt(getL(item),2)}</td>`;
     const snoozeBtn = isFirst
       ? (hidden
-          ? `<button onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
-          : `<button onclick="snoozeItem('${safeName}')" title="N일 동안 안 봄">💤</button>`)
+          ? `<button tabindex="-1" onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
+          : `<button tabindex="-1" onclick="snoozeItem('${safeName}')" title="N일 동안 안 봄">💤</button>`)
       : '';
 
     tr.innerHTML = `
-      <td><input class="cell zone" type="text" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
+      <td><input class="cell zone" type="text" tabindex="-1" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
       <td class="name">${nameDisplay}</td>
       <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
       ${KL}
       ${gCell}
       <td>${item.unit||''}</td>
       <td class="actions">
-        <button class="add" onclick="addRow('${ent.id}')" title="같은 품목 행 추가">+</button>
-        ${dupCount > 1 ? `<button onclick="deleteRow('${ent.id}')" title="이 행 삭제">×</button>` : ''}
+        <button class="add" tabindex="-1" onclick="addRow('${ent.id}')" title="같은 품목 행 추가">+</button>
+        ${dupCount > 1 ? `<button tabindex="-1" onclick="deleteRow('${ent.id}')" title="이 행 삭제">×</button>` : ''}
         ${snoozeBtn}
       </td>
     `;
