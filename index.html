@@ -36,6 +36,9 @@
   td input.cell { background: #0f3460; color: #fff; border: 1px solid #0f3460; border-radius: 4px; padding: 4px 6px; width: 60px; text-align: right; font-size: 13px; }
   td input.cell:focus { outline: none; border-color: #e94560; }
   td input.cell.zone { width: 90px; text-align: left; }
+  .order-cell { display: inline-flex; align-items: center; gap: 5px; }
+  .order-analysis { display: inline-flex; align-items: center; min-height: 18px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(250, 204, 21, 0.34); background: rgba(234, 179, 8, 0.12); color: #fde68a; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
+  .order-analysis.empty { display: none; }
   .daily-cell { display: inline-flex; align-items: center; gap: 6px; }
   .daily-analysis { display: inline-flex; align-items: center; min-height: 18px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(14, 165, 233, 0.12); color: #7dd3fc; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
   .daily-analysis.empty { display: none; }
@@ -201,7 +204,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260601-3';
+const APP_VERSION = '20260601-4';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -365,6 +368,7 @@ let saveLogs = [];
 let debugLogs = [];
 let outputOrder = [];
 let actualOrders = {};
+let conversionAnalysis = {};
 let skipStockRenderOnceId = null;
 let pendingSnoozeName = null;
 let usageHistory = {};
@@ -514,13 +518,158 @@ function setActualOrderValue(name, value) {
   if (!name) return;
   const num = value === '' ? null : parseFloat(value);
   if (num === null || !Number.isFinite(num) || num < 0) delete actualOrders[name];
-  else actualOrders[name] = num;
+  else actualOrders[name] = Math.ceil(num);
   actualOrders = cleanActualOrders();
+}
+
+function orderUnitParts(item) {
+  const raw = String(item?.unit || '').trim();
+  const parts = raw.split('/').map(part => part.trim()).filter(Boolean);
+  const checkUnit = parts[0] || raw || '';
+  const orderUnit = parts[1] || checkUnit;
+  return {
+    checkUnit,
+    orderUnit,
+    same: !checkUnit || !orderUnit || checkUnit === orderUnit
+  };
+}
+
+function roundOrderQty(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.ceil(n - 1e-9);
+}
+
+function stockNeedFromRecord(record, name) {
+  const row = record?.calc?.[name];
+  const stockNeed = Number(row?.stockNeed);
+  if (Number.isFinite(stockNeed) && stockNeed > 0) return stockNeed;
+  const legacyQty = Number(row?.qty);
+  return Number.isFinite(legacyQty) && legacyQty > 0 ? legacyQty : 0;
+}
+
+function summarizeFactors(values) {
+  const clean = values.filter(v => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+  if (clean.length === 0) return null;
+  const mid = Math.floor(clean.length / 2);
+  const median = clean.length % 2 ? clean[mid] : (clean[mid - 1] + clean[mid]) / 2;
+  const avg = clean.reduce((a, b) => a + b, 0) / clean.length;
+  return { factor: median, avg, samples: clean.length };
+}
+
+function unitKeyForItem(item) {
+  const parts = orderUnitParts(item);
+  return `${parts.checkUnit || '-'}>${parts.orderUnit || '-'}`;
+}
+
+function conversionFactorFromRecord(record, item) {
+  const actual = getActualOrder(item.name, record?.actualOrders || {});
+  const stockNeed = stockNeedFromRecord(record, item.name);
+  if (actual === null || actual <= 0 || stockNeed <= 0) return null;
+  const parts = orderUnitParts(item);
+  if (parts.same) return 1;
+  const factor = stockNeed / actual;
+  if (!Number.isFinite(factor) || factor < 1.5) return null;
+  return factor;
+}
+
+function buildConversionAnalysis(history, currentSnapshot) {
+  const records = historyRecordsWithCurrent(history, currentSnapshot);
+  const itemBuckets = {};
+  const unitBuckets = {};
+  records.forEach(record => {
+    MASTER.forEach(item => {
+      const factor = conversionFactorFromRecord(record, item);
+      if (!factor) return;
+      const key = unitKeyForItem(item);
+      (itemBuckets[item.name] ||= []).push(factor);
+      (unitBuckets[key] ||= []).push(factor);
+    });
+  });
+
+  const unitSummary = {};
+  Object.entries(unitBuckets).forEach(([key, values]) => {
+    const summary = summarizeFactors(values);
+    if (summary) unitSummary[key] = summary;
+  });
+
+  const result = {};
+  MASTER.forEach(item => {
+    const parts = orderUnitParts(item);
+    if (parts.same) {
+      result[item.name] = { factor: 1, samples: 0, source: 'same', checkUnit: parts.checkUnit, orderUnit: parts.orderUnit };
+      return;
+    }
+    const own = summarizeFactors(itemBuckets[item.name] || []);
+    if (own) {
+      result[item.name] = { ...own, source: 'item', checkUnit: parts.checkUnit, orderUnit: parts.orderUnit };
+      return;
+    }
+    const pair = unitSummary[unitKeyForItem(item)];
+    result[item.name] = {
+      factor: pair?.factor || null,
+      samples: pair?.samples || 0,
+      source: pair ? 'unit' : 'pending',
+      checkUnit: parts.checkUnit,
+      orderUnit: parts.orderUnit
+    };
+  });
+  return result;
+}
+
+function conversionFactorForItem(item) {
+  const parts = orderUnitParts(item);
+  if (parts.same) return 1;
+  const analysis = conversionAnalysis[item.name];
+  if (analysis?.source === 'item' && Number.isFinite(analysis.factor) && analysis.factor > 0) return analysis.factor;
+  return null;
+}
+
+function recommendedOrderQty(item, stockNeed) {
+  const need = Number(stockNeed);
+  if (!Number.isFinite(need) || need <= 0) return 0;
+  const factor = conversionFactorForItem(item);
+  if (factor) return roundOrderQty(need / factor);
+  const parts = orderUnitParts(item);
+  if (!parts.same) return 1;
+  return roundOrderQty(need);
 }
 
 function outputOrderQty(item, days) {
   const actual = getActualOrder(item.name);
-  return actual !== null ? actual : calcG(item, days);
+  if (actual !== null) return roundOrderQty(actual);
+  return recommendedOrderQty(item, calcG(item, days));
+}
+
+function orderAnalysisText(item, stockNeed) {
+  const actual = getActualOrder(item.name);
+  if (actual !== null) return '확인';
+  const parts = orderUnitParts(item);
+  if (parts.same) return '미확인';
+  const analysis = conversionAnalysis[item.name];
+  if (analysis?.source === 'item' && Number.isFinite(analysis.factor)) {
+    return `${parts.checkUnit}/${parts.orderUnit} ${fmt(analysis.factor, 1)}`;
+  }
+  if (Number(stockNeed) > 0) return '미확인';
+  return '';
+}
+
+function orderAnalysisTitle(item, stockNeed) {
+  const actual = getActualOrder(item.name);
+  const parts = orderUnitParts(item);
+  if (actual !== null) return `실발주 ${actual}${parts.orderUnit || ''} 확인됨`;
+  const analysis = conversionAnalysis[item.name];
+  if (analysis?.source === 'item' && Number.isFinite(analysis.factor)) {
+    return `품목 기록 ${analysis.samples}건 기준: ${fmt(analysis.factor, 2)}${parts.checkUnit || ''} = 1${parts.orderUnit || ''}`;
+  }
+  if (!parts.same) return `단위 분석 대기: 체크 ${parts.checkUnit || '-'} / 발주 ${parts.orderUnit || '-'}. 실제 넣은 발주칸을 한 번 확인하면 이후 패턴에 반영됩니다.`;
+  return '실제 SFA 입력 여부 미확인';
+}
+
+function renderOrderAnalysisSpan(item, stockNeed) {
+  const text = orderAnalysisText(item, stockNeed);
+  if (!text) return '<span class="order-analysis empty"></span>';
+  return `<span class="order-analysis" title="${escapeHtml(orderAnalysisTitle(item, stockNeed))}">${escapeHtml(text)}</span>`;
 }
 
 function handleOutputCellInput(target) {
@@ -637,7 +786,7 @@ function currentAnalysisSnapshot() {
   const calc = {};
   MASTER.forEach(item => {
     const g = calcG(item, days);
-    if (g > 0) calc[item.name] = { qty: Math.round(g * 100) / 100, unit: item.unit, stock: totalStock(item.name) };
+    if (g > 0) calc[item.name] = { qty: recommendedOrderQty(item, g), stockNeed: Math.round(g * 100) / 100, unit: item.unit, stock: totalStock(item.name) };
   });
   return {
     savedAt: Date.now(),
@@ -680,7 +829,10 @@ function historyRecordsWithCurrent(history, currentSnapshot) {
 
 function orderQtyFromRecord(record, name) {
   const actual = getActualOrder(name, record?.actualOrders || {});
-  if (actual !== null) return { qty: actual, source: 'actual' };
+  if (actual !== null) {
+    const stockNeed = stockNeedFromRecord(record, name);
+    return { qty: stockNeed || actual, source: 'actual', actualQty: actual };
+  }
   const n = Number(record?.calc?.[name]?.qty);
   return { qty: Number.isFinite(n) && n > 0 ? n : 0, source: 'calc' };
 }
@@ -714,6 +866,7 @@ function buildUsageAnalysis(history, currentSnapshot) {
         usage: safeUsage,
         daily: safeUsage / gapDays,
         orderQty,
+        actualQty: order.actualQty ?? null,
         orderSource: order.source
       };
       acc[name] = bucket;
@@ -735,13 +888,18 @@ function buildUsageAnalysis(history, currentSnapshot) {
 }
 
 function recomputeUsageAnalysis() {
-  usageAnalysis = buildUsageAnalysis(usageHistory, currentAnalysisSnapshot());
+  const snapshot = currentAnalysisSnapshot();
+  conversionAnalysis = buildConversionAnalysis(usageHistory, snapshot);
+  usageAnalysis = buildUsageAnalysis(usageHistory, snapshot);
 }
 
 function usageAnalysisTitle(analysis) {
   if (!analysis) return '';
   const last = analysis.last;
-  const recent = last ? ` / 최근 ${fmt(last.daily, 2)}/일 (${last.from}→${last.to}, ${last.orderSource === 'actual' ? '전회실발주' : '전회계산발주'} ${fmt(last.orderQty, 2)})` : '';
+  const orderLabel = last?.orderSource === 'actual'
+    ? `전회실발주 ${fmt(last.actualQty, 0)} / 재고환산 ${fmt(last.orderQty, 2)}`
+    : `전회계산발주 ${fmt(last.orderQty, 2)}`;
+  const recent = last ? ` / 최근 ${fmt(last.daily, 2)}/일 (${last.from}→${last.to}, ${orderLabel})` : '';
   return `분석 평균 ${fmt(analysis.avg, 2)}/일 · 누적 ${fmt(analysis.totalUsage, 2)}개/${fmt(analysis.totalDays, 1)}일 · ${analysis.samples}구간${recent}`;
 }
 
@@ -1087,7 +1245,9 @@ function moveOutputItem(name, direction) {
 
 function outputNumberInput(name, field, value) {
   const title = field === 'order' ? '실발주값 (비우면 계산값)' : '';
-  return `<input class="cell" type="number" inputmode="decimal" step="0.1" data-output-name="${escapeHtml(name)}" data-output-field="${field}" value="${escapeHtml(value)}" title="${title}">`;
+  const step = field === 'order' ? '1' : '0.1';
+  const inputmode = field === 'order' ? 'numeric' : 'decimal';
+  return `<input class="cell" type="number" inputmode="${inputmode}" step="${step}" data-output-name="${escapeHtml(name)}" data-output-field="${field}" value="${escapeHtml(value)}" title="${title}">`;
 }
 
 function kstDateKey(ts) {
@@ -1123,7 +1283,7 @@ function render() {
       const safeName = item.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
       tr.innerHTML = `
         <td class="name">${item.name}</td>
-        <td class="qty order-qty pos">${outputNumberInput(item.name, 'order', fmt(outputOrderQty(item, days),2))}</td>
+        <td class="qty order-qty pos"><span class="order-cell">${outputNumberInput(item.name, 'order', fmt(outputOrderQty(item, days),0))}${renderOrderAnalysisSpan(item, g)}</span></td>
         <td>${outputNumberInput(item.name, 'stock', fmt(E,2))}</td>
         <td>${outputNumberInput(item.name, 'k', fmt(getK(item),2))}</td>
         <td><span class="daily-cell">${outputNumberInput(item.name, 'l', fmt(getL(item),2))}${renderDailyAnalysisSpan(item.name)}</span></td>
@@ -1227,6 +1387,7 @@ function render() {
     });
     inp.addEventListener('change', e => {
       if (e.target.dataset.outputField) {
+        handleOutputCellInput(e.target);
         flushAutoSave('auto');
         render();
         return;
@@ -1256,6 +1417,7 @@ function render() {
       if (e.target.dataset.outputField) {
         if (e.key !== 'Enter') return;
         e.preventDefault();
+        handleOutputCellInput(e.target);
         e.target.blur();
         flushAutoSave('auto');
         render();
@@ -1470,7 +1632,7 @@ async function saveToFB(reason = 'manual') {
   const calc = {};
   MASTER.forEach(item => {
     const g = calcG(item, days);
-    if (g > 0) calc[item.name] = { qty: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
+    if (g > 0) calc[item.name] = { qty: recommendedOrderQty(item, g), stockNeed: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
   const salesWeights = dailyWeights(days).map(x => Math.round(x * 1000) / 1000);
   outputOrder = cleanOutputOrder();

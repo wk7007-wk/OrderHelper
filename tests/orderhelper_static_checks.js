@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260601-3';/, 'APP_VERSION must be bumped for actual order tracking');
+mustMatch(/const APP_VERSION = '20260601-4';/, 'APP_VERSION must be bumped for unit conversion analysis');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -34,15 +34,22 @@ mustMatch(/setInterval\(\(\) => loadUsageHistory\(true\), 300000\);/, 'usage his
 mustMatch(/function handleOutputCellInput\(target\)/, 'output edit handler missing');
 mustMatch(/function setOutputStockTotal\(name, value\)/, 'output stock total setter missing');
 mustMatch(/let actualOrders = \{\};/, 'actual order state missing');
+mustMatch(/let conversionAnalysis = \{\};/, 'conversion analysis state missing');
 mustMatch(/function setActualOrderValue\(name, value\)/, 'actual order setter missing');
 mustMatch(/function outputOrderQty\(item, days\)/, 'output order qty must prefer actual order');
+mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
+mustMatch(/function buildConversionAnalysis\(history, currentSnapshot\)/, 'unit conversion analysis builder missing');
+mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order quantity converter missing');
+mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
+mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
+mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output change must confirm unchanged order values');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
 mustMatch(/actualOrders, dailySales/, 'Firebase payload must include actual orders');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
-mustMatch(/last\.orderSource === 'actual' \? '전회실발주' : '전회계산발주'/, 'analysis title must disclose actual vs calculated order');
+mustMatch(/전회실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 재고환산/, 'analysis title must disclose actual order and stock conversion');
 mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');
 mustMatch(/if \(handleOutputCellInput\(e\.target\)\) return;/, 'output edit input must bypass row-id input handler');
-mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*flushAutoSave\('auto'\);\s*render\(\);\s*return;\s*\}/, 'output edit change must save and rerender');
+mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);\s*render\(\);\s*return;\s*\}/, 'output edit change must save and rerender');
 mustMatch(/let debugLogs = \[\];/, 'debug logs state missing');
 mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local storage key missing');
 mustMatch(/let outputOrder = \[\];/, 'output order state missing');
