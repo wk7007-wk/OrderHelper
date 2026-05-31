@@ -18,12 +18,19 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260529-10';/, 'APP_VERSION must be bumped for output ordering');
+mustMatch(/const APP_VERSION = '20260601-1';/, 'APP_VERSION must be bumped for usage analysis');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
 mustMatch(/function stockEventLabel\(e, phase\)/, 'stock key event label missing');
 mustMatch(/function logStockEvent\(e, phase\)/, 'stock key event logger missing');
+mustMatch(/let usageHistory = \{\};/, 'usage history state missing');
+mustMatch(/let usageAnalysis = \{\};/, 'usage analysis state missing');
+mustMatch(/function buildUsageAnalysis\(history, currentSnapshot\)/, 'usage analysis builder missing');
+mustMatch(/const usage = prevStock \+ orderQty - currStock;/, 'usage analysis must infer from previous stock plus order minus next stock');
+mustMatch(/data-analysis-name="\$\{escapeHtml\(name\)\}"/, 'daily analysis marker must be rendered next to daily usage');
+mustMatch(/loadUsageHistory\(true\);/, 'usage history must load on page start');
+mustMatch(/setInterval\(\(\) => loadUsageHistory\(true\), 300000\);/, 'usage history must refresh periodically');
 mustMatch(/let debugLogs = \[\];/, 'debug logs state missing');
 mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local storage key missing');
 mustMatch(/let outputOrder = \[\];/, 'output order state missing');

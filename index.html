@@ -36,6 +36,9 @@
   td input.cell { background: #0f3460; color: #fff; border: 1px solid #0f3460; border-radius: 4px; padding: 4px 6px; width: 60px; text-align: right; font-size: 13px; }
   td input.cell:focus { outline: none; border-color: #e94560; }
   td input.cell.zone { width: 90px; text-align: left; }
+  .daily-cell { display: inline-flex; align-items: center; gap: 6px; }
+  .daily-analysis { display: inline-flex; align-items: center; min-height: 18px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(14, 165, 233, 0.12); color: #7dd3fc; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
+  .daily-analysis.empty { display: none; }
   .order-qty.pos { font-weight: bold; font-size: 14px; color: #e94560; }
   .order-qty.dup { color: #888; font-weight: normal; font-size: 11px; }
   td.actions { white-space: nowrap; }
@@ -198,7 +201,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260529-10';
+const APP_VERSION = '20260601-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -363,6 +366,8 @@ let debugLogs = [];
 let outputOrder = [];
 let skipStockRenderOnceId = null;
 let pendingSnoozeName = null;
+let usageHistory = {};
+let usageAnalysis = {};
 
 let nextId = 1;
 const SAVE_LOG_LIMIT = 8;
@@ -497,6 +502,210 @@ function calcG(item, days) {
   const totalUsage = L * weights.reduce((a, b) => a + b, 0);
   if (E < M) return totalUsage - M + K;
   return totalUsage - E + K;
+}
+
+function normalizeHistoryDateKey(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length >= 8 ? digits.slice(0, 8) : '';
+}
+
+function dateKeyToDayMs(dateKey) {
+  const key = normalizeHistoryDateKey(dateKey);
+  if (!key) return null;
+  const y = Number(key.slice(0, 4));
+  const m = Number(key.slice(4, 6));
+  const d = Number(key.slice(6, 8));
+  if (!y || !m || !d) return null;
+  return Date.UTC(y, m - 1, d);
+}
+
+function stockMapFromEntries(snapshotEntries) {
+  const parts = new Map();
+  (Array.isArray(snapshotEntries) ? snapshotEntries : []).forEach(entry => {
+    if (!entry || !entry.name) return;
+    const current = parts.get(entry.name) || { rows: 0, checked: 0, total: 0 };
+    current.rows += 1;
+    const n = Number(entry.stock);
+    if (entry.stock !== null && entry.stock !== '' && Number.isFinite(n)) {
+      current.checked += 1;
+      current.total += n;
+    }
+    parts.set(entry.name, current);
+  });
+  const stockMap = new Map();
+  parts.forEach((value, name) => {
+    if (value.rows > 0 && value.checked === value.rows) stockMap.set(name, value.total);
+  });
+  return stockMap;
+}
+
+function normalizeHistoryRecord(key, snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.entries)) return null;
+  const savedAt = Number(snapshot.savedAt);
+  const dateKey = normalizeHistoryDateKey(snapshot.dateKey) ||
+    normalizeHistoryDateKey(key) ||
+    (Number.isFinite(savedAt) ? kstDateKey(savedAt) : '');
+  const dayMs = dateKeyToDayMs(dateKey);
+  if (!dateKey || dayMs === null) return null;
+  const stockMap = stockMapFromEntries(snapshot.entries);
+  if (stockMap.size === 0) return null;
+  return {
+    dateKey,
+    dayMs,
+    savedAt: Number.isFinite(savedAt) ? savedAt : dayMs,
+    stockMap,
+    calc: snapshot.calc || {}
+  };
+}
+
+function currentAnalysisSnapshot() {
+  const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
+  const calc = {};
+  MASTER.forEach(item => {
+    const g = calcG(item, days);
+    if (g > 0) calc[item.name] = { qty: Math.round(g * 100) / 100, unit: item.unit, stock: totalStock(item.name) };
+  });
+  return {
+    savedAt: Date.now(),
+    dateKey: kstDateKey(Date.now()),
+    entries: entries.map(entry => ({ name: entry.name, stock: entry.stock })),
+    calc
+  };
+}
+
+function historyRecordsWithCurrent(history, currentSnapshot) {
+  const byDate = new Map();
+  Object.entries(history || {}).forEach(([key, snapshot]) => {
+    const record = normalizeHistoryRecord(key, snapshot);
+    if (!record) return;
+    const existing = byDate.get(record.dateKey);
+    if (!existing || record.savedAt >= existing.savedAt) byDate.set(record.dateKey, record);
+  });
+
+  const current = normalizeHistoryRecord(currentSnapshot?.dateKey, currentSnapshot);
+  if (current) {
+    const existing = byDate.get(current.dateKey);
+    if (existing) {
+      const mergedStock = new Map(existing.stockMap);
+      current.stockMap.forEach((value, name) => mergedStock.set(name, value));
+      byDate.set(current.dateKey, {
+        ...current,
+        savedAt: Math.max(existing.savedAt, current.savedAt),
+        stockMap: mergedStock,
+        calc: current.calc || existing.calc || {}
+      });
+    } else {
+      byDate.set(current.dateKey, current);
+    }
+  }
+
+  return Array.from(byDate.values()).sort((a, b) => (a.dayMs - b.dayMs) || (a.savedAt - b.savedAt));
+}
+
+function orderQtyFromRecord(record, name) {
+  const n = Number(record?.calc?.[name]?.qty);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function buildUsageAnalysis(history, currentSnapshot) {
+  const records = historyRecordsWithCurrent(history, currentSnapshot);
+  const acc = {};
+  for (let i = 1; i < records.length; i++) {
+    const prev = records[i - 1];
+    const curr = records[i];
+    const gapDays = (curr.dayMs - prev.dayMs) / 86400000;
+    if (!Number.isFinite(gapDays) || gapDays <= 0) continue;
+    MASTER.forEach(item => {
+      const name = item.name;
+      if (!prev.stockMap.has(name) || !curr.stockMap.has(name)) return;
+      const prevStock = prev.stockMap.get(name);
+      const currStock = curr.stockMap.get(name);
+      const orderQty = orderQtyFromRecord(prev, name);
+      const usage = prevStock + orderQty - currStock;
+      if (!Number.isFinite(usage) || usage < -0.05) return;
+      const bucket = acc[name] || { totalUsage: 0, totalDays: 0, samples: 0, last: null };
+      const safeUsage = Math.max(0, usage);
+      bucket.totalUsage += safeUsage;
+      bucket.totalDays += gapDays;
+      bucket.samples += 1;
+      bucket.last = {
+        from: prev.dateKey,
+        to: curr.dateKey,
+        days: gapDays,
+        usage: safeUsage,
+        daily: safeUsage / gapDays,
+        orderQty
+      };
+      acc[name] = bucket;
+    });
+  }
+
+  const result = {};
+  Object.entries(acc).forEach(([name, value]) => {
+    if (value.samples <= 0 || value.totalDays <= 0) return;
+    result[name] = {
+      avg: value.totalUsage / value.totalDays,
+      totalUsage: value.totalUsage,
+      totalDays: value.totalDays,
+      samples: value.samples,
+      last: value.last
+    };
+  });
+  return result;
+}
+
+function recomputeUsageAnalysis() {
+  usageAnalysis = buildUsageAnalysis(usageHistory, currentAnalysisSnapshot());
+}
+
+function usageAnalysisTitle(analysis) {
+  if (!analysis) return '';
+  const last = analysis.last;
+  const recent = last ? ` / 최근 ${fmt(last.daily, 2)}/일 (${last.from}→${last.to}, 전회발주 ${fmt(last.orderQty, 2)})` : '';
+  return `분석 평균 ${fmt(analysis.avg, 2)}/일 · 누적 ${fmt(analysis.totalUsage, 2)}개/${fmt(analysis.totalDays, 1)}일 · ${analysis.samples}구간${recent}`;
+}
+
+function renderDailyAnalysisSpan(name) {
+  const analysis = usageAnalysis[name];
+  const text = analysis ? `분석 ${fmt(analysis.avg, 2)}` : '';
+  const title = analysis ? usageAnalysisTitle(analysis) : '';
+  return `<span class="daily-analysis ${analysis ? '' : 'empty'}" data-analysis-name="${escapeHtml(name)}" title="${escapeHtml(title)}">${text}</span>`;
+}
+
+function updateDailyAnalysisSpan(span) {
+  const name = span?.dataset?.analysisName;
+  if (!name) return;
+  const analysis = usageAnalysis[name];
+  span.textContent = analysis ? `분석 ${fmt(analysis.avg, 2)}` : '';
+  span.title = analysis ? usageAnalysisTitle(analysis) : '';
+  span.classList.toggle('empty', !analysis);
+}
+
+function updateAllDailyAnalysisCells() {
+  document.querySelectorAll('.daily-analysis[data-analysis-name]').forEach(updateDailyAnalysisSpan);
+}
+
+function updateDailyAnalysisForName(name) {
+  document.querySelectorAll('.daily-analysis[data-analysis-name]').forEach(span => {
+    if (span.dataset.analysisName === name) updateDailyAnalysisSpan(span);
+  });
+}
+
+async function loadUsageHistory(silent = true) {
+  try {
+    const res = await fetch(`${FB_URL}${FB_PATH}/history.json?_=` + Date.now());
+    if (!res.ok) {
+      if (!silent) toast('일사용 분석 기록을 불러오지 못했습니다');
+      console.warn('[usageAnalysis] HTTP', res.status);
+      return;
+    }
+    usageHistory = await res.json() || {};
+    recomputeUsageAnalysis();
+    updateAllDailyAnalysisCells();
+  } catch (e) {
+    console.warn('[usageAnalysis] load failed', e);
+    if (!silent) toast('일사용 분석 기록 오류');
+  }
 }
 
 function recommendedDays() {
@@ -721,6 +930,16 @@ function fmt(n, dp=2) {
   return (Math.round(n * Math.pow(10, dp)) / Math.pow(10, dp)).toString();
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
 function normalizedZone(zone) {
   return String(zone || '').trim();
 }
@@ -800,6 +1019,7 @@ function render() {
   renderHeader();
   renderSaveLogs();
   const days = parseInt(document.getElementById('orderDays').value);
+  recomputeUsageAnalysis();
 
   // 발주 N개 (품목 단위)
   let needCount = 0;
@@ -821,7 +1041,7 @@ function render() {
         <td class="qty order-qty pos">${fmt(g,2)}</td>
         <td class="qty">${fmt(E,2)}</td>
         <td class="qty">${fmt(getK(item),2)}</td>
-        <td class="qty">${fmt(getL(item),2)}</td>
+        <td class="qty"><span>${fmt(getL(item),2)}</span>${renderDailyAnalysisSpan(item.name)}</td>
         <td>${item.unit||''}</td>
         <td class="output-actions">
           <button type="button" onclick="moveOutputItem('${safeName}', -1)" title="위로" ${idx === 0 ? 'disabled' : ''}>▲</button>
@@ -866,8 +1086,8 @@ function render() {
       : `<td class="qty order-qty dup">${hidden ? '' : fmt(g,2)}</td>`;
     const KL = isFirst
       ? `<td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="k" value="${fmt(getK(item),2)}"></td>
-         <td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="l" value="${fmt(getL(item),2)}"></td>`
-      : `<td class="qty dup-meta">${fmt(getK(item),2)}</td><td class="qty dup-meta">${fmt(getL(item),2)}</td>`;
+         <td><span class="daily-cell"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="l" value="${fmt(getL(item),2)}">${renderDailyAnalysisSpan(item.name)}</span></td>`
+      : `<td class="qty dup-meta">${fmt(getK(item),2)}</td><td class="qty dup-meta"><span>${fmt(getL(item),2)}</span>${renderDailyAnalysisSpan(item.name)}</td>`;
     const snoozeBtn = isFirst
       ? (hidden
           ? `<button tabindex="-1" onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
@@ -901,6 +1121,8 @@ function render() {
         logStockEvent(e, 'input');
         ent.stock = v === '' ? null : parseFloat(v);
         saveLocal();
+        recomputeUsageAnalysis();
+        updateDailyAnalysisForName(ent.name);
         updateGForName(ent.name);
       } else if (f === 'zone') {
         ent.zone = v;
@@ -1190,6 +1412,7 @@ async function saveToFB(reason = 'manual') {
     renderSaveState('저장됨', 'saved');
     toast(saveReasonLabel(activeReason) + ' 완료 (' + new Date(now).toLocaleTimeString('ko-KR') + ')');
     document.getElementById('lastSaved').textContent = lastSavedLabel(activeReason) + ' ' + new Date(now).toLocaleTimeString('ko-KR');
+    loadUsageHistory(true);
   } catch (e) {
     console.error('[saveToFB] EXCEPTION', e);
     pushSaveLog(saveReasonLabel(activeReason) + ' 실패', 'error');
@@ -1258,6 +1481,7 @@ function applyFBData(data) {
   render();
   renderSaveState('동기화됨', 'idle');
   document.getElementById('lastSaved').textContent = '동기화 ' + new Date(data.savedAt).toLocaleTimeString('ko-KR');
+  loadUsageHistory(true);
 }
 
 // Firebase 폴링 (5초마다, 입력 중이면 보류)
@@ -1382,10 +1606,12 @@ document.getElementById('appVer').textContent = 'v' + APP_VERSION;
 bindBaseSalesInput();
 renderSalesInputs();
 render();
+loadUsageHistory(true);
 window.addEventListener('resize', updateStickyOffsets);
 // 디바이스 간 동기화: 페이지 열 때마다 + 5초 간격 폴링
 autoLoadFromFB(true);
 setInterval(() => autoLoadFromFB(true), 5000);
+setInterval(() => loadUsageHistory(true), 300000);
 </script>
 </body>
 </html>
