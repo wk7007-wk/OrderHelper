@@ -201,7 +201,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260601-2';
+const APP_VERSION = '20260601-3';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -364,6 +364,7 @@ let viewMode = 'input';
 let saveLogs = [];
 let debugLogs = [];
 let outputOrder = [];
+let actualOrders = {};
 let skipStockRenderOnceId = null;
 let pendingSnoozeName = null;
 let usageHistory = {};
@@ -375,6 +376,8 @@ const SAVE_LOG_STORAGE_KEY = 'bbq_save_logs';
 const DEBUG_LOG_LIMIT = 40;
 const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';
 const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';
+const ACTUAL_ORDER_STORAGE_KEY = 'bbq_actual_orders';
+const ACTUAL_ORDER_DATE_STORAGE_KEY = 'bbq_actual_orders_date';
 function newId() { return 'e' + (nextId++); }
 
 function getL(item) { return overrides[item.name]?.l ?? (item.daily || 0); }
@@ -491,6 +494,35 @@ function setOutputStockTotal(name, value) {
   });
 }
 
+function cleanActualOrders(source = actualOrders) {
+  const known = new Set(MASTER.map(item => item.name));
+  const cleaned = {};
+  Object.entries(source || {}).forEach(([name, value]) => {
+    const n = Number(value);
+    if (known.has(name) && Number.isFinite(n) && n >= 0) cleaned[name] = n;
+  });
+  return cleaned;
+}
+
+function getActualOrder(name, source = actualOrders) {
+  if (!Object.prototype.hasOwnProperty.call(source || {}, name)) return null;
+  const n = Number(source[name]);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function setActualOrderValue(name, value) {
+  if (!name) return;
+  const num = value === '' ? null : parseFloat(value);
+  if (num === null || !Number.isFinite(num) || num < 0) delete actualOrders[name];
+  else actualOrders[name] = num;
+  actualOrders = cleanActualOrders();
+}
+
+function outputOrderQty(item, days) {
+  const actual = getActualOrder(item.name);
+  return actual !== null ? actual : calcG(item, days);
+}
+
 function handleOutputCellInput(target) {
   const name = target?.dataset?.outputName;
   const field = target?.dataset?.outputField;
@@ -504,10 +536,12 @@ function handleOutputCellInput(target) {
   } else if (field === 'k' || field === 'l') {
     setOverrideValue(name, field, value);
     saveLocal();
+  } else if (field === 'order') {
+    setActualOrderValue(name, value);
+    saveLocal('actualOrder');
   } else {
     return false;
   }
-  updateGForName(name);
   return true;
 }
 
@@ -593,6 +627,7 @@ function normalizeHistoryRecord(key, snapshot) {
     dayMs,
     savedAt: Number.isFinite(savedAt) ? savedAt : dayMs,
     stockMap,
+    actualOrders: cleanActualOrders(snapshot.actualOrders),
     calc: snapshot.calc || {}
   };
 }
@@ -608,6 +643,7 @@ function currentAnalysisSnapshot() {
     savedAt: Date.now(),
     dateKey: kstDateKey(Date.now()),
     entries: entries.map(entry => ({ name: entry.name, stock: entry.stock })),
+    actualOrders: cleanActualOrders(),
     calc
   };
 }
@@ -631,6 +667,7 @@ function historyRecordsWithCurrent(history, currentSnapshot) {
         ...current,
         savedAt: Math.max(existing.savedAt, current.savedAt),
         stockMap: mergedStock,
+        actualOrders: current.actualOrders || {},
         calc: current.calc || existing.calc || {}
       });
     } else {
@@ -642,8 +679,10 @@ function historyRecordsWithCurrent(history, currentSnapshot) {
 }
 
 function orderQtyFromRecord(record, name) {
+  const actual = getActualOrder(name, record?.actualOrders || {});
+  if (actual !== null) return { qty: actual, source: 'actual' };
   const n = Number(record?.calc?.[name]?.qty);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  return { qty: Number.isFinite(n) && n > 0 ? n : 0, source: 'calc' };
 }
 
 function buildUsageAnalysis(history, currentSnapshot) {
@@ -659,7 +698,8 @@ function buildUsageAnalysis(history, currentSnapshot) {
       if (!prev.stockMap.has(name) || !curr.stockMap.has(name)) return;
       const prevStock = prev.stockMap.get(name);
       const currStock = curr.stockMap.get(name);
-      const orderQty = orderQtyFromRecord(prev, name);
+      const order = orderQtyFromRecord(prev, name);
+      const orderQty = order.qty;
       const usage = prevStock + orderQty - currStock;
       if (!Number.isFinite(usage) || usage < -0.05) return;
       const bucket = acc[name] || { totalUsage: 0, totalDays: 0, samples: 0, last: null };
@@ -673,7 +713,8 @@ function buildUsageAnalysis(history, currentSnapshot) {
         days: gapDays,
         usage: safeUsage,
         daily: safeUsage / gapDays,
-        orderQty
+        orderQty,
+        orderSource: order.source
       };
       acc[name] = bucket;
     });
@@ -700,7 +741,7 @@ function recomputeUsageAnalysis() {
 function usageAnalysisTitle(analysis) {
   if (!analysis) return '';
   const last = analysis.last;
-  const recent = last ? ` / 최근 ${fmt(last.daily, 2)}/일 (${last.from}→${last.to}, 전회발주 ${fmt(last.orderQty, 2)})` : '';
+  const recent = last ? ` / 최근 ${fmt(last.daily, 2)}/일 (${last.from}→${last.to}, ${last.orderSource === 'actual' ? '전회실발주' : '전회계산발주'} ${fmt(last.orderQty, 2)})` : '';
   return `분석 평균 ${fmt(analysis.avg, 2)}/일 · 누적 ${fmt(analysis.totalUsage, 2)}개/${fmt(analysis.totalDays, 1)}일 · ${analysis.samples}구간${recent}`;
 }
 
@@ -1045,7 +1086,8 @@ function moveOutputItem(name, direction) {
 }
 
 function outputNumberInput(name, field, value) {
-  return `<input class="cell" type="number" inputmode="decimal" step="0.1" data-output-name="${escapeHtml(name)}" data-output-field="${field}" value="${escapeHtml(value)}">`;
+  const title = field === 'order' ? '실발주값 (비우면 계산값)' : '';
+  return `<input class="cell" type="number" inputmode="decimal" step="0.1" data-output-name="${escapeHtml(name)}" data-output-field="${field}" value="${escapeHtml(value)}" title="${title}">`;
 }
 
 function kstDateKey(ts) {
@@ -1081,7 +1123,7 @@ function render() {
       const safeName = item.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
       tr.innerHTML = `
         <td class="name">${item.name}</td>
-        <td class="qty order-qty pos">${fmt(g,2)}</td>
+        <td class="qty order-qty pos">${outputNumberInput(item.name, 'order', fmt(outputOrderQty(item, days),2))}</td>
         <td>${outputNumberInput(item.name, 'stock', fmt(E,2))}</td>
         <td>${outputNumberInput(item.name, 'k', fmt(getK(item),2))}</td>
         <td><span class="daily-cell">${outputNumberInput(item.name, 'l', fmt(getL(item),2))}${renderDailyAnalysisSpan(item.name)}</span></td>
@@ -1311,7 +1353,10 @@ function saveLocal(reason = 'auto') {
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
   outputOrder = cleanOutputOrder();
+  actualOrders = cleanActualOrders();
   localStorage.setItem(OUTPUT_ORDER_STORAGE_KEY, JSON.stringify(outputOrder));
+  localStorage.setItem(ACTUAL_ORDER_STORAGE_KEY, JSON.stringify(actualOrders));
+  localStorage.setItem(ACTUAL_ORDER_DATE_STORAGE_KEY, kstDateKey(Date.now()));
   if (baseSales == null) localStorage.removeItem('bbq_baseSales');
   else {
     localStorage.setItem('bbq_baseSales', JSON.stringify(baseSales));
@@ -1429,7 +1474,8 @@ async function saveToFB(reason = 'manual') {
   });
   const salesWeights = dailyWeights(days).map(x => Math.round(x * 1000) / 1000);
   outputOrder = cleanOutputOrder();
-  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
+  actualOrders = cleanActualOrders();
+  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
@@ -1513,6 +1559,11 @@ function applyFBData(data) {
   if (data.entries) entries = data.entries;
   if (data.overrides) overrides = data.overrides;
   if (data.outputOrder) outputOrder = cleanOutputOrder(data.outputOrder);
+  if (Object.prototype.hasOwnProperty.call(data, 'actualOrders') && normalizeHistoryDateKey(data.dateKey) === kstDateKey(Date.now())) {
+    actualOrders = cleanActualOrders(data.actualOrders);
+  } else {
+    actualOrders = {};
+  }
   if (data.dailySales) dailySales = data.dailySales;
   if (Object.prototype.hasOwnProperty.call(data, 'baseSales')) {
     const n = Number(data.baseSales);
@@ -1621,6 +1672,9 @@ try {
   }
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
   const oo = localStorage.getItem(OUTPUT_ORDER_STORAGE_KEY); if (oo) outputOrder = cleanOutputOrder(JSON.parse(oo));
+  const ao = localStorage.getItem(ACTUAL_ORDER_STORAGE_KEY);
+  const aoDate = localStorage.getItem(ACTUAL_ORDER_DATE_STORAGE_KEY);
+  if (ao && aoDate === kstDateKey(Date.now())) actualOrders = cleanActualOrders(JSON.parse(ao));
   const ds = localStorage.getItem('bbq_dailySales'); if (ds) dailySales = JSON.parse(ds);
   const bs = localStorage.getItem('bbq_baseSales');
   const bsv = localStorage.getItem('bbq_baseSalesVersion');
@@ -1643,6 +1697,7 @@ try {
 // 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 (구 이름 정합성, 0510 RTDB 키 sanitize 대응)
 entries = entries.filter(e => MASTER.some(m => m.name === e.name));
 Object.keys(overrides).forEach(k => { if (!MASTER.some(m => m.name === k)) delete overrides[k]; });
+actualOrders = cleanActualOrders();
 
 // MASTER에 있는데 entries에 없는 품목 보충 (마스터 갱신 대비)
 MASTER.forEach(item => {

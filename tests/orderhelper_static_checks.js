@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260601-2';/, 'APP_VERSION must be bumped for output editing');
+mustMatch(/const APP_VERSION = '20260601-3';/, 'APP_VERSION must be bumped for actual order tracking');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -33,6 +33,13 @@ mustMatch(/loadUsageHistory\(true\);/, 'usage history must load on page start');
 mustMatch(/setInterval\(\(\) => loadUsageHistory\(true\), 300000\);/, 'usage history must refresh periodically');
 mustMatch(/function handleOutputCellInput\(target\)/, 'output edit handler missing');
 mustMatch(/function setOutputStockTotal\(name, value\)/, 'output stock total setter missing');
+mustMatch(/let actualOrders = \{\};/, 'actual order state missing');
+mustMatch(/function setActualOrderValue\(name, value\)/, 'actual order setter missing');
+mustMatch(/function outputOrderQty\(item, days\)/, 'output order qty must prefer actual order');
+mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
+mustMatch(/actualOrders, dailySales/, 'Firebase payload must include actual orders');
+mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
+mustMatch(/last\.orderSource === 'actual' \? '전회실발주' : '전회계산발주'/, 'analysis title must disclose actual vs calculated order');
 mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');
 mustMatch(/if \(handleOutputCellInput\(e\.target\)\) return;/, 'output edit input must bypass row-id input handler');
 mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*flushAutoSave\('auto'\);\s*render\(\);\s*return;\s*\}/, 'output edit change must save and rerender');
@@ -44,7 +51,7 @@ mustMatch(/function getOutputItems\(days\)/, 'output item sort helper missing');
 mustMatch(/function moveOutputItem\(name, direction\)/, 'output move helper missing');
 mustMatch(/outputOrder = visibleNames\.concat\(remaining\);/, 'output move must persist visible order');
 mustMatch(/outputOrder = cleanOutputOrder\(\);/, 'output order must be cleaned before saving');
-mustMatch(/outputOrder, dailySales/, 'Firebase payload must include output order');
+mustMatch(/outputOrder, actualOrders, dailySales/, 'Firebase payload must include output and actual order');
 mustMatch(/if \(data\.outputOrder\) outputOrder = cleanOutputOrder\(data\.outputOrder\);/, 'Firebase sync must restore output order');
 mustMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(outputOrder\)\)/, 'output order must be stored locally');
 mustMatch(/function pushDebugLog\(message, tone = 'debug', ts = Date\.now\(\)\)/, 'internal debug logger missing');
