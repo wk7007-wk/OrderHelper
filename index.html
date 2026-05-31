@@ -201,7 +201,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260601-1';
+const APP_VERSION = '20260601-2';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -470,6 +470,45 @@ function unsnoozeItem(name) {
   }
   saveLocal();
   render();
+}
+
+function setOverrideValue(name, field, value) {
+  if (!name || (field !== 'k' && field !== 'l')) return;
+  if (!overrides[name]) overrides[name] = {};
+  const num = value === '' ? null : parseFloat(value);
+  if (num === null || !Number.isFinite(num)) delete overrides[name][field];
+  else overrides[name][field] = num;
+  if (Object.keys(overrides[name]).length === 0) delete overrides[name];
+}
+
+function setOutputStockTotal(name, value) {
+  const sameEntries = entries.filter(entry => entry.name === name);
+  if (sameEntries.length === 0) return;
+  const num = value === '' ? null : parseFloat(value);
+  sameEntries.forEach((entry, idx) => {
+    if (idx === 0) entry.stock = Number.isFinite(num) ? num : null;
+    else entry.stock = null;
+  });
+}
+
+function handleOutputCellInput(target) {
+  const name = target?.dataset?.outputName;
+  const field = target?.dataset?.outputField;
+  if (!name || !field) return false;
+  const value = target.value;
+  if (field === 'stock') {
+    setOutputStockTotal(name, value);
+    saveLocal();
+    recomputeUsageAnalysis();
+    updateDailyAnalysisForName(name);
+  } else if (field === 'k' || field === 'l') {
+    setOverrideValue(name, field, value);
+    saveLocal();
+  } else {
+    return false;
+  }
+  updateGForName(name);
+  return true;
 }
 
 // G수식 (Excel 동등 + 일별 매출 가중치 일반화). 숨김 품목은 G=0.
@@ -1005,6 +1044,10 @@ function moveOutputItem(name, direction) {
   render();
 }
 
+function outputNumberInput(name, field, value) {
+  return `<input class="cell" type="number" inputmode="decimal" step="0.1" data-output-name="${escapeHtml(name)}" data-output-field="${field}" value="${escapeHtml(value)}">`;
+}
+
 function kstDateKey(ts) {
   const k = new Date(ts + 9 * 3600000);
   return k.getUTCFullYear().toString() +
@@ -1039,9 +1082,9 @@ function render() {
       tr.innerHTML = `
         <td class="name">${item.name}</td>
         <td class="qty order-qty pos">${fmt(g,2)}</td>
-        <td class="qty">${fmt(E,2)}</td>
-        <td class="qty">${fmt(getK(item),2)}</td>
-        <td class="qty"><span>${fmt(getL(item),2)}</span>${renderDailyAnalysisSpan(item.name)}</td>
+        <td>${outputNumberInput(item.name, 'stock', fmt(E,2))}</td>
+        <td>${outputNumberInput(item.name, 'k', fmt(getK(item),2))}</td>
+        <td><span class="daily-cell">${outputNumberInput(item.name, 'l', fmt(getL(item),2))}${renderDailyAnalysisSpan(item.name)}</span></td>
         <td>${item.unit||''}</td>
         <td class="output-actions">
           <button type="button" onclick="moveOutputItem('${safeName}', -1)" title="위로" ${idx === 0 ? 'disabled' : ''}>▲</button>
@@ -1112,6 +1155,7 @@ function render() {
 
   document.querySelectorAll('input.cell').forEach(inp => {
     inp.addEventListener('input', e => {
+      if (handleOutputCellInput(e.target)) return;
       const id = e.target.dataset.id;
       const f = e.target.dataset.field;
       const v = e.target.value;
@@ -1140,6 +1184,11 @@ function render() {
       }
     });
     inp.addEventListener('change', e => {
+      if (e.target.dataset.outputField) {
+        flushAutoSave('auto');
+        render();
+        return;
+      }
       // blur/Enter — pending autosave 즉시 flush
       if (e.target.dataset.field === 'stock') {
         logStockEvent(e, 'change');
@@ -1162,6 +1211,14 @@ function render() {
       if (e.target.dataset.field === 'zone') render();
     });
     inp.addEventListener('keydown', e => {
+      if (e.target.dataset.outputField) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        e.target.blur();
+        flushAutoSave('auto');
+        render();
+        return;
+      }
       if (e.target.dataset.field === 'stock') logStockEvent(e, 'keydown');
       if (e.key !== 'Enter') return;
       if (e.target.dataset.field !== 'stock') return;

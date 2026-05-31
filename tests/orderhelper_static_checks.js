@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260601-1';/, 'APP_VERSION must be bumped for usage analysis');
+mustMatch(/const APP_VERSION = '20260601-2';/, 'APP_VERSION must be bumped for output editing');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -31,6 +31,11 @@ mustMatch(/const usage = prevStock \+ orderQty - currStock;/, 'usage analysis mu
 mustMatch(/data-analysis-name="\$\{escapeHtml\(name\)\}"/, 'daily analysis marker must be rendered next to daily usage');
 mustMatch(/loadUsageHistory\(true\);/, 'usage history must load on page start');
 mustMatch(/setInterval\(\(\) => loadUsageHistory\(true\), 300000\);/, 'usage history must refresh periodically');
+mustMatch(/function handleOutputCellInput\(target\)/, 'output edit handler missing');
+mustMatch(/function setOutputStockTotal\(name, value\)/, 'output stock total setter missing');
+mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');
+mustMatch(/if \(handleOutputCellInput\(e\.target\)\) return;/, 'output edit input must bypass row-id input handler');
+mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*flushAutoSave\('auto'\);\s*render\(\);\s*return;\s*\}/, 'output edit change must save and rerender');
 mustMatch(/let debugLogs = \[\];/, 'debug logs state missing');
 mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local storage key missing');
 mustMatch(/let outputOrder = \[\];/, 'output order state missing');
