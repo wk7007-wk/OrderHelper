@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260602-1';/, 'APP_VERSION must be bumped for orderDays sync fix');
+mustMatch(/const APP_VERSION = '20260602-2';/, 'APP_VERSION must be bumped for output order sync fix');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -37,11 +37,18 @@ mustMatch(/let actualOrders = \{\};/, 'actual order state missing');
 mustMatch(/let conversionAnalysis = \{\};/, 'conversion analysis state missing');
 mustMatch(/function setActualOrderValue\(name, value\)/, 'actual order setter missing');
 mustMatch(/function outputOrderQty\(item, days\)/, 'output order qty must prefer actual order');
+mustMatch(/function displayOrderQty\(item, days\)/, 'input and output order display must share the same quantity formatter');
+mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
 mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
 mustMatch(/function buildConversionAnalysis\(history, currentSnapshot\)/, 'unit conversion analysis builder missing');
 mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order quantity converter missing');
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
+mustMatch(/const orderText = isNeed \? displayOrderQty\(item, days\) : '';/, 'input order view must show the same order-unit quantity as output view');
+mustMatch(/gCell\.textContent = isNeed \? displayOrderQty\(item, days\) : '';/, 'live input order refresh must use the same output quantity');
+mustMatch(/const isDuplicateCell = gCell\.classList\.contains\('dup'\);/, 'duplicate input rows must keep the same order quantity while preserving duplicate styling');
+mustMatch(/updateDailyAnalysisForName\(name\);\s*updateOutputOrderForName\(name\);/, 'output stock edits must refresh order quantity');
+mustMatch(/setOverrideValue\(name, field, value\);\s*saveLocal\(\);\s*updateOutputOrderForName\(name\);/, 'output buffer/daily edits must refresh order quantity');
 mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output change must confirm unchanged order values');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
 mustMatch(/actualOrders, dailySales/, 'Firebase payload must include actual orders');
