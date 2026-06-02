@@ -18,10 +18,11 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260602-6';/, 'APP_VERSION must be bumped for read-only output order and one-decimal display');
+mustMatch(/const APP_VERSION = '20260602-7';/, 'APP_VERSION must be bumped for visible SFA comparison results');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
+mustMatch(/const SFA_COMPARE_PATH = `\$\{FB_PATH\}\/sfaCompare\/latest`;/, 'SFA latest comparison path missing');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -50,16 +51,25 @@ mustMatch(/checkUnitKey === orderUnitKey/, 'unit equality must compare normalize
 mustMatch(/name:"신선육\(10호\)-뼈한마리",unit:"박\/박스"/, 'fresh meat 박/박스 regression item missing');
 mustMatch(/function requestSfaOrderAnalysis\(\)/, 'SFA analysis request button handler missing');
 mustMatch(/id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis\(\)"/, 'SFA analysis request button missing');
+mustMatch(/id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel\(\)">오차보기<\/button>/, 'SFA compare result button missing');
+mustMatch(/id="sfaComparePanel"/, 'SFA compare panel missing');
 mustMatch(/id="sfaStatus">엑셀 대기<\/span>/, 'SFA status chip missing');
 mustMatch(/function loadSfaOrderStatus\(silent = true\)/, 'SFA status polling handler missing');
 mustMatch(/function renderSfaStatus\(data\)/, 'SFA status renderer missing');
+mustMatch(/function renderSfaComparePanel\(data\)/, 'SFA comparison renderer missing');
+mustMatch(/function loadSfaCompareLatest\(silent = true, forceShow = false\)/, 'SFA comparison loader missing');
+mustMatch(/function toggleSfaComparePanel\(\)/, 'SFA comparison toggle missing');
 mustMatch(/function sfaStatusToastText\(data\)/, 'SFA status change toast handler missing');
 mustMatch(/let sfaLastRequestAt = 0;/, 'SFA status must track request time to ignore stale completion states');
+mustMatch(/let lastSfaCompareStatusKey = '';/, 'SFA compare loader must dedupe completed status updates');
 mustMatch(/statusMs < sfaLastRequestAt/, 'SFA status must ignore stale states older than the latest request');
+mustMatch(/loadSfaCompareLatest\(true, hadPendingRequest\)/, 'fresh SFA completion must load visible comparison results');
 mustMatch(/setInterval\(\(\) => loadSfaOrderStatus\(false\), 10000\);/, 'SFA status must refresh every 10 seconds');
 mustMatch(/mode: 'scan_pc_downloads'/, 'SFA request must target the PC download folder flow');
 mustMatch(/PC 다운로드 폴더 분석 요청함/, 'SFA request must give user feedback');
 mustMatch(/renderSfaStatus\(\{ state: 'requested'/, 'SFA request must update visible status immediately');
+mustMatch(/비교만 완료: 실발주값은 자동반영되지 않음/, 'SFA compare panel must disclose that analysis is not auto-apply');
+mustMatch(/sfaReviewRows\(comp\)/, 'SFA comparison must include matched differences and missing rows');
 mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
 mustMatch(/function buildConversionAnalysis\(history, currentSnapshot\)/, 'unit conversion analysis builder missing');
 mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order quantity converter missing');

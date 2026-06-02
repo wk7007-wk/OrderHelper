@@ -25,6 +25,29 @@
   .status-pill.saving { background: rgba(168, 85, 247, 0.16); color: #e9d5ff; border: 1px solid rgba(168, 85, 247, 0.35); }
   .status-pill.saved { background: rgba(34, 197, 94, 0.16); color: #bbf7d0; border: 1px solid rgba(34, 197, 94, 0.35); }
   .status-pill.error { background: rgba(239, 68, 68, 0.16); color: #fecaca; border: 1px solid rgba(239, 68, 68, 0.35); }
+  .sfa-panel { background: #111b33; border-bottom: 1px solid #0f3460; padding: 9px 14px; display: grid; gap: 8px; }
+  .sfa-panel.hidden { display: none; }
+  .sfa-panel-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sfa-panel-title { font-size: 13px; font-weight: 800; color: #fff; }
+  .sfa-panel-meta { color: #9aa7b7; font-size: 11px; }
+  .sfa-panel-note { color: #fde68a; font-size: 11px; }
+  .sfa-panel-actions { margin-left: auto; display: inline-flex; gap: 6px; }
+  .sfa-panel-actions button { background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 5px 9px; font-size: 11px; font-weight: 700; }
+  .sfa-counts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sfa-count { border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 800; border: 1px solid rgba(148, 163, 184, 0.3); color: #cbd5e1; background: rgba(15, 52, 96, 0.55); }
+  .sfa-count.high { color: #fecaca; border-color: rgba(239, 68, 68, 0.45); background: rgba(239, 68, 68, 0.14); }
+  .sfa-count.medium { color: #fed7aa; border-color: rgba(249, 115, 22, 0.45); background: rgba(249, 115, 22, 0.14); }
+  .sfa-count.low { color: #bfdbfe; border-color: rgba(59, 130, 246, 0.45); background: rgba(59, 130, 246, 0.14); }
+  .sfa-list { display: grid; gap: 4px; max-height: 260px; overflow: auto; }
+  .sfa-row { display: grid; grid-template-columns: 52px minmax(130px, 1fr) auto; gap: 7px; align-items: start; padding: 6px 8px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(15, 52, 96, 0.35); }
+  .sfa-row .risk { font-size: 11px; font-weight: 900; }
+  .sfa-row.high .risk { color: #fecaca; }
+  .sfa-row.medium .risk { color: #fed7aa; }
+  .sfa-row.low .risk { color: #bfdbfe; }
+  .sfa-row.extra .risk { color: #d8b4fe; }
+  .sfa-row .item { white-space: normal; word-break: keep-all; color: #e5e7eb; }
+  .sfa-row .qty { text-align: right; font-variant-numeric: tabular-nums; color: #fff; font-weight: 800; }
+  .sfa-row .reason { grid-column: 2 / 4; color: #9aa7b7; font-size: 11px; white-space: normal; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; min-width: 760px; border-collapse: collapse; }
   thead { background: #0f3460; z-index: 5; }
@@ -120,6 +143,10 @@
     .input-tools { padding: 8px; }
     .input-tools button { width: 100%; padding: 10px 12px; font-size: 13px; }
     .save-log-wrap { min-width: 100%; }
+    .sfa-panel { padding: 8px; }
+    .sfa-panel-actions { width: 100%; margin-left: 0; }
+    .sfa-panel-actions button { flex: 1; padding: 8px 9px; }
+    .sfa-row { grid-template-columns: 46px minmax(0, 1fr) auto; }
     .table-wrap { border-top: 1px solid #0f3460; }
   }
 </style>
@@ -145,11 +172,26 @@
   <span class="meta" id="cycleHint"></span>
   <button id="modeBtn" onclick="toggleMode()">출력 보기</button>
   <button id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis()">엑셀분석</button>
+  <button id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel()">오차보기</button>
   <span class="status-pill idle" id="sfaStatus">엑셀 대기</span>
   <button class="primary" onclick="flushAutoSave('manual')">저장</button>
   <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
   <span class="meta" id="appVer"></span>
+</div>
+
+<div class="sfa-panel hidden" id="sfaComparePanel">
+  <div class="sfa-panel-head">
+    <span class="sfa-panel-title" id="sfaCompareTitle">엑셀 오차</span>
+    <span class="sfa-panel-meta" id="sfaCompareMeta">분석 결과 없음</span>
+    <span class="sfa-panel-note" id="sfaCompareNote">분석 버튼은 비교만 하고 실발주값은 자동반영하지 않음</span>
+    <span class="sfa-panel-actions">
+      <button type="button" onclick="loadSfaCompareLatest(false, true)">새로고침</button>
+      <button type="button" onclick="hideSfaComparePanel()">닫기</button>
+    </span>
+  </div>
+  <div class="sfa-counts" id="sfaCompareCounts"></div>
+  <div class="sfa-list" id="sfaCompareBody"></div>
 </div>
 
 <div class="sales-row">
@@ -206,12 +248,13 @@
 </div>
 
 <script>
-const APP_VERSION = '20260602-6';
+const APP_VERSION = '20260602-7';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
 const SFA_ORDER_REQUEST_PATH = '/monitor/main_pc/sfa_order_request';
 const SFA_ORDER_STATUS_PATH = '/monitor/main_pc/sfa_order';
+const SFA_COMPARE_PATH = `${FB_PATH}/sfaCompare/latest`;
 const USAGE_ANALYSIS_MAX_DAYS = 90;
 const DEFAULT_BASE_SALES = 280;
 const BASE_SALES_STORAGE_VERSION = 'formula-280';
@@ -377,6 +420,9 @@ let conversionAnalysis = {};
 let sfaStatusInitialized = false;
 let lastSfaStatusKey = '';
 let sfaLastRequestAt = 0;
+let sfaCompareVisible = false;
+let lastSfaCompareSavedAt = 0;
+let lastSfaCompareStatusKey = '';
 let skipStockRenderOnceId = null;
 let pendingSnoozeName = null;
 let usageHistory = {};
@@ -1097,11 +1143,166 @@ function sfaStatusToastText(data) {
   return '';
 }
 
+function sfaCompareTime(savedAt) {
+  if (!savedAt) return '';
+  const d = new Date(Number(savedAt));
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function sfaDateBasisText(history) {
+  const selected = history?.selectedDate || '';
+  const target = history?.targetDate || '';
+  const selection = history?.dateSelection || '';
+  if (selection === 'order_cycle' && selected) return `주문일자 ${selected}`;
+  if (selection === 'latest_fallback' && selected) return `최신일자 ${selected}${target ? ` (목표 ${target} 없음)` : ''}`;
+  if (selected) return `주문일자 ${selected}`;
+  return '주문일자 미확인';
+}
+
+function sfaRiskClass(risk) {
+  if (risk === 'HIGH') return 'high';
+  if (risk === 'MEDIUM') return 'medium';
+  if (risk === 'LOW') return 'low';
+  return 'extra';
+}
+
+function sfaRiskLabel(risk) {
+  if (risk === 'HIGH') return '위험';
+  if (risk === 'MEDIUM') return '확인';
+  if (risk === 'LOW') return '낮음';
+  return 'SFA만';
+}
+
+function sfaCountChip(label, value, tone = '') {
+  return `<span class="sfa-count ${tone}">${escapeHtml(label)} ${escapeHtml(value)}</span>`;
+}
+
+function sfaReviewRows(comp) {
+  const matched = comp?.matched || [];
+  const missing = comp?.missing || [];
+  return matched.filter(row => row.status !== 'OK').concat(missing);
+}
+
+function sfaGapRowHtml(row, extraOnly = false) {
+  const risk = extraOnly ? '' : (row.risk || 'MEDIUM');
+  const klass = extraOnly ? 'extra' : sfaRiskClass(risk);
+  const label = extraOnly ? 'SFA만' : sfaRiskLabel(risk);
+  const name = row.expected_name || row.name || row.sfa_name || '';
+  const source = row.sfa_name && row.sfa_name !== name ? ` / ${row.sfa_name}` : '';
+  const expected = extraOnly ? '-' : (row.expected_qty ?? row.qty ?? 0);
+  const actual = row.sfa_qty ?? row.qty ?? 0;
+  const reason = extraOnly ? '앱 발주 목록에는 없고 SFA 엑셀에만 있는 품목입니다.' : (row.reason || '');
+  return `<div class="sfa-row ${klass}">
+    <div class="risk">${label}</div>
+    <div class="item">${escapeHtml(name + source)}</div>
+    <div class="qty">앱 ${escapeHtml(expected)} / SFA ${escapeHtml(actual)}</div>
+    <div class="reason">${escapeHtml(reason)}</div>
+  </div>`;
+}
+
+function renderSfaComparePanel(data) {
+  const panel = document.getElementById('sfaComparePanel');
+  const title = document.getElementById('sfaCompareTitle');
+  const meta = document.getElementById('sfaCompareMeta');
+  const note = document.getElementById('sfaCompareNote');
+  const counts = document.getElementById('sfaCompareCounts');
+  const body = document.getElementById('sfaCompareBody');
+  if (!panel || !title || !meta || !note || !counts || !body) return;
+
+  if (!data) {
+    title.textContent = '엑셀 오차';
+    meta.textContent = '분석 결과 없음';
+    note.textContent = '엑셀분석 버튼을 누르면 PC 다운로드 폴더의 최신 주문현황을 비교합니다.';
+    counts.innerHTML = '';
+    body.innerHTML = '';
+    return;
+  }
+
+  const fileName = data.file?.name || '';
+  const structure = data.structure || {};
+  const comp = data.comparison || {};
+  const history = data.historySummary || {};
+  const matched = comp.matched || [];
+  const reviewRows = sfaReviewRows(comp);
+  const high = reviewRows.filter(row => row.risk === 'HIGH');
+  const medium = reviewRows.filter(row => row.risk === 'MEDIUM');
+  const low = reviewRows.filter(row => row.risk === 'LOW');
+  const extra = comp.extra || [];
+  const okCount = matched.filter(row => row.status === 'OK').length;
+  const applied = data.appliedActualOrders || {};
+  lastSfaCompareSavedAt = Number(data.savedAt || 0);
+
+  title.textContent = data.ok ? '엑셀 오차' : '엑셀 구조 확인';
+  meta.textContent = `${fileName || '파일 미확인'} · ${sfaDateBasisText(history)}${data.savedAt ? ` · ${sfaCompareTime(data.savedAt)}` : ''}`;
+  note.textContent = Object.keys(applied).length
+    ? `실발주값 ${Object.keys(applied).length}개 반영됨`
+    : '비교만 완료: 실발주값은 자동반영되지 않음';
+  counts.innerHTML = [
+    sfaCountChip('일치', okCount),
+    sfaCountChip('위험', high.length, 'high'),
+    sfaCountChip('확인', medium.length, 'medium'),
+    sfaCountChip('낮음', low.length, 'low'),
+    sfaCountChip('SFA만', extra.length),
+  ].join('');
+
+  if (!data.ok) {
+    const sample = structure.sample_rows || [];
+    body.innerHTML = `<div class="sfa-row high">
+      <div class="risk">구조</div>
+      <div class="item">품목명/수량 열 확정 실패</div>
+      <div class="qty">${escapeHtml(structure.confidence || 0)}</div>
+      <div class="reason">${escapeHtml((structure.reason || '') + ' ' + sample.slice(0, 3).map(row => row.join(' / ')).join(' | '))}</div>
+    </div>`;
+    return;
+  }
+
+  const rows = high.concat(medium, low).map(row => sfaGapRowHtml(row, false))
+    .concat(extra.slice(0, 12).map(row => sfaGapRowHtml(row, true)));
+  body.innerHTML = rows.length ? rows.join('') : '<div class="sfa-panel-meta">오차 없음</div>';
+}
+
+async function loadSfaCompareLatest(silent = true, forceShow = false) {
+  if (forceShow) showSfaComparePanel();
+  try {
+    const res = await fetch(`${FB_URL}${SFA_COMPARE_PATH}.json?_=` + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderSfaComparePanel(data);
+    if (!silent && !data) toast('엑셀 분석 결과 없음');
+  } catch (e) {
+    console.warn('[sfaCompare] latest failed', e);
+    if (!silent) toast('오차 결과 확인 실패');
+  }
+}
+
+function showSfaComparePanel() {
+  sfaCompareVisible = true;
+  document.getElementById('sfaComparePanel')?.classList.remove('hidden');
+  updateStickyOffsets();
+}
+
+function hideSfaComparePanel() {
+  sfaCompareVisible = false;
+  document.getElementById('sfaComparePanel')?.classList.add('hidden');
+  updateStickyOffsets();
+}
+
+function toggleSfaComparePanel() {
+  if (sfaCompareVisible) {
+    hideSfaComparePanel();
+  } else {
+    showSfaComparePanel();
+    loadSfaCompareLatest(false, false);
+  }
+}
+
 function renderSfaStatus(data) {
   const el = document.getElementById('sfaStatus');
   if (!el) return;
   const state = data?.state || 'idle';
   const statusMs = sfaStatusMs(data);
+  const hadPendingRequest = !!sfaLastRequestAt;
   if (sfaLastRequestAt && ['idle', 'ok', 'already_applied'].includes(state) && (!statusMs || statusMs < sfaLastRequestAt)) {
     return;
   }
@@ -1121,6 +1322,13 @@ function renderSfaStatus(data) {
   }
   if (key) lastSfaStatusKey = key;
   sfaStatusInitialized = true;
+  if (state === 'ok') {
+    const compareKey = `${data?.file || ''}|${data?.last_analyzed_at || data?.updated_at || ''}`;
+    if (compareKey && compareKey !== lastSfaCompareStatusKey) {
+      lastSfaCompareStatusKey = compareKey;
+      loadSfaCompareLatest(true, hadPendingRequest);
+    }
+  }
   updateStickyOffsets();
 }
 
@@ -1156,6 +1364,7 @@ async function requestSfaOrderAnalysis() {
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     renderSfaStatus({ state: 'requested', updated_at: new Date().toISOString() });
+    renderSfaComparePanel(null);
     toast('PC 다운로드 폴더 분석 요청함');
     setTimeout(() => loadSfaOrderStatus(false), 1500);
   } catch (e) {
