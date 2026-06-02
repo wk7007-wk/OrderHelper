@@ -144,6 +144,8 @@
   </label>
   <span class="meta" id="cycleHint"></span>
   <button id="modeBtn" onclick="toggleMode()">출력 보기</button>
+  <button id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis()">엑셀분석</button>
+  <span class="status-pill idle" id="sfaStatus">엑셀 대기</span>
   <button class="primary" onclick="flushAutoSave('manual')">저장</button>
   <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
@@ -204,10 +206,13 @@
 </div>
 
 <script>
-const APP_VERSION = '20260602-2';
+const APP_VERSION = '20260602-3';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
+const SFA_ORDER_REQUEST_PATH = '/monitor/main_pc/sfa_order_request';
+const SFA_ORDER_STATUS_PATH = '/monitor/main_pc/sfa_order';
+const USAGE_ANALYSIS_MAX_DAYS = 90;
 const DEFAULT_BASE_SALES = 280;
 const BASE_SALES_STORAGE_VERSION = 'formula-280';
 const DEFAULT_SNOOZE_DAYS = 5;
@@ -369,6 +374,9 @@ let debugLogs = [];
 let outputOrder = [];
 let actualOrders = {};
 let conversionAnalysis = {};
+let sfaStatusInitialized = false;
+let lastSfaStatusKey = '';
+let sfaLastRequestAt = 0;
 let skipStockRenderOnceId = null;
 let pendingSnoozeName = null;
 let usageHistory = {};
@@ -844,7 +852,11 @@ function historyRecordsWithCurrent(history, currentSnapshot) {
     }
   }
 
-  return Array.from(byDate.values()).sort((a, b) => (a.dayMs - b.dayMs) || (a.savedAt - b.savedAt));
+  const sorted = Array.from(byDate.values()).sort((a, b) => (a.dayMs - b.dayMs) || (a.savedAt - b.savedAt));
+  const latest = sorted[sorted.length - 1];
+  if (!latest) return sorted;
+  const cutoff = latest.dayMs - (USAGE_ANALYSIS_MAX_DAYS * 86400000);
+  return sorted.filter(record => record.dayMs >= cutoff);
 }
 
 function orderQtyFromRecord(record, name) {
@@ -920,7 +932,7 @@ function usageAnalysisTitle(analysis) {
     ? `전회실발주 ${fmt(last.actualQty, 0)} / 재고환산 ${fmt(last.orderQty, 2)}`
     : `전회계산발주 ${fmt(last.orderQty, 2)}`;
   const recent = last ? ` / 최근 ${fmt(last.daily, 2)}/일 (${last.from}→${last.to}, ${orderLabel})` : '';
-  return `분석 평균 ${fmt(analysis.avg, 2)}/일 · 누적 ${fmt(analysis.totalUsage, 2)}개/${fmt(analysis.totalDays, 1)}일 · ${analysis.samples}구간${recent}`;
+  return `최근 ${USAGE_ANALYSIS_MAX_DAYS}일 분석 평균 ${fmt(analysis.avg, 2)}/일 · 누적 ${fmt(analysis.totalUsage, 2)}개/${fmt(analysis.totalDays, 1)}일 · ${analysis.samples}구간${recent}`;
 }
 
 function renderDailyAnalysisSpan(name) {
@@ -986,6 +998,143 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function sfaStatusLabel(state) {
+  const labels = {
+    init: '대기',
+    idle: '대기',
+    requested: '요청됨',
+    detected: '감지',
+    waiting_stable: '대기',
+    analyzing: '분석중',
+    ok: '완료',
+    already_applied: '이미처리',
+    no_file: '파일없음',
+    missing_dir: '폴더없음',
+    missing_tool: '도구없음',
+    request_error: '요청오류',
+    error: '오류',
+    disabled: '꺼짐'
+  };
+  return labels[state] || state || '대기';
+}
+
+function sfaStatusTone(state) {
+  if (state === 'ok') return 'saved';
+  if (state === 'already_applied' || state === 'idle' || state === 'init') return 'idle';
+  if (state === 'requested' || state === 'detected' || state === 'waiting_stable' || state === 'analyzing') return 'saving';
+  if (state === 'no_file' || state === 'missing_dir' || state === 'missing_tool' || state === 'request_error' || state === 'error') return 'error';
+  return 'idle';
+}
+
+function shortStatusTime(raw) {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  return String(raw).replace('T', ' ').slice(5, 16);
+}
+
+function sfaStatusKey(data) {
+  if (!data || typeof data !== 'object') return '';
+  return [
+    data.state || '',
+    data.order_date || '',
+    data.file || '',
+    data.last_analyzed_at || '',
+    data.updated_at || '',
+    data.error || ''
+  ].join('|');
+}
+
+function sfaStatusMs(data) {
+  const raw = data?.last_analyzed_at || data?.updated_at || '';
+  const ms = raw ? new Date(raw).getTime() : NaN;
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+function sfaStatusToastText(data) {
+  const state = data?.state || '';
+  const day = data?.order_date ? ` ${data.order_date.slice(5)}` : '';
+  if (state === 'ok') return `엑셀분석 완료${day}`;
+  if (state === 'already_applied') return `엑셀분석 이미 처리됨${day}`;
+  if (state === 'analyzing') return `엑셀분석 중${day}`;
+  if (state === 'requested') return '엑셀분석 요청됨';
+  if (state === 'no_file') return '엑셀 파일 없음';
+  if (state === 'error' || state === 'request_error') return '엑셀분석 오류';
+  return '';
+}
+
+function renderSfaStatus(data) {
+  const el = document.getElementById('sfaStatus');
+  if (!el) return;
+  const state = data?.state || 'idle';
+  const statusMs = sfaStatusMs(data);
+  if (sfaLastRequestAt && ['idle', 'ok', 'already_applied'].includes(state) && (!statusMs || statusMs < sfaLastRequestAt)) {
+    return;
+  }
+  if (sfaLastRequestAt && statusMs >= sfaLastRequestAt && ['ok', 'already_applied', 'no_file', 'error', 'request_error'].includes(state)) {
+    sfaLastRequestAt = 0;
+  }
+  const day = data?.order_date ? ` ${data.order_date.slice(5)}` : '';
+  const time = shortStatusTime(data?.last_analyzed_at || data?.updated_at);
+  el.textContent = `엑셀 ${sfaStatusLabel(state)}${day}${time ? ' ' + time : ''}`;
+  el.className = `status-pill ${sfaStatusTone(state)}`;
+  el.title = data?.file || data?.error || '';
+
+  const key = sfaStatusKey(data);
+  if (sfaStatusInitialized && key && key !== lastSfaStatusKey) {
+    const msg = sfaStatusToastText(data);
+    if (msg) toast(msg);
+  }
+  if (key) lastSfaStatusKey = key;
+  sfaStatusInitialized = true;
+  updateStickyOffsets();
+}
+
+async function loadSfaOrderStatus(silent = true) {
+  try {
+    const res = await fetch(`${FB_URL}${SFA_ORDER_STATUS_PATH}.json?_=` + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderSfaStatus(data || { state: 'idle' });
+  } catch (e) {
+    console.warn('[sfaOrder] status failed', e);
+    renderSfaStatus({ state: 'request_error', error: e.message, updated_at: new Date().toISOString() });
+    if (!silent) toast('엑셀 상태 확인 실패');
+  }
+}
+
+async function requestSfaOrderAnalysis() {
+  const btn = document.getElementById('sfaAnalyzeBtn');
+  if (btn) btn.disabled = true;
+  const now = Date.now();
+  sfaLastRequestAt = now;
+  const payload = {
+    source: 'OrderHelper',
+    mode: 'scan_pc_downloads',
+    dirHint: 'C:\\Users\\wk771\\Downloads',
+    requestedAt: now,
+    requestedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19)
+  };
+  try {
+    const res = await fetch(`${FB_URL}${SFA_ORDER_REQUEST_PATH}.json`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    renderSfaStatus({ state: 'requested', updated_at: new Date().toISOString() });
+    toast('PC 다운로드 폴더 분석 요청함');
+    setTimeout(() => loadSfaOrderStatus(false), 1500);
+  } catch (e) {
+    console.warn('[sfaOrder] request failed', e);
+    renderSfaStatus({ state: 'request_error', error: e.message, updated_at: new Date().toISOString() });
+    toast('엑셀분석 요청 실패');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function renderSaveState(label, tone = 'idle') {
@@ -1930,11 +2079,13 @@ bindBaseSalesInput();
 renderSalesInputs();
 render();
 loadUsageHistory(true);
+loadSfaOrderStatus(true);
 window.addEventListener('resize', updateStickyOffsets);
 // 디바이스 간 동기화: 페이지 열 때마다 + 5초 간격 폴링
 autoLoadFromFB(true);
 setInterval(() => autoLoadFromFB(true), 5000);
 setInterval(() => loadUsageHistory(true), 300000);
+setInterval(() => loadSfaOrderStatus(false), 10000);
 </script>
 </body>
 </html>

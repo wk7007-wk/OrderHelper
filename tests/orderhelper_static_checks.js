@@ -18,7 +18,10 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260602-2';/, 'APP_VERSION must be bumped for output order sync fix');
+mustMatch(/const APP_VERSION = '20260602-3';/, 'APP_VERSION must be bumped for SFA analysis request button');
+mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
+mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
+mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -27,6 +30,7 @@ mustMatch(/function logStockEvent\(e, phase\)/, 'stock key event logger missing'
 mustMatch(/let usageHistory = \{\};/, 'usage history state missing');
 mustMatch(/let usageAnalysis = \{\};/, 'usage analysis state missing');
 mustMatch(/function buildUsageAnalysis\(history, currentSnapshot\)/, 'usage analysis builder missing');
+mustMatch(/USAGE_ANALYSIS_MAX_DAYS \* 86400000/, 'usage analysis must limit old history records');
 mustMatch(/const usage = prevStock \+ orderQty - currStock;/, 'usage analysis must infer from previous stock plus order minus next stock');
 mustMatch(/data-analysis-name="\$\{escapeHtml\(name\)\}"/, 'daily analysis marker must be rendered next to daily usage');
 mustMatch(/loadUsageHistory\(true\);/, 'usage history must load on page start');
@@ -39,6 +43,18 @@ mustMatch(/function setActualOrderValue\(name, value\)/, 'actual order setter mi
 mustMatch(/function outputOrderQty\(item, days\)/, 'output order qty must prefer actual order');
 mustMatch(/function displayOrderQty\(item, days\)/, 'input and output order display must share the same quantity formatter');
 mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
+mustMatch(/function requestSfaOrderAnalysis\(\)/, 'SFA analysis request button handler missing');
+mustMatch(/id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis\(\)"/, 'SFA analysis request button missing');
+mustMatch(/id="sfaStatus">엑셀 대기<\/span>/, 'SFA status chip missing');
+mustMatch(/function loadSfaOrderStatus\(silent = true\)/, 'SFA status polling handler missing');
+mustMatch(/function renderSfaStatus\(data\)/, 'SFA status renderer missing');
+mustMatch(/function sfaStatusToastText\(data\)/, 'SFA status change toast handler missing');
+mustMatch(/let sfaLastRequestAt = 0;/, 'SFA status must track request time to ignore stale completion states');
+mustMatch(/statusMs < sfaLastRequestAt/, 'SFA status must ignore stale states older than the latest request');
+mustMatch(/setInterval\(\(\) => loadSfaOrderStatus\(false\), 10000\);/, 'SFA status must refresh every 10 seconds');
+mustMatch(/mode: 'scan_pc_downloads'/, 'SFA request must target the PC download folder flow');
+mustMatch(/PC 다운로드 폴더 분석 요청함/, 'SFA request must give user feedback');
+mustMatch(/renderSfaStatus\(\{ state: 'requested'/, 'SFA request must update visible status immediately');
 mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
 mustMatch(/function buildConversionAnalysis\(history, currentSnapshot\)/, 'unit conversion analysis builder missing');
 mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order quantity converter missing');
@@ -54,6 +70,7 @@ mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be saniti
 mustMatch(/actualOrders, dailySales/, 'Firebase payload must include actual orders');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
 mustMatch(/전회실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 재고환산/, 'analysis title must disclose actual order and stock conversion');
+mustMatch(/최근 \$\{USAGE_ANALYSIS_MAX_DAYS\}일 분석 평균/, 'analysis title must disclose the recent history window');
 mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');
 mustMatch(/if \(handleOutputCellInput\(e\.target\)\) return;/, 'output edit input must bypass row-id input handler');
 mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);\s*render\(\);\s*return;\s*\}/, 'output edit change must save and rerender');
