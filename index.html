@@ -206,7 +206,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260602-5';
+const APP_VERSION = '20260602-6';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -678,6 +678,10 @@ function displayOrderQty(item, days) {
   return fmt(outputOrderQty(item, days), 0);
 }
 
+function displayDecimal(value) {
+  return fmt(value, 1);
+}
+
 function orderAnalysisText(item, stockNeed) {
   const actual = getActualOrder(item.name);
   if (actual !== null) return '확인';
@@ -718,10 +722,10 @@ function updateOutputOrderForName(name) {
   if (!item) return;
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const g = calcG(item, days);
-  document.querySelectorAll('input[data-output-field="order"]').forEach(input => {
-    if (input.dataset.outputName !== name) return;
-    if (document.activeElement !== input) input.value = displayOrderQty(item, days);
-    const wrap = input.closest('.order-cell');
+  document.querySelectorAll('.output-order-value[data-output-name]').forEach(output => {
+    if (output.dataset.outputName !== name) return;
+    output.textContent = displayOrderQty(item, days);
+    const wrap = output.closest('.order-cell');
     const marker = wrap?.querySelector('.order-analysis');
     if (marker) marker.outerHTML = renderOrderAnalysisSpan(item, g);
   });
@@ -742,9 +746,6 @@ function handleOutputCellInput(target) {
     setOverrideValue(name, field, value);
     saveLocal();
     updateOutputOrderForName(name);
-  } else if (field === 'order') {
-    setActualOrderValue(name, value);
-    saveLocal('actualOrder');
   } else {
     return false;
   }
@@ -1442,10 +1443,11 @@ function moveOutputItem(name, direction) {
 }
 
 function outputNumberInput(name, field, value) {
-  const title = field === 'order' ? '실발주값 (비우면 계산값)' : '';
-  const step = field === 'order' ? '1' : '0.1';
-  const inputmode = field === 'order' ? 'numeric' : 'decimal';
-  return `<input class="cell" type="number" inputmode="${inputmode}" step="${step}" data-output-name="${escapeHtml(name)}" data-output-field="${field}" value="${escapeHtml(value)}" title="${title}">`;
+  return `<input class="cell" type="number" inputmode="decimal" step="0.1" data-output-name="${escapeHtml(name)}" data-output-field="${field}" value="${escapeHtml(value)}">`;
+}
+
+function outputOrderDisplay(name, value) {
+  return `<span class="output-order-value" data-output-name="${escapeHtml(name)}" data-output-field="order">${escapeHtml(value)}</span>`;
 }
 
 function kstDateKey(ts) {
@@ -1481,10 +1483,10 @@ function render() {
       const safeName = item.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
       tr.innerHTML = `
         <td class="name">${item.name}</td>
-        <td class="qty order-qty pos"><span class="order-cell">${outputNumberInput(item.name, 'order', displayOrderQty(item, days))}${renderOrderAnalysisSpan(item, g)}</span></td>
-        <td>${outputNumberInput(item.name, 'stock', fmt(E,2))}</td>
-        <td>${outputNumberInput(item.name, 'k', fmt(getK(item),2))}</td>
-        <td><span class="daily-cell">${outputNumberInput(item.name, 'l', fmt(getL(item),2))}${renderDailyAnalysisSpan(item.name)}</span></td>
+        <td class="qty order-qty pos"><span class="order-cell">${outputOrderDisplay(item.name, displayOrderQty(item, days))}${renderOrderAnalysisSpan(item, g)}</span></td>
+        <td>${outputNumberInput(item.name, 'stock', displayDecimal(E))}</td>
+        <td>${outputNumberInput(item.name, 'k', displayDecimal(getK(item)))}</td>
+        <td><span class="daily-cell">${outputNumberInput(item.name, 'l', displayDecimal(getL(item)))}${renderDailyAnalysisSpan(item.name)}</span></td>
         <td>${item.unit||''}</td>
         <td class="output-actions">
           <button type="button" onclick="moveOutputItem('${safeName}', -1)" title="위로" ${idx === 0 ? 'disabled' : ''}>▲</button>
@@ -1529,9 +1531,9 @@ function render() {
           : `<td class="qty order-qty ${isNeed?'pos':''}">${orderText}</td>`)
       : `<td class="qty order-qty dup">${hidden ? '' : orderText}</td>`;
     const KL = isFirst
-      ? `<td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="k" value="${fmt(getK(item),2)}"></td>
-         <td><span class="daily-cell"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="l" value="${fmt(getL(item),2)}">${renderDailyAnalysisSpan(item.name)}</span></td>`
-      : `<td class="qty dup-meta">${fmt(getK(item),2)}</td><td class="qty dup-meta"><span>${fmt(getL(item),2)}</span>${renderDailyAnalysisSpan(item.name)}</td>`;
+      ? `<td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="k" value="${displayDecimal(getK(item))}"></td>
+         <td><span class="daily-cell"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="l" value="${displayDecimal(getL(item))}">${renderDailyAnalysisSpan(item.name)}</span></td>`
+      : `<td class="qty dup-meta">${displayDecimal(getK(item))}</td><td class="qty dup-meta"><span>${displayDecimal(getL(item))}</span>${renderDailyAnalysisSpan(item.name)}</td>`;
     const snoozeBtn = isFirst
       ? (hidden
           ? `<button tabindex="-1" onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`

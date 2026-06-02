@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260602-5';/, 'APP_VERSION must be bumped for unit conversion pattern calculation');
+mustMatch(/const APP_VERSION = '20260602-6';/, 'APP_VERSION must be bumped for read-only output order and one-decimal display');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -42,6 +42,7 @@ mustMatch(/let conversionAnalysis = \{\};/, 'conversion analysis state missing')
 mustMatch(/function setActualOrderValue\(name, value\)/, 'actual order setter missing');
 mustMatch(/function outputOrderQty\(item, days\)/, 'output order qty must prefer actual order');
 mustMatch(/function displayOrderQty\(item, days\)/, 'input and output order display must share the same quantity formatter');
+mustMatch(/function displayDecimal\(value\)/, 'decimal display helper missing');
 mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
 mustMatch(/function normalizeOrderUnit\(unit\)/, 'unit alias normalizer missing');
 mustMatch(/\['box', '박스', '박'\]\.includes\(value\)/, 'box/박스/박 must be treated as the same order unit');
@@ -67,12 +68,18 @@ mustMatch(/analysis\?\.source === 'unit'[\s\S]*Number\(analysis\.samples \|\| 0\
 mustMatch(/같은 단위 기록 \$\{analysis\.samples\}건 기준/, 'unit-pair conversion analysis must be visible to the user');
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
+mustMatch(/function outputOrderDisplay\(name, value\)/, 'output order must be read-only display');
+mustMatch(/class="output-order-value" data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="order"/, 'output order display marker missing');
+mustNotMatch(/outputNumberInput\(item\.name, 'order'/, 'output order must not render as an editable input');
+mustMatch(/outputNumberInput\(item\.name, 'stock', displayDecimal\(E\)\)/, 'output stock must display one decimal place');
+mustMatch(/outputNumberInput\(item\.name, 'k', displayDecimal\(getK\(item\)\)\)/, 'output buffer must display one decimal place');
+mustMatch(/outputNumberInput\(item\.name, 'l', displayDecimal\(getL\(item\)\)\)/, 'output daily usage must display one decimal place');
 mustMatch(/const orderText = isNeed \? displayOrderQty\(item, days\) : '';/, 'input order view must show the same order-unit quantity as output view');
 mustMatch(/gCell\.textContent = isNeed \? displayOrderQty\(item, days\) : '';/, 'live input order refresh must use the same output quantity');
 mustMatch(/const isDuplicateCell = gCell\.classList\.contains\('dup'\);/, 'duplicate input rows must keep the same order quantity while preserving duplicate styling');
 mustMatch(/updateDailyAnalysisForName\(name\);\s*updateOutputOrderForName\(name\);/, 'output stock edits must refresh order quantity');
 mustMatch(/setOverrideValue\(name, field, value\);\s*saveLocal\(\);\s*updateOutputOrderForName\(name\);/, 'output buffer/daily edits must refresh order quantity');
-mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output change must confirm unchanged order values');
+mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l changes must save');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
 mustMatch(/actualOrders, dailySales/, 'Firebase payload must include actual orders');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
@@ -123,8 +130,8 @@ mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'd
 mustMatch(/<th>순서<\/th>/, 'output view must show order controls header');
 mustMatch(/onclick="moveOutputItem\('\$\{safeName\}', -1\)"/, 'output row must include move-up button');
 mustMatch(/onclick="moveOutputItem\('\$\{safeName\}', 1\)"/, 'output row must include move-down button');
-mustMatch(/data-field="k" value="\$\{fmt\(getK\(item\),2\)\}"/, 'k field must still render');
-mustMatch(/data-field="l" value="\$\{fmt\(getL\(item\),2\)\}"/, 'l field must still render');
+mustMatch(/data-field="k" value="\$\{displayDecimal\(getK\(item\)\)\}"/, 'k field must still render with one decimal');
+mustMatch(/data-field="l" value="\$\{displayDecimal\(getL\(item\)\)\}"/, 'l field must still render with one decimal');
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="k"/, 'k field must be skipped by keyboard next navigation');
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="l"/, 'l field must be skipped by keyboard next navigation');
 mustMatch(/class="cell zone" type="text" tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');
