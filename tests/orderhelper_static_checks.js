@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260601-4';/, 'APP_VERSION must be bumped for unit conversion analysis');
+mustMatch(/const APP_VERSION = '20260602-1';/, 'APP_VERSION must be bumped for orderDays sync fix');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -83,6 +83,11 @@ mustMatch(/if \(active === target\) return true;/, 'mobile change while focused 
 mustMatch(/activeField === 'stock' && activeId === nextStockId/, 'already-correct next stock focus must not be overridden');
 mustMatch(/change correction current=\$\{currentId\}/, 'wrong active focus must be logged');
 mustMatch(/dateKey, orderDays: days/, 'daily history payload must include KST date key');
+mustMatch(/function setOrderDaysValue\(value\)/, 'orderDays setter must exist for cross-device sync');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderDays'\)\) setOrderDaysValue\(data\.orderDays\);/, 'Firebase sync must apply orderDays to the selector');
+mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
+mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
+mustMatch(/localStorage\.setItem\('bbq_orderDays', orderDaysEl\.value\)/, 'saveLocal must persist orderDays locally');
 mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'daily history path must be saved');
 mustMatch(/<th>순서<\/th>/, 'output view must show order controls header');
 mustMatch(/onclick="moveOutputItem\('\$\{safeName\}', -1\)"/, 'output row must include move-up button');

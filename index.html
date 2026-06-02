@@ -204,7 +204,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260601-4';
+const APP_VERSION = '20260602-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -1511,6 +1511,8 @@ function resetStocks() {
 let suppressAutoSave = false;
 let localDirty = false;
 function saveLocal(reason = 'auto') {
+  const orderDaysEl = document.getElementById('orderDays');
+  if (orderDaysEl) localStorage.setItem('bbq_orderDays', orderDaysEl.value);
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
@@ -1701,10 +1703,10 @@ async function saveToFB(reason = 'manual') {
 let inputFocused = false;
 let pendingFBData = null;
 document.addEventListener('focusin', e => {
-  if (e.target.matches('input')) inputFocused = true;
+  if (e.target.matches('input,select,textarea')) inputFocused = true;
 });
 document.addEventListener('focusout', e => {
-  if (e.target.matches('input')) {
+  if (e.target.matches('input,select,textarea')) {
     inputFocused = false;
     setTimeout(() => {
       if (!inputFocused && pendingFBData) {
@@ -1715,9 +1717,25 @@ document.addEventListener('focusout', e => {
   }
 });
 
+function normalizeOrderDays(value) {
+  const n = parseInt(String(value || '').replace(/\D/g, ''), 10);
+  if (!Number.isFinite(n) || n < 1 || n > 7) return '';
+  return String(n);
+}
+
+function setOrderDaysValue(value) {
+  const days = normalizeOrderDays(value);
+  const sel = document.getElementById('orderDays');
+  if (!days || !sel) return false;
+  sel.value = days;
+  localStorage.setItem('bbq_orderDays', days);
+  return true;
+}
+
 function applyFBData(data) {
   if (!data || !data.savedAt) return;
   // FB가 source of truth: 그대로 교체. 로컬 변경 보호는 autoLoadFromFB의 localDirty 체크가 담당
+  if (Object.prototype.hasOwnProperty.call(data, 'orderDays')) setOrderDaysValue(data.orderDays);
   if (data.entries) entries = data.entries;
   if (data.overrides) overrides = data.overrides;
   if (data.outputOrder) outputOrder = cleanOutputOrder(data.outputOrder);
@@ -1802,7 +1820,15 @@ function flushAutoSave(reason) {
   saveToFB(reasonToSave);
 }
 
-document.getElementById('orderDays').addEventListener('change', () => { renderSalesInputs(); render(); });
+function handleOrderDaysChange() {
+  setOrderDaysValue(document.getElementById('orderDays')?.value);
+  saveLocal('orderDays');
+  renderSalesInputs();
+  render();
+  flushAutoSave('orderDays');
+}
+
+document.getElementById('orderDays').addEventListener('change', handleOrderDaysChange);
 document.getElementById('snoozeOverlay')?.addEventListener('click', e => {
   if (e.target.id === 'snoozeOverlay') closeSnoozeDialog();
 });
@@ -1872,8 +1898,7 @@ MASTER.forEach(item => {
 const rec = recommendedDays();
 const sel = document.getElementById('orderDays');
 const savedDays = localStorage.getItem('bbq_orderDays');
-sel.value = savedDays ? savedDays : rec;
-sel.addEventListener('change', () => localStorage.setItem('bbq_orderDays', sel.value));
+setOrderDaysValue(savedDays || rec);
 document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
 
 document.getElementById('appVer').textContent = 'v' + APP_VERSION;
