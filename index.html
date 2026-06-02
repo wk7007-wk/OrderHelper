@@ -206,7 +206,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260602-3';
+const APP_VERSION = '20260602-5';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -530,15 +530,29 @@ function setActualOrderValue(name, value) {
   actualOrders = cleanActualOrders();
 }
 
+function normalizeOrderUnit(unit) {
+  const value = String(unit || '').trim().toLowerCase().replace(/\s+/g, '');
+  if (!value) return '';
+  if (['box', '박스', '박'].includes(value)) return 'box';
+  if (['ea', '개'].includes(value)) return 'ea';
+  if (['bon', '봉'].includes(value)) return 'bon';
+  if (['묶', '묶음'].includes(value)) return 'bundle';
+  return value;
+}
+
 function orderUnitParts(item) {
   const raw = String(item?.unit || '').trim();
   const parts = raw.split('/').map(part => part.trim()).filter(Boolean);
   const checkUnit = parts[0] || raw || '';
   const orderUnit = parts[1] || checkUnit;
+  const checkUnitKey = normalizeOrderUnit(checkUnit);
+  const orderUnitKey = normalizeOrderUnit(orderUnit);
   return {
     checkUnit,
     orderUnit,
-    same: !checkUnit || !orderUnit || checkUnit === orderUnit
+    checkUnitKey,
+    orderUnitKey,
+    same: !checkUnitKey || !orderUnitKey || checkUnitKey === orderUnitKey
   };
 }
 
@@ -562,12 +576,14 @@ function summarizeFactors(values) {
   const mid = Math.floor(clean.length / 2);
   const median = clean.length % 2 ? clean[mid] : (clean[mid - 1] + clean[mid]) / 2;
   const avg = clean.reduce((a, b) => a + b, 0) / clean.length;
-  return { factor: median, avg, samples: clean.length };
+  const min = clean[0];
+  const max = clean[clean.length - 1];
+  return { factor: median, avg, samples: clean.length, min, max, spread: max / Math.max(min, 1e-9) };
 }
 
 function unitKeyForItem(item) {
   const parts = orderUnitParts(item);
-  return `${parts.checkUnit || '-'}>${parts.orderUnit || '-'}`;
+  return `${parts.checkUnitKey || parts.checkUnit || '-'}>${parts.orderUnitKey || parts.orderUnit || '-'}`;
 }
 
 function conversionFactorFromRecord(record, item) {
@@ -630,6 +646,15 @@ function conversionFactorForItem(item) {
   if (parts.same) return 1;
   const analysis = conversionAnalysis[item.name];
   if (analysis?.source === 'item' && Number.isFinite(analysis.factor) && analysis.factor > 0) return analysis.factor;
+  if (
+    analysis?.source === 'unit' &&
+    Number.isFinite(analysis.factor) &&
+    analysis.factor > 0 &&
+    Number(analysis.samples || 0) >= 3 &&
+    Number(analysis.spread || 999) <= 1.25
+  ) {
+    return analysis.factor;
+  }
   return null;
 }
 
@@ -659,7 +684,7 @@ function orderAnalysisText(item, stockNeed) {
   const parts = orderUnitParts(item);
   if (parts.same) return '미확인';
   const analysis = conversionAnalysis[item.name];
-  if (analysis?.source === 'item' && Number.isFinite(analysis.factor)) {
+  if ((analysis?.source === 'item' || analysis?.source === 'unit') && Number.isFinite(analysis.factor)) {
     return `${parts.checkUnit}/${parts.orderUnit} ${fmt(analysis.factor, 1)}`;
   }
   if (Number(stockNeed) > 0) return '미확인';
@@ -673,6 +698,10 @@ function orderAnalysisTitle(item, stockNeed) {
   const analysis = conversionAnalysis[item.name];
   if (analysis?.source === 'item' && Number.isFinite(analysis.factor)) {
     return `품목 기록 ${analysis.samples}건 기준: ${fmt(analysis.factor, 2)}${parts.checkUnit || ''} = 1${parts.orderUnit || ''}`;
+  }
+  if (analysis?.source === 'unit' && Number.isFinite(analysis.factor)) {
+    const useText = conversionFactorForItem(item) ? '발주량 계산에 적용됨' : '참고만 표시됨';
+    return `같은 단위 기록 ${analysis.samples}건 기준: ${fmt(analysis.factor, 2)}${parts.checkUnit || ''} = 1${parts.orderUnit || ''} (${useText})`;
   }
   if (!parts.same) return `단위 분석 대기: 체크 ${parts.checkUnit || '-'} / 발주 ${parts.orderUnit || '-'}. 실제 넣은 발주칸을 한 번 확인하면 이후 패턴에 반영됩니다.`;
   return '실제 SFA 입력 여부 미확인';

@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260602-3';/, 'APP_VERSION must be bumped for SFA analysis request button');
+mustMatch(/const APP_VERSION = '20260602-5';/, 'APP_VERSION must be bumped for unit conversion pattern calculation');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -43,6 +43,10 @@ mustMatch(/function setActualOrderValue\(name, value\)/, 'actual order setter mi
 mustMatch(/function outputOrderQty\(item, days\)/, 'output order qty must prefer actual order');
 mustMatch(/function displayOrderQty\(item, days\)/, 'input and output order display must share the same quantity formatter');
 mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
+mustMatch(/function normalizeOrderUnit\(unit\)/, 'unit alias normalizer missing');
+mustMatch(/\['box', '박스', '박'\]\.includes\(value\)/, 'box/박스/박 must be treated as the same order unit');
+mustMatch(/checkUnitKey === orderUnitKey/, 'unit equality must compare normalized unit aliases');
+mustMatch(/name:"신선육\(10호\)-뼈한마리",unit:"박\/박스"/, 'fresh meat 박/박스 regression item missing');
 mustMatch(/function requestSfaOrderAnalysis\(\)/, 'SFA analysis request button handler missing');
 mustMatch(/id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis\(\)"/, 'SFA analysis request button missing');
 mustMatch(/id="sfaStatus">엑셀 대기<\/span>/, 'SFA status chip missing');
@@ -58,6 +62,9 @@ mustMatch(/renderSfaStatus\(\{ state: 'requested'/, 'SFA request must update vis
 mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
 mustMatch(/function buildConversionAnalysis\(history, currentSnapshot\)/, 'unit conversion analysis builder missing');
 mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order quantity converter missing');
+mustMatch(/spread: max \/ Math\.max\(min, 1e-9\)/, 'unit conversion summaries must track consistency spread');
+mustMatch(/analysis\?\.source === 'unit'[\s\S]*Number\(analysis\.samples \|\| 0\) >= 3[\s\S]*Number\(analysis\.spread \|\| 999\) <= 1\.25/, 'stable unit-pair patterns must be used for order quantity conversion');
+mustMatch(/같은 단위 기록 \$\{analysis\.samples\}건 기준/, 'unit-pair conversion analysis must be visible to the user');
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
 mustMatch(/const orderText = isNeed \? displayOrderQty\(item, days\) : '';/, 'input order view must show the same order-unit quantity as output view');
