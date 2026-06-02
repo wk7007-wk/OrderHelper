@@ -248,7 +248,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260602-7';
+const APP_VERSION = '20260602-8';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -364,7 +364,7 @@ const MASTER = [
   {sfaSeq:34,name:"핫앤크리스피마리네이드",unit:"팩/팩",policy:"여유",buffer:0.3,daily:0.3},
   {sfaSeq:35,name:"블랙페퍼시즈닝(15g)",unit:"봉/봉",policy:"",buffer:1,daily:0},
   {sfaSeq:36,name:"골든크리스피배터믹스(맵소반죽)",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.5},
-  {sfaSeq:37,name:"BBQ시크릿양념소스(주방용)",unit:"팩/팩",policy:"여유",buffer:1.5,daily:2},
+  {sfaSeq:37,name:"BBQ양념치킨소스",unit:"팩/팩",policy:"여유",buffer:1.5,daily:2},
   {sfaSeq:39,name:"땡쇼크소스",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.2},
   {sfaSeq:41,name:"올리브치킨용배터믹스-파우다",unit:"팩/팩",policy:"여유",buffer:2,daily:2.5},
   {sfaSeq:42,name:"올리브마리네이드(신)",unit:"팩/팩",policy:"여유",buffer:1.2,daily:0.6},
@@ -393,7 +393,7 @@ const MASTER = [
   {sfaSeq:62,name:"(신)위생장갑(200매)",unit:"개/개",policy:"전부",buffer:0.4,daily:0.4},
   {sfaSeq:62.2,name:"여과지필터(320*535)(14)",unit:"장",policy:"전부",buffer:1,daily:0},
   {sfaSeq:63,name:"수제맥주 공케그(빈통)",unit:"",policy:"여유",buffer:0,daily:0},
-  {sfaSeq:63,name:"BBQ시크릿양념소스(배달용)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.3},
+  {sfaSeq:63,name:"(컵소스)BBQ양념치킨소스(배달용)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.3},
   {sfaSeq:64,name:"스티커T_컷팅칼(떡볶이스티커)",unit:"개/봉",policy:"여유",buffer:1,daily:0},
   {sfaSeq:65,name:"BBQ뿜치킹시즈닝(58g)",unit:"",policy:"",buffer:0.3,daily:0.4},
   {sfaSeq:66,name:"BBQ뿜치킹시즈닝(25g)",unit:"",policy:"전부",buffer:0.2,daily:0.1},
@@ -406,6 +406,11 @@ const MASTER = [
   {sfaSeq:9999,name:"고추,가위,소금,종이호일,레몬보이,검정봉투",unit:"",policy:"",buffer:1,daily:0},
   {sfaSeq:43.5,name:"치플레소스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.1},
 ];
+
+const ITEM_NAME_ALIASES = {
+  "BBQ시크릿양념소스(주방용)": "BBQ양념치킨소스",
+  "BBQ시크릿양념소스(배달용)": "(컵소스)BBQ양념치킨소스(배달용)",
+};
 
 let entries = [];     // [{id, name, zone, stock}] — 한 품목이 N구역에 있으면 N entry
 let overrides = {};   // {name: {k?, l?}}  — 품목별 보정
@@ -427,6 +432,62 @@ let skipStockRenderOnceId = null;
 let pendingSnoozeName = null;
 let usageHistory = {};
 let usageAnalysis = {};
+
+function canonicalItemName(name) {
+  return ITEM_NAME_ALIASES[name] || name;
+}
+
+function legacyItemNames(name) {
+  return Object.entries(ITEM_NAME_ALIASES)
+    .filter(([, next]) => next === name)
+    .map(([old]) => old);
+}
+
+function knownItemNameSet() {
+  return new Set(MASTER.map(item => item.name));
+}
+
+function migrateEntriesByName(source = entries) {
+  const known = knownItemNameSet();
+  return (Array.isArray(source) ? source : [])
+    .map(entry => ({ ...entry, name: canonicalItemName(entry?.name || '') }))
+    .filter(entry => known.has(entry.name));
+}
+
+function migrateNamedObject(source = {}) {
+  const known = knownItemNameSet();
+  const out = {};
+  Object.entries(source || {}).forEach(([name, value]) => {
+    const nextName = canonicalItemName(name);
+    if (!known.has(nextName)) return;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      out[nextName] = { ...(out[nextName] || {}), ...value };
+    } else {
+      out[nextName] = value;
+    }
+  });
+  return out;
+}
+
+function migrateOutputOrder(order = outputOrder) {
+  return (Array.isArray(order) ? order : []).map(name => canonicalItemName(name));
+}
+
+function migrateRuntimeItemNames() {
+  entries = migrateEntriesByName(entries);
+  overrides = migrateNamedObject(overrides);
+  outputOrder = migrateOutputOrder(outputOrder);
+  actualOrders = migrateNamedObject(actualOrders);
+}
+
+function storedStockForName(stocks, name) {
+  if (!stocks || typeof stocks !== 'object') return null;
+  if (Object.prototype.hasOwnProperty.call(stocks, name)) return stocks[name];
+  for (const oldName of legacyItemNames(name)) {
+    if (Object.prototype.hasOwnProperty.call(stocks, oldName)) return stocks[oldName];
+  }
+  return null;
+}
 
 let nextId = 1;
 const SAVE_LOG_LIMIT = 8;
@@ -553,19 +614,24 @@ function setOutputStockTotal(name, value) {
 }
 
 function cleanActualOrders(source = actualOrders) {
-  const known = new Set(MASTER.map(item => item.name));
+  const known = knownItemNameSet();
   const cleaned = {};
   Object.entries(source || {}).forEach(([name, value]) => {
+    const nextName = canonicalItemName(name);
     const n = Number(value);
-    if (known.has(name) && Number.isFinite(n) && n >= 0) cleaned[name] = n;
+    if (known.has(nextName) && Number.isFinite(n) && n >= 0) cleaned[nextName] = n;
   });
   return cleaned;
 }
 
 function getActualOrder(name, source = actualOrders) {
-  if (!Object.prototype.hasOwnProperty.call(source || {}, name)) return null;
-  const n = Number(source[name]);
-  return Number.isFinite(n) && n >= 0 ? n : null;
+  const candidates = [name, canonicalItemName(name), ...legacyItemNames(name)];
+  for (const key of candidates) {
+    if (!Object.prototype.hasOwnProperty.call(source || {}, key)) continue;
+    const n = Number(source[key]);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return null;
 }
 
 function setActualOrderValue(name, value) {
@@ -608,8 +674,13 @@ function roundOrderQty(value) {
   return Math.ceil(n - 1e-9);
 }
 
+function calcRowFromRecord(record, name) {
+  const calc = record?.calc || {};
+  return calc[name] || calc[canonicalItemName(name)] || legacyItemNames(name).map(oldName => calc[oldName]).find(Boolean);
+}
+
 function stockNeedFromRecord(record, name) {
-  const row = record?.calc?.[name];
+  const row = calcRowFromRecord(record, name);
   const stockNeed = Number(row?.stockNeed);
   if (Number.isFinite(stockNeed) && stockNeed > 0) return stockNeed;
   const legacyQty = Number(row?.qty);
@@ -849,14 +920,15 @@ function stockMapFromEntries(snapshotEntries) {
   const parts = new Map();
   (Array.isArray(snapshotEntries) ? snapshotEntries : []).forEach(entry => {
     if (!entry || !entry.name) return;
-    const current = parts.get(entry.name) || { rows: 0, checked: 0, total: 0 };
+    const name = canonicalItemName(entry.name);
+    const current = parts.get(name) || { rows: 0, checked: 0, total: 0 };
     current.rows += 1;
     const n = Number(entry.stock);
     if (entry.stock !== null && entry.stock !== '' && Number.isFinite(n)) {
       current.checked += 1;
       current.total += n;
     }
-    parts.set(entry.name, current);
+    parts.set(name, current);
   });
   const stockMap = new Map();
   parts.forEach((value, name) => {
@@ -941,7 +1013,7 @@ function orderQtyFromRecord(record, name) {
     const stockNeed = stockNeedFromRecord(record, name);
     return { qty: stockNeed || actual, source: 'actual', actualQty: actual };
   }
-  const n = Number(record?.calc?.[name]?.qty);
+  const n = Number(calcRowFromRecord(record, name)?.qty);
   return { qty: Number.isFinite(n) && n > 0 ? n : 0, source: 'calc' };
 }
 
@@ -1613,9 +1685,9 @@ function defaultOutputCompare(a, b) {
 }
 
 function cleanOutputOrder(order = outputOrder) {
-  const known = new Set(MASTER.map(item => item.name));
+  const known = knownItemNameSet();
   const seen = new Set();
-  return (Array.isArray(order) ? order : []).filter(name => {
+  return migrateOutputOrder(order).filter(name => {
     if (!known.has(name) || seen.has(name)) return false;
     seen.add(name);
     return true;
@@ -1926,11 +1998,12 @@ let localDirty = false;
 function saveLocal(reason = 'auto') {
   const orderDaysEl = document.getElementById('orderDays');
   if (orderDaysEl) localStorage.setItem('bbq_orderDays', orderDaysEl.value);
+  migrateRuntimeItemNames();
+  outputOrder = cleanOutputOrder();
+  actualOrders = cleanActualOrders();
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
-  outputOrder = cleanOutputOrder();
-  actualOrders = cleanActualOrders();
   localStorage.setItem(OUTPUT_ORDER_STORAGE_KEY, JSON.stringify(outputOrder));
   localStorage.setItem(ACTUAL_ORDER_STORAGE_KEY, JSON.stringify(actualOrders));
   localStorage.setItem(ACTUAL_ORDER_DATE_STORAGE_KEY, kstDateKey(Date.now()));
@@ -2041,6 +2114,7 @@ async function saveToFB(reason = 'manual') {
   saveInFlight = true;
   renderSaveState(saveReasonLabel(reason) + ' 중', 'saving');
   const activeReason = reason;
+  migrateRuntimeItemNames();
   const now = Date.now();
   const dateKey = kstDateKey(now);
   const days = parseInt(document.getElementById('orderDays').value);
@@ -2149,8 +2223,8 @@ function applyFBData(data) {
   if (!data || !data.savedAt) return;
   // FB가 source of truth: 그대로 교체. 로컬 변경 보호는 autoLoadFromFB의 localDirty 체크가 담당
   if (Object.prototype.hasOwnProperty.call(data, 'orderDays')) setOrderDaysValue(data.orderDays);
-  if (data.entries) entries = data.entries;
-  if (data.overrides) overrides = data.overrides;
+  if (data.entries) entries = migrateEntriesByName(data.entries);
+  if (data.overrides) overrides = migrateNamedObject(data.overrides);
   if (data.outputOrder) outputOrder = cleanOutputOrder(data.outputOrder);
   if (Object.prototype.hasOwnProperty.call(data, 'actualOrders') && normalizeHistoryDateKey(data.dateKey) === kstDateKey(Date.now())) {
     actualOrders = cleanActualOrders(data.actualOrders);
@@ -2163,8 +2237,7 @@ function applyFBData(data) {
     baseSales = Number.isFinite(n) && n > 0 ? n : DEFAULT_BASE_SALES;
   }
   // 마이그레이션: FB 데이터에 MASTER 에서 사라진 이름 잔존 시 정리 (구 이름 / 등 RTDB 키 사고 방지)
-  entries = entries.filter(e => MASTER.some(m => m.name === e.name));
-  Object.keys(overrides).forEach(k => { if (!MASTER.some(m => m.name === k)) delete overrides[k]; });
+  migrateRuntimeItemNames();
   let maxN = 0;
   entries.forEach(e => { const m = /^e(\d+)$/.exec(e.id||''); if (m) maxN = Math.max(maxN, +m[1]); });
   nextId = maxN + 1;
@@ -2268,7 +2341,7 @@ try {
       id: newId(),
       name: item.name,
       zone: '',
-      stock: oldStocks[item.name] !== undefined ? oldStocks[item.name] : null
+      stock: storedStockForName(oldStocks, item.name)
     }));
   }
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
@@ -2295,9 +2368,8 @@ try {
   }
 } catch {}
 
-// 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 (구 이름 정합성, 0510 RTDB 키 sanitize 대응)
-entries = entries.filter(e => MASTER.some(m => m.name === e.name));
-Object.keys(overrides).forEach(k => { if (!MASTER.some(m => m.name === k)) delete overrides[k]; });
+// 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 + 구 품목명 갱신
+migrateRuntimeItemNames();
 actualOrders = cleanActualOrders();
 
 // MASTER에 있는데 entries에 없는 품목 보충 (마스터 갱신 대비)
