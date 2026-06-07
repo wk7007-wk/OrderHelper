@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260607-1';/, 'APP_VERSION must be bumped for output decimal and sync fixes');
+mustMatch(/const APP_VERSION = '20260607-2';/, 'APP_VERSION must be bumped for stock-movement unit inference');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -76,10 +76,14 @@ mustMatch(/비교만 완료: 실발주값은 자동반영되지 않음/, 'SFA co
 mustMatch(/sfaReviewRows\(comp\)/, 'SFA comparison must include matched differences and missing rows');
 mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
 mustMatch(/function buildConversionAnalysis\(history, currentSnapshot\)/, 'unit conversion analysis builder missing');
+mustMatch(/function movementConversionFactorFromRecords\(prev, curr, item\)/, 'unit conversion must infer from stock movement versus actual SFA order quantity');
+mustMatch(/const observedDelivery = currStock - prevStock \+ expectedUsage;/, 'stock movement inference must compare inventory change with expected usage');
+mustMatch(/result\[item\.name\] = \{ \.\.\.movement, source: 'movement'/, 'movement-derived conversion must override manual unit labels when usable');
 mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order quantity converter missing');
 mustMatch(/spread: max \/ Math\.max\(min, 1e-9\)/, 'unit conversion summaries must track consistency spread');
 mustMatch(/analysis\?\.source === 'unit'[\s\S]*Number\(analysis\.samples \|\| 0\) >= 3[\s\S]*Number\(analysis\.spread \|\| 999\) <= 1\.25/, 'stable unit-pair patterns must be used for order quantity conversion');
 mustMatch(/같은 단위 기록 \$\{analysis\.samples\}건 기준/, 'unit-pair conversion analysis must be visible to the user');
+mustMatch(/재고 변동 \$\{analysis\.samples\}건 기준 추정/, 'movement-derived unit conversion must be disclosed in the title');
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
 mustMatch(/function outputOrderDisplay\(name, value\)/, 'output order must be read-only display');
@@ -97,6 +101,7 @@ mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'out
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
 mustMatch(/actualOrders, dailySales/, 'Firebase payload must include actual orders');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
+mustMatch(/const convertedActual = factor \? actual \* factor : 0;/, 'usage analysis must convert actual SFA order quantity back to stock-check units');
 mustMatch(/전회실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 재고환산/, 'analysis title must disclose actual order and stock conversion');
 mustMatch(/최근 \$\{USAGE_ANALYSIS_MAX_DAYS\}일 분석 평균/, 'analysis title must disclose the recent history window');
 mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');

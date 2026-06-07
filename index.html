@@ -248,7 +248,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260607-1';
+const APP_VERSION = '20260607-2';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -716,9 +716,34 @@ function conversionFactorFromRecord(record, item) {
   return factor;
 }
 
+function movementConversionFactorFromRecords(prev, curr, item) {
+  const actual = getActualOrder(item.name, prev?.actualOrders || {});
+  if (actual === null || actual <= 0) return null;
+  if (!prev?.stockMap?.has(item.name) || !curr?.stockMap?.has(item.name)) return null;
+  const gapDays = (curr.dayMs - prev.dayMs) / 86400000;
+  if (!Number.isFinite(gapDays) || gapDays <= 0 || gapDays > 10) return null;
+  const prevStock = Number(prev.stockMap.get(item.name));
+  const currStock = Number(curr.stockMap.get(item.name));
+  if (!Number.isFinite(prevStock) || !Number.isFinite(currStock)) return null;
+  const expectedUsage = Math.max(0, getL(item) * gapDays);
+  const observedDelivery = currStock - prevStock + expectedUsage;
+  if (!Number.isFinite(observedDelivery) || observedDelivery <= 0) return null;
+  const factor = observedDelivery / actual;
+  if (!Number.isFinite(factor) || factor < 1.2 || factor > 200) return null;
+  return factor;
+}
+
+function isUsableMovementSummary(item, summary) {
+  if (!summary || !Number.isFinite(summary.factor) || summary.factor <= 0) return false;
+  const parts = orderUnitParts(item);
+  if (!parts.same) return summary.samples >= 1;
+  return Number(summary.samples || 0) >= 2 && Number(summary.spread || 999) <= 1.35;
+}
+
 function buildConversionAnalysis(history, currentSnapshot) {
   const records = historyRecordsWithCurrent(history, currentSnapshot);
   const itemBuckets = {};
+  const movementBuckets = {};
   const unitBuckets = {};
   records.forEach(record => {
     MASTER.forEach(item => {
@@ -729,6 +754,17 @@ function buildConversionAnalysis(history, currentSnapshot) {
       (unitBuckets[key] ||= []).push(factor);
     });
   });
+  for (let i = 1; i < records.length; i++) {
+    const prev = records[i - 1];
+    const curr = records[i];
+    MASTER.forEach(item => {
+      const factor = movementConversionFactorFromRecords(prev, curr, item);
+      if (!factor) return;
+      const key = unitKeyForItem(item);
+      (movementBuckets[item.name] ||= []).push(factor);
+      (unitBuckets[key] ||= []).push(factor);
+    });
+  }
 
   const unitSummary = {};
   Object.entries(unitBuckets).forEach(([key, values]) => {
@@ -739,6 +775,11 @@ function buildConversionAnalysis(history, currentSnapshot) {
   const result = {};
   MASTER.forEach(item => {
     const parts = orderUnitParts(item);
+    const movement = summarizeFactors(movementBuckets[item.name] || []);
+    if (isUsableMovementSummary(item, movement)) {
+      result[item.name] = { ...movement, source: 'movement', checkUnit: parts.checkUnit || '재고', orderUnit: parts.orderUnit || '발주' };
+      return;
+    }
     if (parts.same) {
       result[item.name] = { factor: 1, samples: 0, source: 'same', checkUnit: parts.checkUnit, orderUnit: parts.orderUnit };
       return;
@@ -762,8 +803,9 @@ function buildConversionAnalysis(history, currentSnapshot) {
 
 function conversionFactorForItem(item) {
   const parts = orderUnitParts(item);
-  if (parts.same) return 1;
   const analysis = conversionAnalysis[item.name];
+  if (analysis?.source === 'movement' && Number.isFinite(analysis.factor) && analysis.factor > 0) return analysis.factor;
+  if (parts.same) return 1;
   if (analysis?.source === 'item' && Number.isFinite(analysis.factor) && analysis.factor > 0) return analysis.factor;
   if (
     analysis?.source === 'unit' &&
@@ -805,8 +847,11 @@ function orderAnalysisText(item, stockNeed) {
   const actual = getActualOrder(item.name);
   if (actual !== null) return '확인';
   const parts = orderUnitParts(item);
-  if (parts.same) return '미확인';
   const analysis = conversionAnalysis[item.name];
+  if (analysis?.source === 'movement' && Number.isFinite(analysis.factor)) {
+    return `재고추정 ${fmt(analysis.factor, 1)}`;
+  }
+  if (parts.same) return '미확인';
   if ((analysis?.source === 'item' || analysis?.source === 'unit') && Number.isFinite(analysis.factor)) {
     return `${parts.checkUnit}/${parts.orderUnit} ${fmt(analysis.factor, 1)}`;
   }
@@ -819,6 +864,9 @@ function orderAnalysisTitle(item, stockNeed) {
   const parts = orderUnitParts(item);
   if (actual !== null) return `실발주 ${actual}${parts.orderUnit || ''} 확인됨`;
   const analysis = conversionAnalysis[item.name];
+  if (analysis?.source === 'movement' && Number.isFinite(analysis.factor)) {
+    return `재고 변동 ${analysis.samples}건 기준 추정: 1${parts.orderUnit || '발주단위'} ≈ ${fmt(analysis.factor, 2)}${parts.checkUnit || '재고단위'}. 사용자는 단위를 보지 않아도 이 환산값으로 발주량을 계산합니다.`;
+  }
   if (analysis?.source === 'item' && Number.isFinite(analysis.factor)) {
     return `품목 기록 ${analysis.samples}건 기준: ${fmt(analysis.factor, 2)}${parts.checkUnit || ''} = 1${parts.orderUnit || ''}`;
   }
@@ -1016,8 +1064,11 @@ function historyRecordsWithCurrent(history, currentSnapshot) {
 function orderQtyFromRecord(record, name) {
   const actual = getActualOrder(name, record?.actualOrders || {});
   if (actual !== null) {
+    const item = MASTER.find(m => m.name === name);
+    const factor = item ? conversionFactorForItem(item) : null;
     const stockNeed = stockNeedFromRecord(record, name);
-    return { qty: stockNeed || actual, source: 'actual', actualQty: actual };
+    const convertedActual = factor ? actual * factor : 0;
+    return { qty: convertedActual || stockNeed || actual, source: 'actual', actualQty: actual };
   }
   const n = Number(calcRowFromRecord(record, name)?.qty);
   return { qty: Number.isFinite(n) && n > 0 ? n : 0, source: 'calc' };
