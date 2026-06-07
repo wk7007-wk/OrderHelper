@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260602-8';/, 'APP_VERSION must be bumped for BBQ sauce name migration');
+mustMatch(/const APP_VERSION = '20260607-1';/, 'APP_VERSION must be bumped for output decimal and sync fixes');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -44,7 +44,11 @@ mustMatch(/function setActualOrderValue\(name, value\)/, 'actual order setter mi
 mustMatch(/function outputOrderQty\(item, days\)/, 'output order qty must prefer actual order');
 mustMatch(/function displayOrderQty\(item, days\)/, 'input and output order display must share the same quantity formatter');
 mustMatch(/function displayDecimal\(value\)/, 'decimal display helper missing');
+mustMatch(/return Math\.ceil\(\(n - 1e-9\) \* 10\) \/ 10;/, 'order quantity must round up to one decimal instead of whole units');
+mustMatch(/return fmt\(outputOrderQty\(item, days\), 1\);/, 'order quantity display must preserve one decimal digit');
 mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
+mustMatch(/function bindCellInputs\(\)/, 'cell event binding must be shared by input and output views');
+mustMatch(/bindCellInputs\(\);\s*updateStickyOffsets\(\);\s*return;/, 'output view must bind stock/buffer/daily inputs before returning');
 mustMatch(/function normalizeOrderUnit\(unit\)/, 'unit alias normalizer missing');
 mustMatch(/\['box', '박스', '박'\]\.includes\(value\)/, 'box/박스/박 must be treated as the same order unit');
 mustMatch(/checkUnitKey === orderUnitKey/, 'unit equality must compare normalized unit aliases');
@@ -102,12 +106,13 @@ mustMatch(/let debugLogs = \[\];/, 'debug logs state missing');
 mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local storage key missing');
 mustMatch(/let outputOrder = \[\];/, 'output order state missing');
 mustMatch(/const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';/, 'output order storage key missing');
+mustMatch(/const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';/, 'order day recommendation rule version missing');
 mustMatch(/function getOutputItems\(days\)/, 'output item sort helper missing');
 mustMatch(/function moveOutputItem\(name, direction\)/, 'output move helper missing');
 mustMatch(/outputOrder = visibleNames\.concat\(remaining\);/, 'output move must persist visible order');
 mustMatch(/outputOrder = cleanOutputOrder\(\);/, 'output order must be cleaned before saving');
 mustMatch(/outputOrder, actualOrders, dailySales/, 'Firebase payload must include output and actual order');
-mustMatch(/if \(data\.outputOrder\) outputOrder = cleanOutputOrder\(data\.outputOrder\);/, 'Firebase sync must restore output order');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'outputOrder'\)\) outputOrder = cleanOutputOrder\(data\.outputOrder\);/, 'Firebase sync must restore output order including empty order lists');
 mustMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(outputOrder\)\)/, 'output order must be stored locally');
 mustMatch(/function pushDebugLog\(message, tone = 'debug', ts = Date\.now\(\)\)/, 'internal debug logger missing');
 mustMatch(/debugLogs: debugLogs\.slice\(0, DEBUG_LOG_LIMIT\)/, 'debug logs must be included in Firebase payload');
@@ -143,15 +148,21 @@ mustMatch(/change correction current=\$\{currentId\}/, 'wrong active focus must 
 mustMatch(/dateKey, orderDays: days/, 'daily history payload must include KST date key');
 mustMatch(/function setOrderDaysValue\(value\)/, 'orderDays setter must exist for cross-device sync');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderDays'\)\) setOrderDaysValue\(data\.orderDays\);/, 'Firebase sync must apply orderDays to the selector');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'entries'\)\) entries = migrateEntriesByName\(data\.entries\);/, 'Firebase sync must apply empty entries payloads by ownership check');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'overrides'\)\) overrides = migrateNamedObject\(data\.overrides\);/, 'Firebase sync must apply cleared overrides payloads');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
 mustMatch(/localStorage\.setItem\('bbq_orderDays', orderDaysEl\.value\)/, 'saveLocal must persist orderDays locally');
+mustMatch(/localStorage\.setItem\(ORDER_DAYS_RULE_STORAGE_KEY, ORDER_DAYS_RULE_VERSION\)/, 'orderDays local persistence must mark the current recommendation rule');
 mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'daily history path must be saved');
 mustMatch(/<th>순서<\/th>/, 'output view must show order controls header');
 mustMatch(/onclick="moveOutputItem\('\$\{safeName\}', -1\)"/, 'output row must include move-up button');
 mustMatch(/onclick="moveOutputItem\('\$\{safeName\}', 1\)"/, 'output row must include move-down button');
 mustMatch(/data-field="k" value="\$\{displayDecimal\(getK\(item\)\)\}"/, 'k field must still render with one decimal');
 mustMatch(/data-field="l" value="\$\{displayDecimal\(getL\(item\)\)\}"/, 'l field must still render with one decimal');
+mustMatch(/function recommendedDays\(\) \{\s*const d = new Date\(\)\.getDay\(\);\s*if \(d === 4 \|\| d === 5\) return 4;\s*return 3;\s*\}/, 'recommended order days must be 4 only on Thu/Fri and 3 otherwise');
+mustMatch(/setOrderDaysValue\(savedDaysRule === ORDER_DAYS_RULE_VERSION \? \(savedDays \|\| rec\) : rec\);/, 'old site-local recommendation values must be refreshed after rule changes');
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="k"/, 'k field must be skipped by keyboard next navigation');
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="l"/, 'l field must be skipped by keyboard next navigation');
 mustMatch(/class="cell zone" type="text" tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');

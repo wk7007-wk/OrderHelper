@@ -248,7 +248,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260602-8';
+const APP_VERSION = '20260607-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -497,6 +497,8 @@ const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';
 const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';
 const ACTUAL_ORDER_STORAGE_KEY = 'bbq_actual_orders';
 const ACTUAL_ORDER_DATE_STORAGE_KEY = 'bbq_actual_orders_date';
+const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
+const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';
 function newId() { return 'e' + (nextId++); }
 
 function getL(item) { return overrides[item.name]?.l ?? (item.daily || 0); }
@@ -671,7 +673,7 @@ function orderUnitParts(item) {
 function roundOrderQty(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.ceil(n - 1e-9);
+  return Math.ceil((n - 1e-9) * 10) / 10;
 }
 
 function calcRowFromRecord(record, name) {
@@ -792,7 +794,7 @@ function outputOrderQty(item, days) {
 }
 
 function displayOrderQty(item, days) {
-  return fmt(outputOrderQty(item, days), 0);
+  return fmt(outputOrderQty(item, days), 1);
 }
 
 function displayDecimal(value) {
@@ -839,13 +841,17 @@ function updateOutputOrderForName(name) {
   if (!item) return;
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const g = calcG(item, days);
+  const isNeed = g > 0;
   document.querySelectorAll('.output-order-value[data-output-name]').forEach(output => {
     if (output.dataset.outputName !== name) return;
-    output.textContent = displayOrderQty(item, days);
+    output.textContent = isNeed ? displayOrderQty(item, days) : '';
+    const qtyCell = output.closest('td.order-qty');
+    if (qtyCell) qtyCell.classList.toggle('pos', isNeed);
     const wrap = output.closest('.order-cell');
     const marker = wrap?.querySelector('.order-analysis');
     if (marker) marker.outerHTML = renderOrderAnalysisSpan(item, g);
   });
+  refreshNeedBadge(days);
 }
 
 function handleOutputCellInput(target) {
@@ -1128,15 +1134,15 @@ async function loadUsageHistory(silent = true) {
 
 function recommendedDays() {
   const d = new Date().getDay();
-  if (d === 6 || d === 0 || d === 1) return 4;
+  if (d === 4 || d === 5) return 4;
   return 3;
 }
 // 발주 후 물류 도착 전까지 lost 일수 (그 동안 사용량 0)
-// 토/일/월 사이클(4일치): 오늘+내일까지 lost (내일 저녁 도착) → 2일
-// 화/수/목/금 사이클(3일치): 도착이 다음날 새벽이라 거의 lost 없음 → 0일
+// 목/금 사이클(4일치): 주말 물류 공백을 포함해 오늘+내일까지 lost → 2일
+// 나머지 요일(3일치): 도착이 다음날 새벽이라 거의 lost 없음 → 0일
 function recommendedLostDays() {
   const d = new Date().getDay();
-  if (d === 6 || d === 0 || d === 1) return 2;
+  if (d === 4 || d === 5) return 2;
   return 0;
 }
 const dayName = d => ['일','월','화','수','목','금','토'][d];
@@ -1731,112 +1737,7 @@ function outputOrderDisplay(name, value) {
   return `<span class="output-order-value" data-output-name="${escapeHtml(name)}" data-output-field="order">${escapeHtml(value)}</span>`;
 }
 
-function kstDateKey(ts) {
-  const k = new Date(ts + 9 * 3600000);
-  return k.getUTCFullYear().toString() +
-    (k.getUTCMonth()+1).toString().padStart(2,'0') +
-    k.getUTCDate().toString().padStart(2,'0');
-}
-
-function render() {
-  document.body.classList.toggle('output-mode', viewMode === 'output');
-  const tbody = document.getElementById('tbody');
-  tbody.innerHTML = '';
-  renderHeader();
-  renderSaveLogs();
-  const days = parseInt(document.getElementById('orderDays').value);
-  recomputeUsageAnalysis();
-
-  // 발주 N개 (품목 단위)
-  let needCount = 0;
-  MASTER.forEach(it => { if (calcG(it, days) > 0) needCount++; });
-  document.getElementById('badge').textContent = '발주 ' + needCount + '개';
-  document.getElementById('badge').classList.toggle('zero', needCount === 0);
-
-  if (viewMode === 'output') {
-    // 품목 단위 1행, G>0만. 기본은 D순, 버튼으로 출력 순서 조정 가능.
-    const list = getOutputItems(days);
-    list.forEach((item, idx) => {
-      const g = calcG(item, days);
-      const E = totalStock(item.name);
-      const tr = document.createElement('tr');
-      tr.classList.add('need');
-      const safeName = item.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-      tr.innerHTML = `
-        <td class="name">${item.name}</td>
-        <td class="qty order-qty pos"><span class="order-cell">${outputOrderDisplay(item.name, displayOrderQty(item, days))}${renderOrderAnalysisSpan(item, g)}</span></td>
-        <td>${outputNumberInput(item.name, 'stock', displayDecimal(E))}</td>
-        <td>${outputNumberInput(item.name, 'k', displayDecimal(getK(item)))}</td>
-        <td><span class="daily-cell">${outputNumberInput(item.name, 'l', displayDecimal(getL(item)))}${renderDailyAnalysisSpan(item.name)}</span></td>
-        <td>${item.unit||''}</td>
-        <td class="output-actions">
-          <button type="button" onclick="moveOutputItem('${safeName}', -1)" title="위로" ${idx === 0 ? 'disabled' : ''}>▲</button>
-          <button type="button" onclick="moveOutputItem('${safeName}', 1)" title="아래로" ${idx === list.length - 1 ? 'disabled' : ''}>▼</button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
-    updateStickyOffsets();
-    return;
-  }
-
-  // 입력 모드 — 미입력 우선 + 구역 묶음. 완료/숨김은 아래로 내려 입력 동선을 보존.
-  const orderedRows = entries.map(ent => {
-    const item = MASTER.find(m => m.name === ent.name);
-    if (!item) return null;
-    return { entry: ent, item, hidden: isItemHidden(item.name) };
-  }).filter(Boolean).sort(compareInputRows);
-
-  const shownItems = new Set();
-  orderedRows.forEach(({ entry: ent, item, hidden }) => {
-    const isFirst = !shownItems.has(item.name);
-    shownItems.add(item.name);
-    const dupCount = entries.filter(e => e.name === item.name).length;
-    const g = calcG(item, days);
-    const isNeed = g > 0;
-    const isChecked = isStockChecked(ent);
-    const tr = document.createElement('tr');
-    if (isNeed && isFirst) tr.classList.add('need');
-    if (hidden) tr.classList.add('row-hidden');
-    else if (isChecked) tr.classList.add('row-checked');
-    else tr.classList.add('row-pending');
-    if (!isFirst) tr.classList.add('dup-row');
-
-    const safeName = item.name.replace(/"/g, '&quot;');
-    const nameDisplay = item.name;
-    const daysLeft = hidden ? daysUntilReturn(item.name) : 0;
-    const orderText = isNeed ? displayOrderQty(item, days) : '';
-    const gCell = isFirst
-      ? (hidden
-          ? `<td class="qty order-qty dup">💤 ${daysLeft}일 후 복귀</td>`
-          : `<td class="qty order-qty ${isNeed?'pos':''}">${orderText}</td>`)
-      : `<td class="qty order-qty dup">${hidden ? '' : orderText}</td>`;
-    const KL = isFirst
-      ? `<td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="k" value="${displayDecimal(getK(item))}"></td>
-         <td><span class="daily-cell"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="l" value="${displayDecimal(getL(item))}">${renderDailyAnalysisSpan(item.name)}</span></td>`
-      : `<td class="qty dup-meta">${displayDecimal(getK(item))}</td><td class="qty dup-meta"><span>${displayDecimal(getL(item))}</span>${renderDailyAnalysisSpan(item.name)}</td>`;
-    const snoozeBtn = isFirst
-      ? (hidden
-          ? `<button tabindex="-1" onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
-          : `<button tabindex="-1" onclick="snoozeItem('${safeName}')" title="N일 동안 안 봄">💤</button>`)
-      : '';
-
-    tr.innerHTML = `
-      <td><input class="cell zone" type="text" tabindex="-1" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
-      <td class="name">${nameDisplay}</td>
-      <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
-      ${KL}
-      ${gCell}
-      <td>${item.unit||''}</td>
-      <td class="actions">
-        <button class="add" tabindex="-1" onclick="addRow('${ent.id}')" title="같은 품목 행 추가">+</button>
-        ${dupCount > 1 ? `<button tabindex="-1" onclick="deleteRow('${ent.id}')" title="이 행 삭제">×</button>` : ''}
-        ${snoozeBtn}
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-
+function bindCellInputs() {
   document.querySelectorAll('input.cell').forEach(inp => {
     inp.addEventListener('input', e => {
       if (handleOutputCellInput(e.target)) return;
@@ -1914,7 +1815,120 @@ function render() {
       flushAutoSave('auto');
     });
   });
+}
+
+function kstDateKey(ts) {
+  const k = new Date(ts + 9 * 3600000);
+  return k.getUTCFullYear().toString() +
+    (k.getUTCMonth()+1).toString().padStart(2,'0') +
+    k.getUTCDate().toString().padStart(2,'0');
+}
+
+function render() {
+  document.body.classList.toggle('output-mode', viewMode === 'output');
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  renderHeader();
+  renderSaveLogs();
+  const days = parseInt(document.getElementById('orderDays').value);
+  recomputeUsageAnalysis();
+
+  refreshNeedBadge(days);
+
+  if (viewMode === 'output') {
+    // 품목 단위 1행, G>0만. 기본은 D순, 버튼으로 출력 순서 조정 가능.
+    const list = getOutputItems(days);
+    list.forEach((item, idx) => {
+      const g = calcG(item, days);
+      const E = totalStock(item.name);
+      const tr = document.createElement('tr');
+      tr.classList.add('need');
+      const safeName = item.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      tr.innerHTML = `
+        <td class="name">${item.name}</td>
+        <td class="qty order-qty pos"><span class="order-cell">${outputOrderDisplay(item.name, displayOrderQty(item, days))}${renderOrderAnalysisSpan(item, g)}</span></td>
+        <td>${outputNumberInput(item.name, 'stock', displayDecimal(E))}</td>
+        <td>${outputNumberInput(item.name, 'k', displayDecimal(getK(item)))}</td>
+        <td><span class="daily-cell">${outputNumberInput(item.name, 'l', displayDecimal(getL(item)))}${renderDailyAnalysisSpan(item.name)}</span></td>
+        <td>${item.unit||''}</td>
+        <td class="output-actions">
+          <button type="button" onclick="moveOutputItem('${safeName}', -1)" title="위로" ${idx === 0 ? 'disabled' : ''}>▲</button>
+          <button type="button" onclick="moveOutputItem('${safeName}', 1)" title="아래로" ${idx === list.length - 1 ? 'disabled' : ''}>▼</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    bindCellInputs();
+    updateStickyOffsets();
+    return;
+  }
+
+  // 입력 모드 — 미입력 우선 + 구역 묶음. 완료/숨김은 아래로 내려 입력 동선을 보존.
+  const orderedRows = entries.map(ent => {
+    const item = MASTER.find(m => m.name === ent.name);
+    if (!item) return null;
+    return { entry: ent, item, hidden: isItemHidden(item.name) };
+  }).filter(Boolean).sort(compareInputRows);
+
+  const shownItems = new Set();
+  orderedRows.forEach(({ entry: ent, item, hidden }) => {
+    const isFirst = !shownItems.has(item.name);
+    shownItems.add(item.name);
+    const dupCount = entries.filter(e => e.name === item.name).length;
+    const g = calcG(item, days);
+    const isNeed = g > 0;
+    const isChecked = isStockChecked(ent);
+    const tr = document.createElement('tr');
+    if (isNeed && isFirst) tr.classList.add('need');
+    if (hidden) tr.classList.add('row-hidden');
+    else if (isChecked) tr.classList.add('row-checked');
+    else tr.classList.add('row-pending');
+    if (!isFirst) tr.classList.add('dup-row');
+
+    const safeName = item.name.replace(/"/g, '&quot;');
+    const nameDisplay = item.name;
+    const daysLeft = hidden ? daysUntilReturn(item.name) : 0;
+    const orderText = isNeed ? displayOrderQty(item, days) : '';
+    const gCell = isFirst
+      ? (hidden
+          ? `<td class="qty order-qty dup">💤 ${daysLeft}일 후 복귀</td>`
+          : `<td class="qty order-qty ${isNeed?'pos':''}">${orderText}</td>`)
+      : `<td class="qty order-qty dup">${hidden ? '' : orderText}</td>`;
+    const KL = isFirst
+      ? `<td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="k" value="${displayDecimal(getK(item))}"></td>
+         <td><span class="daily-cell"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="l" value="${displayDecimal(getL(item))}">${renderDailyAnalysisSpan(item.name)}</span></td>`
+      : `<td class="qty dup-meta">${displayDecimal(getK(item))}</td><td class="qty dup-meta"><span>${displayDecimal(getL(item))}</span>${renderDailyAnalysisSpan(item.name)}</td>`;
+    const snoozeBtn = isFirst
+      ? (hidden
+          ? `<button tabindex="-1" onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
+          : `<button tabindex="-1" onclick="snoozeItem('${safeName}')" title="N일 동안 안 봄">💤</button>`)
+      : '';
+
+    tr.innerHTML = `
+      <td><input class="cell zone" type="text" tabindex="-1" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
+      <td class="name">${nameDisplay}</td>
+      <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
+      ${KL}
+      ${gCell}
+      <td>${item.unit||''}</td>
+      <td class="actions">
+        <button class="add" tabindex="-1" onclick="addRow('${ent.id}')" title="같은 품목 행 추가">+</button>
+        ${dupCount > 1 ? `<button tabindex="-1" onclick="deleteRow('${ent.id}')" title="이 행 삭제">×</button>` : ''}
+        ${snoozeBtn}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  bindCellInputs();
   updateStickyOffsets();
+}
+
+function refreshNeedBadge(days = parseInt(document.getElementById('orderDays')?.value || recommendedDays())) {
+  let cnt = 0;
+  MASTER.forEach(it => { if (calcG(it, days) > 0) cnt++; });
+  document.getElementById('badge').textContent = '발주 ' + cnt + '개';
+  document.getElementById('badge').classList.toggle('zero', cnt === 0);
 }
 
 function updateGForName(name) {
@@ -1940,10 +1954,7 @@ function updateGForName(name) {
     if (isNeed && !tr.classList.contains('dup-row')) tr.classList.add('need');
     else tr.classList.remove('need');
   });
-  let cnt = 0;
-  MASTER.forEach(it => { if (calcG(it, days) > 0) cnt++; });
-  document.getElementById('badge').textContent = '발주 ' + cnt + '개';
-  document.getElementById('badge').classList.toggle('zero', cnt === 0);
+  refreshNeedBadge(days);
 }
 
 function addRow(fromId) {
@@ -2216,6 +2227,7 @@ function setOrderDaysValue(value) {
   if (!days || !sel) return false;
   sel.value = days;
   localStorage.setItem('bbq_orderDays', days);
+  localStorage.setItem(ORDER_DAYS_RULE_STORAGE_KEY, ORDER_DAYS_RULE_VERSION);
   return true;
 }
 
@@ -2223,15 +2235,15 @@ function applyFBData(data) {
   if (!data || !data.savedAt) return;
   // FB가 source of truth: 그대로 교체. 로컬 변경 보호는 autoLoadFromFB의 localDirty 체크가 담당
   if (Object.prototype.hasOwnProperty.call(data, 'orderDays')) setOrderDaysValue(data.orderDays);
-  if (data.entries) entries = migrateEntriesByName(data.entries);
-  if (data.overrides) overrides = migrateNamedObject(data.overrides);
-  if (data.outputOrder) outputOrder = cleanOutputOrder(data.outputOrder);
+  if (Object.prototype.hasOwnProperty.call(data, 'entries')) entries = migrateEntriesByName(data.entries);
+  if (Object.prototype.hasOwnProperty.call(data, 'overrides')) overrides = migrateNamedObject(data.overrides);
+  if (Object.prototype.hasOwnProperty.call(data, 'outputOrder')) outputOrder = cleanOutputOrder(data.outputOrder);
   if (Object.prototype.hasOwnProperty.call(data, 'actualOrders') && normalizeHistoryDateKey(data.dateKey) === kstDateKey(Date.now())) {
     actualOrders = cleanActualOrders(data.actualOrders);
   } else {
     actualOrders = {};
   }
-  if (data.dailySales) dailySales = data.dailySales;
+  if (Object.prototype.hasOwnProperty.call(data, 'dailySales')) dailySales = Array.isArray(data.dailySales) ? data.dailySales : [];
   if (Object.prototype.hasOwnProperty.call(data, 'baseSales')) {
     const n = Number(data.baseSales);
     baseSales = Number.isFinite(n) && n > 0 ? n : DEFAULT_BASE_SALES;
@@ -2383,7 +2395,8 @@ MASTER.forEach(item => {
 const rec = recommendedDays();
 const sel = document.getElementById('orderDays');
 const savedDays = localStorage.getItem('bbq_orderDays');
-setOrderDaysValue(savedDays || rec);
+const savedDaysRule = localStorage.getItem(ORDER_DAYS_RULE_STORAGE_KEY);
+setOrderDaysValue(savedDaysRule === ORDER_DAYS_RULE_VERSION ? (savedDays || rec) : rec);
 document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
 
 document.getElementById('appVer').textContent = 'v' + APP_VERSION;
