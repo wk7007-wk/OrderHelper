@@ -1,0 +1,13 @@
+# OrderHelper 코드맵
+# 의도 기준: APP_INTENT.md (BBQ 재고 입력과 발주량 계산 흐름 보호)
+
+## 파일 → 역할
+- APP_INTENT.md: 앱 목적, 사용자 결과, 절대 기준
+- index.html: 재고 입력, 발주량 계산, 출력보기 UI, Firebase 동기화, SFA/재고변동 기반 발주단위 환산 추정 본체
+- tests/orderhelper_static_checks.js: 정적 검증. 출력 즉시계산, 추천일, Firebase 동기화, 재고변동 환산 기준 보호
+- ORDER_LIST_ANALYSIS_HANDOFF.md: 발주 자동화 조사/진단 인계
+
+## 수정 시
+- 코드 변경 전 APP_INTENT.md를 먼저 확인한다.
+- 입력 동선, 계산식, SFA 대응, Firebase 경계가 바뀌면 APP_INTENT.md와 이 CODEMAP을 같이 갱신한다.
+- 라이브 반영 확인: `https://wk7007-wk.github.io/OrderHelper/` 에서 `APP_VERSION` 문자열 확인.
