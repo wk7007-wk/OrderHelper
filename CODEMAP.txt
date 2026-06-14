@@ -6,8 +6,11 @@
 - index.html: 재고 입력, 발주량 계산, 출력보기 UI, Firebase 동기화, SFA/재고변동 기반 발주단위 환산 추정 본체
 - tests/orderhelper_static_checks.js: 정적 검증. 출력 즉시계산, 추천일, Firebase 동기화, 재고변동 환산 기준 보호
 - ORDER_LIST_ANALYSIS_HANDOFF.md: 발주 자동화 조사/진단 인계
+- /root/SiteBot/main_auto.pyw: PC 다운로드/SFA 분석 실행자. `/monitor/main_pc/sfa_order_request`를 읽고 `/monitor/main_pc/status.sfa_order` 상태를 올린다.
+- /root/my-first-project/scripts/ai_ops_common_monitor.py: 서버폰 Termux 상주 감시자. OrderHelper 요청/상태/PC heartbeat 정체를 보고 self_fix로 넘긴다.
 
 ## 수정 시
 - 코드 변경 전 APP_INTENT.md를 먼저 확인한다.
 - 입력 동선, 계산식, SFA 대응, Firebase 경계가 바뀌면 APP_INTENT.md와 이 CODEMAP을 같이 갱신한다.
 - 라이브 반영 확인: `https://wk7007-wk.github.io/OrderHelper/` 에서 `APP_VERSION` 문자열 확인.
+- Termux 감시만 바뀐 경우 OrderHelper 웹 배포는 필요 없다. PC/SiteBot 실행 경계와 Firebase 상태 경로만 검증한다.
