@@ -25,6 +25,12 @@
 - SFA 파일 스캔/분석 실행자는 PC/SiteBot이다. 서버폰 Termux AI Ops는 `/monitor/main_pc/*` 요청·상태·heartbeat 정체를 감시하고, 멈춤/오류 때 self_fix 분석으로 넘기는 운영 감시자다.
 - Termux 상주 모니터는 발주 품목, 단위, 환산, SFA 실발주 원본을 자동 확정하거나 수정하지 않는다.
 
+## C&I / AI Ops 경계
+- C&I는 PC/SiteBot heartbeat 정체, SFA 요청/상태 불일치, GitHub Pages 반영 실패, 계산/입력 회귀를 self_fix 후보로 올린다.
+- 자동 복구는 웹 코드/테스트/문서/배포 루프 보정까지 허용한다.
+- 발주 품목, 단위, 환산, SFA 실발주 원본 확정은 자동으로 바꾸지 않는다.
+- CLI는 자체 작업을 만들지 않고 monitor/worker/사용자/수동 enqueue가 넣은 prompt만 실행한다.
+
 ## 수정 전 질문
 - 이 변경이 재고 입력 시간을 줄이는가.
 - 계산식/SFA 대응을 불확실하게 만들지 않는가.
