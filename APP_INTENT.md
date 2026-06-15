@@ -29,7 +29,7 @@
 - C&I는 PC/SiteBot heartbeat 정체, SFA 요청/상태 불일치, GitHub Pages 반영 실패, 계산/입력 회귀를 self_fix 후보로 올린다.
 - 자동 복구는 웹 코드/테스트/문서/배포 루프 보정까지 허용한다.
 - 발주 품목, 단위, 환산, SFA 실발주 원본 확정은 자동으로 바꾸지 않는다.
-- CLI는 자체 작업을 만들지 않고 monitor/worker/사용자/수동 enqueue가 넣은 prompt만 실행한다.
+- CLI/LLM은 prompt envelope가 있어야 깨어난다. monitor/worker/사용자/수동 enqueue 또는 상주 판단 루프가 prompt를 주입하며, 이것은 C&I 판단 권한 제한이 아니다.
 
 ## 수정 전 질문
 - 이 변경이 재고 입력 시간을 줄이는가.
