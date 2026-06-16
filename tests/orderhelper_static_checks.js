@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260616-1';/, 'APP_VERSION must be bumped for stock-movement unit inference');
+mustMatch(/const APP_VERSION = '20260617-1';/, 'APP_VERSION must be bumped for manual daily usage and output order restore');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -74,6 +74,7 @@ mustMatch(/setInterval\(\(\) => loadSfaOrderStatus\(false\), 10000\);/, 'SFA sta
 mustMatch(/mode: 'scan_pc_downloads'/, 'SFA request must target the PC download folder flow');
 mustMatch(/PC 다운로드 폴더 분석 요청함/, 'SFA request must give user feedback');
 mustMatch(/renderSfaStatus\(\{ state: 'requested'/, 'SFA request must update visible status immediately');
+mustMatch(/현재 수동값 자동변경 없음/, 'SFA compare panel must disclose that analysis does not edit manual daily values');
 mustMatch(/비교만 완료: 실발주값은 자동반영되지 않음/, 'SFA compare panel must disclose that analysis is not auto-apply');
 mustMatch(/sfaReviewRows\(comp\)/, 'SFA comparison must include matched differences and missing rows');
 mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
@@ -109,7 +110,8 @@ mustMatch(/function orderQtyForInterval\(prev, curr, name\)/, 'usage analysis mu
 mustMatch(/구간실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 재고환산/, 'analysis title must disclose interval actual order and stock conversion');
 mustMatch(/실발주\+재고 실사용/, 'analysis title must identify actual usage basis');
 mustMatch(/최근 \$\{USAGE_ANALYSIS_MAX_DAYS\}일 평균/, 'analysis title must disclose the recent history window');
-mustMatch(/actualUsage\?\.source === 'actual'[\s\S]*return actualUsage\.avg;/, 'actual usage analysis must override manual daily usage');
+mustMatch(/function getL\(item\) \{\s*return baseDailyUsage\(item\);\s*\}/, 'manual daily usage must remain the calculation/display value');
+mustNotMatch(/actualUsage\?\.source === 'actual'[\s\S]*return actualUsage\.avg;/, 'actual usage analysis must not override manual daily usage');
 mustMatch(/function baseDailyUsage\(item\)/, 'base daily usage helper must exist for non-recursive analysis snapshots');
 mustMatch(/calcG\(item, days, \{ baseDaily: true \}\)/, 'analysis snapshot must avoid feeding inferred usage back into itself');
 mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');
@@ -122,11 +124,12 @@ mustMatch(/const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';/, 'output order 
 mustMatch(/const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';/, 'order day recommendation rule version missing');
 mustMatch(/function getOutputItems\(days\)/, 'output item sort helper missing');
 mustMatch(/function moveOutputItem\(name, direction\)/, 'output move helper missing');
-mustMatch(/outputOrder = visibleNames\.concat\(remaining\);/, 'output move must persist visible order');
-mustMatch(/outputOrder = cleanOutputOrder\(\);/, 'output order must be cleaned before saving');
+mustMatch(/return MASTER\.filter\(item => calcG\(item, days\) > 0\)\.sort\(defaultOutputCompare\);/, 'output view must use the initial default order');
+mustMatch(/localStorage\.removeItem\(OUTPUT_ORDER_STORAGE_KEY\)/, 'stored custom output order must be cleared locally');
 mustMatch(/outputOrder, actualOrders, dailySales/, 'Firebase payload must include output and actual order');
-mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'outputOrder'\)\) outputOrder = cleanOutputOrder\(data\.outputOrder\);/, 'Firebase sync must restore output order including empty order lists');
-mustMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(outputOrder\)\)/, 'output order must be stored locally');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'outputOrder'\)\) outputOrder = \[\];/, 'Firebase sync must ignore saved custom output order');
+mustNotMatch(/outputOrder = visibleNames\.concat\(remaining\);/, 'output move must not persist custom order');
+mustNotMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(outputOrder\)\)/, 'custom output order must not be stored locally');
 mustMatch(/function pushDebugLog\(message, tone = 'debug', ts = Date\.now\(\)\)/, 'internal debug logger missing');
 mustMatch(/debugLogs: debugLogs\.slice\(0, DEBUG_LOG_LIMIT\)/, 'debug logs must be included in Firebase payload');
 mustMatch(/pushDebugLog\('키 ' \+ msg, 'warn'\)/, 'stock key logs must be analysis-only');
@@ -169,9 +172,8 @@ mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Fi
 mustMatch(/localStorage\.setItem\('bbq_orderDays', orderDaysEl\.value\)/, 'saveLocal must persist orderDays locally');
 mustMatch(/localStorage\.setItem\(ORDER_DAYS_RULE_STORAGE_KEY, ORDER_DAYS_RULE_VERSION\)/, 'orderDays local persistence must mark the current recommendation rule');
 mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'daily history path must be saved');
-mustMatch(/<th>순서<\/th>/, 'output view must show order controls header');
-mustMatch(/onclick="moveOutputItem\('\$\{safeName\}', -1\)"/, 'output row must include move-up button');
-mustMatch(/onclick="moveOutputItem\('\$\{safeName\}', 1\)"/, 'output row must include move-down button');
+mustNotMatch(/<th>순서<\/th>/, 'output order controls header must be removed');
+mustNotMatch(/onclick="moveOutputItem/, 'output row must not include move buttons');
 mustMatch(/data-field="k" value="\$\{displayDecimal\(getK\(item\)\)\}"/, 'k field must still render with one decimal');
 mustMatch(/data-field="l" value="\$\{displayDecimal\(getL\(item\)\)\}"/, 'l field must still render with one decimal');
 mustMatch(/function recommendedDays\(\) \{\s*const d = new Date\(\)\.getDay\(\);\s*if \(d === 4 \|\| d === 5\) return 4;\s*return 3;\s*\}/, 'recommended order days must be 4 only on Thu/Fri and 3 otherwise');

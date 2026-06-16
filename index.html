@@ -248,7 +248,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260616-1';
+const APP_VERSION = '20260617-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -507,8 +507,6 @@ function baseDailyUsage(item) {
   return overrides[item.name]?.l ?? (item.daily || 0);
 }
 function getL(item) {
-  const actualUsage = usageAnalysis[item.name];
-  if (actualUsage?.source === 'actual' && Number.isFinite(actualUsage.avg) && actualUsage.avg > 0) return actualUsage.avg;
   return baseDailyUsage(item);
 }
 function getK(item) { return overrides[item.name]?.k ?? (item.buffer || 0); }
@@ -1454,7 +1452,7 @@ function renderSfaComparePanel(data) {
   title.textContent = data.ok ? '엑셀 오차' : '엑셀 구조 확인';
   meta.textContent = `${fileName || '파일 미확인'} · ${sfaDateBasisText(history)}${data.savedAt ? ` · ${sfaCompareTime(data.savedAt)}` : ''}`;
   note.textContent = Object.keys(applied).length
-    ? `실발주값 ${Object.keys(applied).length}개 반영됨`
+    ? `실발주값 ${Object.keys(applied).length}개 기록됨 · 현재 수동값 자동변경 없음`
     : '비교만 완료: 실발주값은 자동반영되지 않음';
   counts.innerHTML = [
     sfaCountChip('일치', okCount),
@@ -1685,7 +1683,6 @@ function renderHeader() {
       <th>여유</th>
       <th>일사용</th>
       <th>단위</th>
-      <th>순서</th>
     `;
     return;
   }
@@ -1831,42 +1828,22 @@ function defaultOutputCompare(a, b) {
 }
 
 function cleanOutputOrder(order = outputOrder) {
-  const known = knownItemNameSet();
-  const seen = new Set();
-  return migrateOutputOrder(order).filter(name => {
-    if (!known.has(name) || seen.has(name)) return false;
-    seen.add(name);
-    return true;
-  });
+  return [];
 }
 
 function outputRankMap() {
-  const cleaned = cleanOutputOrder();
-  if (cleaned.length !== outputOrder.length) outputOrder = cleaned;
-  return new Map(cleaned.map((name, idx) => [name, idx]));
+  outputOrder = [];
+  return new Map();
 }
 
 function getOutputItems(days) {
-  const rank = outputRankMap();
-  return MASTER.filter(item => calcG(item, days) > 0).sort((a, b) => {
-    const ar = rank.has(a.name) ? rank.get(a.name) : Number.MAX_SAFE_INTEGER;
-    const br = rank.has(b.name) ? rank.get(b.name) : Number.MAX_SAFE_INTEGER;
-    if (ar !== br) return ar - br;
-    return defaultOutputCompare(a, b);
-  });
+  outputOrder = [];
+  return MASTER.filter(item => calcG(item, days) > 0).sort(defaultOutputCompare);
 }
 
 function moveOutputItem(name, direction) {
-  const days = parseInt(document.getElementById('orderDays').value);
-  const visibleNames = getOutputItems(days).map(item => item.name);
-  const idx = visibleNames.indexOf(name);
-  const nextIdx = idx + direction;
-  if (idx < 0 || nextIdx < 0 || nextIdx >= visibleNames.length) return;
-  [visibleNames[idx], visibleNames[nextIdx]] = [visibleNames[nextIdx], visibleNames[idx]];
-  const remaining = cleanOutputOrder().filter(itemName => !visibleNames.includes(itemName));
-  outputOrder = visibleNames.concat(remaining);
-  saveLocal('outputOrder');
-  render();
+  outputOrder = [];
+  toast('출력순서는 최초순서 고정');
 }
 
 function outputNumberInput(name, field, value) {
@@ -1991,10 +1968,6 @@ function render() {
         <td>${outputNumberInput(item.name, 'k', displayDecimal(getK(item)))}</td>
         <td><span class="daily-cell">${outputNumberInput(item.name, 'l', displayDecimal(getL(item)))}${renderDailyAnalysisSpan(item.name)}</span></td>
         <td>${item.unit||''}</td>
-        <td class="output-actions">
-          <button type="button" onclick="moveOutputItem('${safeName}', -1)" title="위로" ${idx === 0 ? 'disabled' : ''}>▲</button>
-          <button type="button" onclick="moveOutputItem('${safeName}', 1)" title="아래로" ${idx === list.length - 1 ? 'disabled' : ''}>▼</button>
-        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -2150,12 +2123,12 @@ function saveLocal(reason = 'auto') {
   const orderDaysEl = document.getElementById('orderDays');
   if (orderDaysEl) localStorage.setItem('bbq_orderDays', orderDaysEl.value);
   migrateRuntimeItemNames();
-  outputOrder = cleanOutputOrder();
+  outputOrder = [];
   actualOrders = cleanActualOrders();
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
-  localStorage.setItem(OUTPUT_ORDER_STORAGE_KEY, JSON.stringify(outputOrder));
+  localStorage.removeItem(OUTPUT_ORDER_STORAGE_KEY);
   localStorage.setItem(ACTUAL_ORDER_STORAGE_KEY, JSON.stringify(actualOrders));
   localStorage.setItem(ACTUAL_ORDER_DATE_STORAGE_KEY, kstDateKey(Date.now()));
   if (baseSales == null) localStorage.removeItem('bbq_baseSales');
@@ -2275,7 +2248,7 @@ async function saveToFB(reason = 'manual') {
     if (g > 0) calc[item.name] = { qty: recommendedOrderQty(item, g), stockNeed: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
   const salesWeights = dailyWeights(days).map(x => Math.round(x * 1000) / 1000);
-  outputOrder = cleanOutputOrder();
+  outputOrder = [];
   actualOrders = cleanActualOrders();
   const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
@@ -2377,7 +2350,7 @@ function applyFBData(data) {
   if (Object.prototype.hasOwnProperty.call(data, 'orderDays')) setOrderDaysValue(data.orderDays);
   if (Object.prototype.hasOwnProperty.call(data, 'entries')) entries = migrateEntriesByName(data.entries);
   if (Object.prototype.hasOwnProperty.call(data, 'overrides')) overrides = migrateNamedObject(data.overrides);
-  if (Object.prototype.hasOwnProperty.call(data, 'outputOrder')) outputOrder = cleanOutputOrder(data.outputOrder);
+  if (Object.prototype.hasOwnProperty.call(data, 'outputOrder')) outputOrder = [];
   if (Object.prototype.hasOwnProperty.call(data, 'actualOrders') && normalizeHistoryDateKey(data.dateKey) === kstDateKey(Date.now())) {
     actualOrders = cleanActualOrders(data.actualOrders);
   } else {
@@ -2497,7 +2470,8 @@ try {
     }));
   }
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
-  const oo = localStorage.getItem(OUTPUT_ORDER_STORAGE_KEY); if (oo) outputOrder = cleanOutputOrder(JSON.parse(oo));
+  localStorage.removeItem(OUTPUT_ORDER_STORAGE_KEY);
+  outputOrder = [];
   const ao = localStorage.getItem(ACTUAL_ORDER_STORAGE_KEY);
   const aoDate = localStorage.getItem(ACTUAL_ORDER_DATE_STORAGE_KEY);
   if (ao && aoDate === kstDateKey(Date.now())) actualOrders = cleanActualOrders(JSON.parse(ao));

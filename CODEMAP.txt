@@ -3,8 +3,8 @@
 
 ## 파일 → 역할
 - APP_INTENT.md: 앱 목적, 사용자 결과, 절대 기준
-- index.html: 재고 입력, 발주량 계산, 출력보기 UI, Firebase 동기화, SFA 실발주 이력+재고변동 기반 발주단위 환산/하루 실사용량 추정 본체
-- tests/orderhelper_static_checks.js: 정적 검증. 출력 즉시계산, 추천일, Firebase 동기화, 재고변동 환산 기준 보호
+- index.html: 재고 입력, 수동 하루사용량 기준 발주량 계산, 최초 SFA 순서 출력보기 UI, Firebase 동기화, SFA 실발주 이력+재고변동 기반 발주단위 환산/하루 실사용량 참고 배지
+- tests/orderhelper_static_checks.js: 정적 검증. 출력 즉시계산, 추천일, Firebase 동기화, 수동 하루사용량 우선, 최초 출력순서, 재고변동 환산 기준 보호
 - ORDER_LIST_ANALYSIS_HANDOFF.md: 발주 자동화 조사/진단 인계
 - /root/SiteBot/main_auto.pyw: PC 다운로드/SFA 분석 실행자. `/monitor/main_pc/sfa_order_request`를 읽고 `/monitor/main_pc/status.sfa_order` 상태를 올린다.
 - /root/my-first-project/scripts/orderhelper_usage_inference.py: 재고 history + SFA 실발주 엑셀/비교 이력으로 `이전재고+입고-다음재고` 실사용량과 발주단위 환산을 추정해 `/unitInference/latest`에 올린다.
@@ -15,4 +15,4 @@
 - 입력 동선, 계산식, SFA 대응, Firebase 경계가 바뀌면 APP_INTENT.md와 이 CODEMAP을 같이 갱신한다.
 - 라이브 반영 확인: `https://wk7007-wk.github.io/OrderHelper/` 에서 `APP_VERSION` 문자열 확인.
 - Termux 감시만 바뀐 경우 OrderHelper 웹 배포는 필요 없다. PC/SiteBot 실행 경계와 Firebase 상태 경로만 검증한다.
-- CLI 감시는 누락/정체/불일치 보고, `/unitInference/latest` 리포트 업로드, 코드/문서/배포 보정 역할이다. 발주 품목, 단위, 환산, SFA 실발주 원본은 자동 확정하지 않는다.
+- CLI 감시는 누락/정체/불일치 보고, `/unitInference/latest` 리포트 업로드, 코드/문서/배포 보정 역할이다. 발주 품목, 단위, 하루사용량 수동값, 환산, SFA 실발주 원본은 자동 확정하지 않는다.
