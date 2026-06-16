@@ -18,11 +18,12 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260607-2';/, 'APP_VERSION must be bumped for stock-movement unit inference');
+mustMatch(/const APP_VERSION = '20260616-1';/, 'APP_VERSION must be bumped for stock-movement unit inference');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
 mustMatch(/const SFA_COMPARE_PATH = `\$\{FB_PATH\}\/sfaCompare\/latest`;/, 'SFA latest comparison path missing');
+mustMatch(/const SFA_ACTUAL_HISTORY_PATH = `\$\{FB_PATH\}\/sfaActualHistory`;/, 'SFA actual order history path missing');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
@@ -30,6 +31,7 @@ mustMatch(/function stockEventLabel\(e, phase\)/, 'stock key event label missing
 mustMatch(/function logStockEvent\(e, phase\)/, 'stock key event logger missing');
 mustMatch(/let usageHistory = \{\};/, 'usage history state missing');
 mustMatch(/let usageAnalysis = \{\};/, 'usage analysis state missing');
+mustMatch(/let sfaActualHistory = \{\};/, 'SFA actual history state missing');
 mustMatch(/function buildUsageAnalysis\(history, currentSnapshot\)/, 'usage analysis builder missing');
 mustMatch(/USAGE_ANALYSIS_MAX_DAYS \* 86400000/, 'usage analysis must limit old history records');
 mustMatch(/const usage = prevStock \+ orderQty - currStock;/, 'usage analysis must infer from previous stock plus order minus next stock');
@@ -102,8 +104,14 @@ mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be saniti
 mustMatch(/actualOrders, dailySales/, 'Firebase payload must include actual orders');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
 mustMatch(/const convertedActual = factor \? actual \* factor : 0;/, 'usage analysis must convert actual SFA order quantity back to stock-check units');
-mustMatch(/전회실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 재고환산/, 'analysis title must disclose actual order and stock conversion');
-mustMatch(/최근 \$\{USAGE_ANALYSIS_MAX_DAYS\}일 분석 평균/, 'analysis title must disclose the recent history window');
+mustMatch(/function actualOrderForInterval\(prev, curr, name\)/, 'usage analysis must join SFA actual orders by stock interval');
+mustMatch(/function orderQtyForInterval\(prev, curr, name\)/, 'usage analysis must convert interval SFA orders to stock units');
+mustMatch(/구간실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 재고환산/, 'analysis title must disclose interval actual order and stock conversion');
+mustMatch(/실발주\+재고 실사용/, 'analysis title must identify actual usage basis');
+mustMatch(/최근 \$\{USAGE_ANALYSIS_MAX_DAYS\}일 평균/, 'analysis title must disclose the recent history window');
+mustMatch(/actualUsage\?\.source === 'actual'[\s\S]*return actualUsage\.avg;/, 'actual usage analysis must override manual daily usage');
+mustMatch(/function baseDailyUsage\(item\)/, 'base daily usage helper must exist for non-recursive analysis snapshots');
+mustMatch(/calcG\(item, days, \{ baseDaily: true \}\)/, 'analysis snapshot must avoid feeding inferred usage back into itself');
 mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');
 mustMatch(/if \(handleOutputCellInput\(e\.target\)\) return;/, 'output edit input must bypass row-id input handler');
 mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);\s*render\(\);\s*return;\s*\}/, 'output edit change must save and rerender');
