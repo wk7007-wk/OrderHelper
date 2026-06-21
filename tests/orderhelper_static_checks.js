@@ -4,6 +4,14 @@ const path = require('path');
 
 const indexPath = path.join(__dirname, '..', 'index.html');
 const html = fs.readFileSync(indexPath, 'utf8');
+const inferencePath =
+  process.env.ORDERHELPER_INFERENCE_SCRIPT?.trim() ||
+  path.join('/root', 'my-first-project', 'scripts', 'orderhelper_usage_inference.py');
+assert(
+  fs.existsSync(inferencePath),
+  `missing inference script: ${inferencePath} (set ORDERHELPER_INFERENCE_SCRIPT)`
+);
+const inferencePy = fs.readFileSync(inferencePath, 'utf8');
 const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g))
   .map(match => match[1])
   .join('\n');
@@ -18,7 +26,11 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260622-1';/, 'APP_VERSION must be bumped for immediate SFA actual history reference refresh');
+function mustMatchPy(pattern, message) {
+  assert(pattern.test(inferencePy), message);
+}
+
+mustMatch(/const APP_VERSION = '20260622-2';/, 'APP_VERSION must be bumped for the current partial fix set');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -34,7 +46,7 @@ mustMatch(/let usageAnalysis = \{\};/, 'usage analysis state missing');
 mustMatch(/let sfaActualHistory = \{\};/, 'SFA actual history state missing');
 mustMatch(/function buildUsageAnalysis\(history, currentSnapshot\)/, 'usage analysis builder missing');
 mustMatch(/USAGE_ANALYSIS_MAX_DAYS \* 86400000/, 'usage analysis must limit old history records');
-mustMatch(/const usage = prevStock \+ orderQty - currStock;/, 'usage analysis must infer from previous stock plus order minus next stock');
+mustMatch(/const usage = order\.source === 'actual'[\s\S]*prevStock \+ \(Number\(order\.actualQty \|\| 0\) \* Number\(order\.orderUnitToStockFactor \|\| 1\)\) - currStock[\s\S]*: prevStock \+ orderQty - currStock;/, 'usage analysis must convert actual SFA orders back into stock units before inferring usage');
 mustMatch(/data-analysis-name="\$\{escapeHtml\(name\)\}"/, 'daily analysis marker must be rendered next to daily usage');
 mustMatch(/loadUsageHistory\(true\);/, 'usage history must load on page start');
 mustMatch(/setInterval\(\(\) => loadUsageHistory\(true\), 300000\);/, 'usage history must refresh periodically');
@@ -46,6 +58,13 @@ mustMatch(/function setActualOrderValue\(name, value\)/, 'actual order setter mi
 mustMatch(/function outputOrderQty\(item, days\)/, 'output order qty must prefer actual order');
 mustMatch(/function displayOrderQty\(item, days\)/, 'input and output order display must share the same quantity formatter');
 mustMatch(/function displayDecimal\(value\)/, 'decimal display helper missing');
+mustMatch(/function parseMoney\(value\)/, 'money parser missing');
+mustMatch(/function formatWon\(value\)/, 'won formatter missing');
+mustMatch(/function sfaUnitPriceFromRow\(row\)/, 'SFA unit price resolver missing');
+mustMatch(/function expectedOrderAmountForItem\(item, stockNeed\)/, 'expected order amount helper missing');
+mustMatch(/const matched = lastSfaCompareData\?\.comparison\?\.matched \|\| \[\];/, 'amount estimate must read latest matched SFA comparison rows');
+mustMatch(/const recommendedQty = recommendedOrderQty\(item, stockNeed\);/, 'amount estimate must use the same recommended order quantity conversion');
+mustMatch(/expected_order_amount: recommendedQty \* price\.unitPrice/, 'amount estimate must multiply converted order qty by inferred unit price');
 mustMatch(/return Math\.ceil\(\(n - 1e-9\) \* 10\) \/ 10;/, 'order quantity must round up to one decimal instead of whole units');
 mustMatch(/return fmt\(outputOrderQty\(item, days\), 1\);/, 'order quantity display must preserve one decimal digit');
 mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
@@ -88,9 +107,14 @@ mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order 
 mustMatch(/spread: max \/ Math\.max\(min, 1e-9\)/, 'unit conversion summaries must track consistency spread');
 mustMatch(/analysis\?\.source === 'unit'[\s\S]*Number\(analysis\.samples \|\| 0\) >= 3[\s\S]*Number\(analysis\.spread \|\| 999\) <= 1\.25/, 'stable unit-pair patterns must be used for order quantity conversion');
 mustMatch(/같은 단위 기록 \$\{analysis\.samples\}건 기준/, 'unit-pair conversion analysis must be visible to the user');
-mustMatch(/재고 변동 \$\{analysis\.samples\}건 기준 추정/, 'movement-derived unit conversion must be disclosed in the title');
+mustMatch(/단위환산 분석: orderUnitToStockFactor \$\{fmt\(analysis\.factor, 2\)\}\. 발주환산 1\$\{parts\.orderUnit \|\| '발주단위'\}=\$\{fmt\(analysis\.factor, 2\)\}\$\{parts\.checkUnit \|\| '재고단위'\} \(재고 변동 \$\{analysis\.samples\}건\)\./, 'movement-derived unit conversion must be disclosed separately from amount analysis');
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
+mustMatch(/function renderOrderAmountSpan\(item, stockNeed\)/, 'output order amount renderer missing');
+mustMatch(/<span class="order-amount" title="\$\{escapeHtml\(title\)\}">예상 \$\{escapeHtml\(formatWon\(estimate\.expected_order_amount\)\)\}<\/span>/, 'output order cell must show expected amount from SFA amount data');
+mustMatch(/renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g\)\}/, 'unit conversion analysis and amount estimate must render as separate chips');
+mustMatch(/예상 발주금액 \$\{formatWon\(estimate\.expected_order_amount\)\}/, 'amount chip title must disclose expected order amount');
+mustMatch(/단가 \$\{formatWon\(estimate\.unit_price\)\} \(\$\{estimate\.basis\}\)/, 'amount chip title must disclose unit price basis');
 mustMatch(/function outputOrderDisplay\(name, value\)/, 'output order must be read-only display');
 mustMatch(/class="output-order-value" data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="order"/, 'output order display marker missing');
 mustNotMatch(/outputNumberInput\(item\.name, 'order'/, 'output order must not render as an editable input');
@@ -106,12 +130,12 @@ mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'out
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
 mustMatch(/actualOrders, dailySales/, 'Firebase payload must include actual orders');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
-mustMatch(/const convertedActual = factor \? actual \* factor : 0;/, 'usage analysis must convert actual SFA order quantity back to stock-check units');
+mustMatch(/const convertedActual = orderUnitToStockFactor \? actual \* orderUnitToStockFactor : actual;/, 'usage analysis must convert actual SFA order quantity back to stock-check units');
 mustMatch(/function actualOrderForInterval\(prev, curr, name\)/, 'usage analysis must join SFA actual orders by stock interval');
 mustMatch(/function orderQtyForInterval\(prev, curr, name\)/, 'usage analysis must convert interval SFA orders to stock units');
-mustMatch(/구간실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 재고환산/, 'analysis title must disclose interval actual order and stock conversion');
+mustMatch(/구간실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 발주환산 1발주=\$\{fmt\(last\.orderUnitToStockFactor \|\| 1, 2\)\}재고 \/ 재고환산 \$\{fmt\(last\.orderQty, 2\)\}/, 'analysis title must disclose interval actual order and stock conversion');
 mustMatch(/실발주\+재고 실사용/, 'analysis title must identify actual usage basis');
-mustMatch(/최근 \$\{USAGE_ANALYSIS_MAX_DAYS\}일 평균/, 'analysis title must disclose the recent history window');
+mustMatch(/최근 기준매출환산/, 'analysis title must disclose the recent history context');
 mustMatch(/function getL\(item\) \{\s*return baseDailyUsage\(item\);\s*\}/, 'manual daily usage must remain the calculation/display value');
 mustNotMatch(/actualUsage\?\.source === 'actual'[\s\S]*return actualUsage\.avg;/, 'actual usage analysis must not override manual daily usage');
 mustMatch(/function baseDailyUsage\(item\)/, 'base daily usage helper must exist for non-recursive analysis snapshots');

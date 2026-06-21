@@ -62,6 +62,8 @@
   .order-cell { display: inline-flex; align-items: center; gap: 5px; }
   .order-analysis { display: inline-flex; align-items: center; min-height: 18px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(250, 204, 21, 0.34); background: rgba(234, 179, 8, 0.12); color: #fde68a; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
   .order-analysis.empty { display: none; }
+  .order-amount { display: inline-flex; align-items: center; min-height: 18px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.38); background: rgba(14, 165, 233, 0.13); color: #bae6fd; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
+  .order-amount.empty { display: none; }
   .daily-cell { display: inline-flex; align-items: center; gap: 6px; }
   .daily-analysis { display: inline-flex; align-items: center; min-height: 18px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(14, 165, 233, 0.12); color: #7dd3fc; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
   .daily-analysis.empty { display: none; }
@@ -248,7 +250,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260622-1';
+const APP_VERSION = '20260622-2';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -429,6 +431,7 @@ let sfaLastRequestAt = 0;
 let sfaCompareVisible = false;
 let lastSfaCompareSavedAt = 0;
 let lastSfaCompareStatusKey = '';
+let lastSfaCompareData = null;
 let skipStockRenderOnceId = null;
 let pendingSnoozeName = null;
 let usageHistory = {};
@@ -879,6 +882,53 @@ function displayDecimal(value) {
   return fmt(value, 1);
 }
 
+function parseMoney(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(String(value).replace(/[^\d.-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatWon(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return Math.round(n).toLocaleString('ko-KR') + '원';
+}
+
+function sfaUnitPriceFromRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  const direct = parseMoney(row.unit_price ?? row.unitPrice ?? row.sfa_unit_price ?? row.price);
+  if (direct !== null && direct > 0) {
+    return { unitPrice: direct, basis: 'unit_price', qty: null, amount: null };
+  }
+  const qty = Number(row.sfa_qty ?? row.qty);
+  const amount = parseMoney(row.amount ?? row.sfa_amount ?? row.order_amount ?? row.total_amount ?? row.total);
+  if (Number.isFinite(qty) && qty > 0 && amount !== null && amount > 0) {
+    return { unitPrice: amount / qty, basis: 'amount/qty', qty, amount };
+  }
+  return null;
+}
+
+function expectedOrderAmountForItem(item, stockNeed) {
+  const matched = lastSfaCompareData?.comparison?.matched || [];
+  const row = matched.find(r => canonicalItemName(r?.expected_name || '') === item.name);
+  const price = sfaUnitPriceFromRow(row);
+  if (!price) return null;
+  const recommendedQty = recommendedOrderQty(item, stockNeed);
+  if (!Number.isFinite(recommendedQty) || recommendedQty <= 0) return null;
+  const history = lastSfaCompareData?.historySummary || {};
+  const file = lastSfaCompareData?.file || {};
+  return {
+    expected_order_amount: recommendedQty * price.unitPrice,
+    recommended_order_qty: recommendedQty,
+    unit_price: price.unitPrice,
+    basis: price.basis,
+    source_date: history.selectedDate || '',
+    source_file: file.name || '',
+    source_qty: price.qty,
+    source_amount: price.amount
+  };
+}
+
 function orderAnalysisText(item, stockNeed) {
   const actual = getActualOrder(item.name);
   if (actual !== null) return '확인';
@@ -901,14 +951,14 @@ function orderAnalysisTitle(item, stockNeed) {
   if (actual !== null) return `실발주 ${actual}${parts.orderUnit || ''} 확인됨`;
   const analysis = conversionAnalysis[item.name];
   if (analysis?.source === 'movement' && Number.isFinite(analysis.factor)) {
-    return `재고 변동 ${analysis.samples}건 기준 추정: 1${parts.orderUnit || '발주단위'} ≈ ${fmt(analysis.factor, 2)}${parts.checkUnit || '재고단위'}. 사용자는 단위를 보지 않아도 이 환산값으로 발주량을 계산합니다.`;
+    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 발주환산 1${parts.orderUnit || '발주단위'}=${fmt(analysis.factor, 2)}${parts.checkUnit || '재고단위'} (재고 변동 ${analysis.samples}건).`;
   }
   if (analysis?.source === 'item' && Number.isFinite(analysis.factor)) {
-    return `품목 기록 ${analysis.samples}건 기준: ${fmt(analysis.factor, 2)}${parts.checkUnit || ''} = 1${parts.orderUnit || ''}`;
+    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 품목 기록 ${analysis.samples}건 기준 1${parts.orderUnit || '발주'}=${fmt(analysis.factor, 2)}${parts.checkUnit || '재고'}`;
   }
   if (analysis?.source === 'unit' && Number.isFinite(analysis.factor)) {
     const useText = conversionFactorForItem(item) ? '발주량 계산에 적용됨' : '참고만 표시됨';
-    return `같은 단위 기록 ${analysis.samples}건 기준: ${fmt(analysis.factor, 2)}${parts.checkUnit || ''} = 1${parts.orderUnit || ''} (${useText})`;
+    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 같은 단위 기록 ${analysis.samples}건 기준 1${parts.orderUnit || '발주'}=${fmt(analysis.factor, 2)}${parts.checkUnit || '재고'} (${useText})`;
   }
   if (!parts.same) return `단위 분석 대기: 체크 ${parts.checkUnit || '-'} / 발주 ${parts.orderUnit || '-'}. 실제 넣은 발주칸을 한 번 확인하면 이후 패턴에 반영됩니다.`;
   return '실제 SFA 입력 여부 미확인';
@@ -918,6 +968,20 @@ function renderOrderAnalysisSpan(item, stockNeed) {
   const text = orderAnalysisText(item, stockNeed);
   if (!text) return '<span class="order-analysis empty"></span>';
   return `<span class="order-analysis" title="${escapeHtml(orderAnalysisTitle(item, stockNeed))}">${escapeHtml(text)}</span>`;
+}
+
+function renderOrderAmountSpan(item, stockNeed) {
+  const estimate = expectedOrderAmountForItem(item, stockNeed);
+  if (!estimate) return '<span class="order-amount empty"></span>';
+  const title = [
+    `예상 발주금액 ${formatWon(estimate.expected_order_amount)}`,
+    `오늘 계산 발주량 ${fmt(estimate.recommended_order_qty, 1)}${orderUnitParts(item).orderUnit || '발주'}`,
+    `단가 ${formatWon(estimate.unit_price)} (${estimate.basis})`,
+    estimate.source_date ? `엑셀 ${estimate.source_date}` : '',
+    estimate.source_file ? `파일 ${estimate.source_file}` : '',
+    estimate.source_qty && estimate.source_amount ? `근거 qty ${fmt(estimate.source_qty, 2)} / amount ${formatWon(estimate.source_amount)}` : ''
+  ].filter(Boolean).join(' · ');
+  return `<span class="order-amount" title="${escapeHtml(title)}">예상 ${escapeHtml(formatWon(estimate.expected_order_amount))}</span>`;
 }
 
 function updateOutputOrderForName(name) {
@@ -934,6 +998,8 @@ function updateOutputOrderForName(name) {
     const wrap = output.closest('.order-cell');
     const marker = wrap?.querySelector('.order-analysis');
     if (marker) marker.outerHTML = renderOrderAnalysisSpan(item, g);
+    const amount = wrap?.querySelector('.order-amount');
+    if (amount) amount.outerHTML = renderOrderAmountSpan(item, g);
   });
   refreshNeedBadge(days);
 }
@@ -979,6 +1045,60 @@ function dailyWeights(days) {
     return Math.max(0, n) / base;
   });
 }
+
+function normalizeNumberArray(value) {
+  return Array.isArray(value) ? value.map(x => {
+    if (x === null || x === '') return null;
+    const n = Number(x);
+    return Number.isFinite(n) ? n : null;
+  }) : [];
+}
+
+function salesWeightForInterval(record, gapDays) {
+  const days = Math.max(0, Math.round(Number(gapDays) || 0));
+  const weights = normalizeNumberArray(record?.salesWeights);
+  if (weights.length > 0) {
+    let missing = 0;
+    let sum = 0;
+    for (let i = 0; i < days; i++) {
+      const n = weights[i];
+      if (n === null) {
+        missing += 1;
+        sum += 1;
+      } else {
+        sum += Math.max(0, n);
+      }
+    }
+    return { sum, basis: missing ? 'salesWeights_partial' : 'salesWeights', missing, fallback: missing > 0 };
+  }
+
+  const sales = normalizeNumberArray(record?.dailySales);
+  if (sales.length > 0) {
+    const base = Number(record?.baseSales);
+    const hasBase = Number.isFinite(base) && base > 0;
+    const divisor = hasBase ? base : DEFAULT_BASE_SALES;
+    let missing = 0;
+    let sum = 0;
+    for (let i = 0; i < days; i++) {
+      const n = sales[i];
+      if (n === null) {
+        missing += 1;
+        sum += 1;
+      } else {
+        sum += Math.max(0, n) / divisor;
+      }
+    }
+    return {
+      sum,
+      basis: hasBase ? (missing ? 'dailySales_partial' : 'dailySales') : 'dailySales_defaultBaseSales',
+      missing,
+      fallback: missing > 0 || !hasBase
+    };
+  }
+
+  return { sum: gapDays, basis: 'gapDays_fallback', missing: days, fallback: true };
+}
+
 function calcG(item, days, options = {}) {
   if (isItemHidden(item.name)) return 0;
   const L = options.baseDaily ? baseDailyUsage(item) : getL(item);
@@ -1043,7 +1163,11 @@ function normalizeHistoryRecord(key, snapshot) {
     savedAt: Number.isFinite(savedAt) ? savedAt : dayMs,
     stockMap,
     actualOrders: cleanActualOrders(snapshot.actualOrders),
-    calc: snapshot.calc || {}
+    calc: snapshot.calc || {},
+    orderDays: Number.isFinite(Number(snapshot.orderDays)) ? Number(snapshot.orderDays) : null,
+    dailySales: normalizeNumberArray(snapshot.dailySales),
+    baseSales: Number.isFinite(Number(snapshot.baseSales)) && Number(snapshot.baseSales) > 0 ? Number(snapshot.baseSales) : null,
+    salesWeights: normalizeNumberArray(snapshot.salesWeights)
   };
 }
 
@@ -1057,8 +1181,12 @@ function currentAnalysisSnapshot() {
   return {
     savedAt: Date.now(),
     dateKey: kstDateKey(Date.now()),
+    orderDays: days,
     entries: entries.map(entry => ({ name: entry.name, stock: entry.stock })),
     actualOrders: cleanActualOrders(),
+    dailySales: normalizeNumberArray(dailySales),
+    baseSales: getBaseSales(),
+    salesWeights: dailyWeights(days),
     calc
   };
 }
@@ -1083,7 +1211,11 @@ function historyRecordsWithCurrent(history, currentSnapshot) {
         savedAt: Math.max(existing.savedAt, current.savedAt),
         stockMap: mergedStock,
         actualOrders: current.actualOrders || {},
-        calc: current.calc || existing.calc || {}
+        calc: current.calc || existing.calc || {},
+        orderDays: current.orderDays || existing.orderDays || null,
+        dailySales: current.dailySales?.length ? current.dailySales : existing.dailySales || [],
+        baseSales: current.baseSales || existing.baseSales || null,
+        salesWeights: current.salesWeights?.length ? current.salesWeights : existing.salesWeights || []
       });
     } else {
       byDate.set(current.dateKey, current);
@@ -1101,10 +1233,12 @@ function orderQtyFromRecord(record, name) {
   const actual = getActualOrder(name, record?.actualOrders || {});
   if (actual !== null) {
     const item = MASTER.find(m => m.name === name);
-    const factor = item ? conversionFactorForItem(item) : null;
+    const orderUnitToStockFactor = item ? conversionFactorForItem(item) : null;
+    const parts = item ? orderUnitParts(item) : { same: true };
+    if (!orderUnitToStockFactor && !parts.same) return { qty: 0, source: 'actual_unconverted', actualQty: actual, orderUnitToStockFactor: null };
     const stockNeed = stockNeedFromRecord(record, name);
-    const convertedActual = factor ? actual * factor : 0;
-    return { qty: convertedActual || stockNeed || actual, source: 'actual', actualQty: actual };
+    const convertedActual = orderUnitToStockFactor ? actual * orderUnitToStockFactor : actual;
+    return { qty: convertedActual || stockNeed || actual, source: 'actual', actualQty: actual, orderUnitToStockFactor };
   }
   const n = Number(calcRowFromRecord(record, name)?.qty);
   return { qty: Number.isFinite(n) && n > 0 ? n : 0, source: 'calc' };
@@ -1114,16 +1248,19 @@ function orderQtyForInterval(prev, curr, name) {
   const intervalActual = actualOrderForInterval(prev, curr, name);
   if (intervalActual) {
     const item = MASTER.find(m => m.name === name);
-    const factor = item ? conversionFactorForItem(item) : null;
+    const orderUnitToStockFactor = item ? conversionFactorForItem(item) : null;
     const parts = item ? orderUnitParts(item) : { same: true };
-    if (!factor && !parts.same) {
-      return { qty: 0, source: 'actual_unconverted', actualQty: intervalActual.qty, actualDates: intervalActual.dates };
+    if (!orderUnitToStockFactor && !parts.same) {
+      return { qty: 0, source: 'actual_unconverted', actualQty: intervalActual.qty, actualDates: intervalActual.dates, orderUnitToStockFactor: null };
     }
-    const convertedActual = factor ? intervalActual.qty * factor : intervalActual.qty;
+    const actualQty = intervalActual.qty;
+    const factor = orderUnitToStockFactor || 1;
+    const convertedActual = actualQty * factor;
     return {
       qty: convertedActual,
       source: 'actual',
       actualQty: intervalActual.qty,
+      orderUnitToStockFactor: factor,
       actualDates: intervalActual.dates,
       actualSource: intervalActual.source
     };
@@ -1147,36 +1284,62 @@ function buildUsageAnalysis(history, currentSnapshot) {
       const order = orderQtyForInterval(prev, curr, name);
       if (order.source === 'actual_unconverted') return;
       const orderQty = order.qty;
-      const usage = prevStock + orderQty - currStock;
+      const usage = order.source === 'actual'
+        ? prevStock + (Number(order.actualQty || 0) * Number(order.orderUnitToStockFactor || 1)) - currStock
+        : prevStock + orderQty - currStock;
       if (!Number.isFinite(usage) || usage < -0.05) return;
       const bucket = acc[name] || {
         actualUsage: 0,
+        actualWeight: 0,
+        actualRawDays: 0,
         actualDays: 0,
         actualSamples: 0,
         calcUsage: 0,
+        calcWeight: 0,
+        calcRawDays: 0,
         calcDays: 0,
         calcSamples: 0,
+        salesWeightMissing: 0,
+        salesWeightFallbacks: 0,
+        salesWeightBasisCounts: {},
         last: null
       };
       const safeUsage = Math.max(0, usage);
+      const weight = salesWeightForInterval(prev, gapDays);
+      const normalizedDays = Number(weight.sum);
+      if (!Number.isFinite(normalizedDays) || normalizedDays <= 0) return;
+      const normalizedDaily = safeUsage / normalizedDays;
+      const rawDaily = safeUsage / gapDays;
+      bucket.salesWeightMissing += weight.missing || 0;
+      if (weight.fallback) bucket.salesWeightFallbacks += 1;
+      bucket.salesWeightBasisCounts[weight.basis] = (bucket.salesWeightBasisCounts[weight.basis] || 0) + 1;
       const isActual = order.source === 'actual';
       if (isActual) {
         bucket.actualUsage += safeUsage;
-        bucket.actualDays += gapDays;
+        bucket.actualWeight += normalizedDays;
+        bucket.actualRawDays += gapDays;
+        bucket.actualDays += normalizedDays;
         bucket.actualSamples += 1;
       } else {
         bucket.calcUsage += safeUsage;
-        bucket.calcDays += gapDays;
+        bucket.calcWeight += normalizedDays;
+        bucket.calcRawDays += gapDays;
+        bucket.calcDays += normalizedDays;
         bucket.calcSamples += 1;
       }
       bucket.last = {
         from: prev.dateKey,
         to: curr.dateKey,
         days: gapDays,
+        salesWeightSum: normalizedDays,
+        salesWeightBasis: weight.basis,
+        salesWeightMissing: weight.missing || 0,
         usage: safeUsage,
-        daily: safeUsage / gapDays,
+        daily: normalizedDaily,
+        rawDaily,
         orderQty,
         actualQty: order.actualQty ?? null,
+        orderUnitToStockFactor: order.orderUnitToStockFactor ?? null,
         actualDates: order.actualDates || [],
         orderSource: order.source
       };
@@ -1189,16 +1352,22 @@ function buildUsageAnalysis(history, currentSnapshot) {
     const useActual = value.actualSamples > 0 && value.actualDays > 0;
     const totalUsage = useActual ? value.actualUsage : value.calcUsage;
     const totalDays = useActual ? value.actualDays : value.calcDays;
+    const rawDays = useActual ? value.actualRawDays : value.calcRawDays;
     const samples = useActual ? value.actualSamples : value.calcSamples;
-    if (samples <= 0 || totalDays <= 0) return;
+    if (samples <= 0 || totalDays <= 0 || rawDays <= 0) return;
     result[name] = {
       avg: totalUsage / totalDays,
+      rawAvg: totalUsage / rawDays,
       totalUsage,
       totalDays,
+      rawDays,
       samples,
       source: useActual ? 'actual' : 'calc',
       actualSamples: value.actualSamples,
       calcSamples: value.calcSamples,
+      salesWeightMissing: value.salesWeightMissing,
+      salesWeightFallbacks: value.salesWeightFallbacks,
+      salesWeightBasisCounts: value.salesWeightBasisCounts,
       last: value.last
     };
   });
@@ -1215,11 +1384,12 @@ function usageAnalysisTitle(analysis) {
   if (!analysis) return '';
   const last = analysis.last;
   const orderLabel = last?.orderSource === 'actual'
-    ? `구간실발주 ${fmt(last.actualQty, 0)} / 재고환산 ${fmt(last.orderQty, 2)}${last.actualDates?.length ? ` / ${last.actualDates.join(',')}` : ''}`
+    ? `구간실발주 ${fmt(last.actualQty, 0)} / 발주환산 1발주=${fmt(last.orderUnitToStockFactor || 1, 2)}재고 / 재고환산 ${fmt(last.orderQty, 2)}${last.actualDates?.length ? ` / ${last.actualDates.join(',')}` : ''}`
     : `전회계산발주 ${fmt(last.orderQty, 2)}`;
-  const recent = last ? ` / 최근 ${fmt(last.daily, 2)}/일 (${last.from}→${last.to}, ${orderLabel})` : '';
+  const recent = last ? ` / 최근 기준매출환산 ${fmt(last.daily, 2)}/일, raw ${fmt(last.rawDaily, 2)}/일 (${last.from}→${last.to}, 매출가중 ${fmt(last.salesWeightSum, 2)}일분 ${last.salesWeightBasis}${last.salesWeightMissing ? ` missing ${last.salesWeightMissing}` : ''}, ${orderLabel})` : '';
   const basis = analysis.source === 'actual' ? '실발주+재고 실사용' : '계산발주 참고';
-  return `${basis} · 최근 ${USAGE_ANALYSIS_MAX_DAYS}일 평균 ${fmt(analysis.avg, 2)}/일 · 누적 ${fmt(analysis.totalUsage, 2)}개/${fmt(analysis.totalDays, 1)}일 · ${analysis.samples}구간${recent}`;
+  const coverage = `weight coverage ${analysis.samples - analysis.salesWeightFallbacks}/${analysis.samples}, missing ${analysis.salesWeightMissing || 0}`;
+  return `${basis} · 매출가중 환산 평균 ${fmt(analysis.avg, 2)}/일 · raw 평균 ${fmt(analysis.rawAvg, 2)}/일 · 누적 ${fmt(analysis.totalUsage, 2)}개/${fmt(analysis.totalDays, 1)}환산일 · ${analysis.samples}구간 · ${coverage}${recent}`;
 }
 
 function renderDailyAnalysisSpan(name) {
@@ -1427,6 +1597,7 @@ function renderSfaComparePanel(data) {
   if (!panel || !title || !meta || !note || !counts || !body) return;
 
   if (!data) {
+    lastSfaCompareData = null;
     title.textContent = '엑셀 오차';
     meta.textContent = '분석 결과 없음';
     note.textContent = '엑셀분석 버튼을 누르면 PC 다운로드 폴더의 최신 주문현황을 비교합니다.';
@@ -1434,6 +1605,7 @@ function renderSfaComparePanel(data) {
     body.innerHTML = '';
     return;
   }
+  lastSfaCompareData = data;
 
   const fileName = data.file?.name || '';
   const structure = data.structure || {};
@@ -1486,6 +1658,7 @@ async function loadSfaCompareLatest(silent = true, forceShow = false) {
     const data = await res.json();
     renderSfaComparePanel(data);
     if (data) await loadUsageHistory(true);
+    if (data && viewMode === 'output') render();
     if (!silent && !data) toast('엑셀 분석 결과 없음');
   } catch (e) {
     console.warn('[sfaCompare] latest failed', e);
@@ -1964,7 +2137,7 @@ function render() {
       const safeName = item.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
       tr.innerHTML = `
         <td class="name">${item.name}</td>
-        <td class="qty order-qty pos"><span class="order-cell">${outputOrderDisplay(item.name, displayOrderQty(item, days))}${renderOrderAnalysisSpan(item, g)}</span></td>
+        <td class="qty order-qty pos"><span class="order-cell">${outputOrderDisplay(item.name, displayOrderQty(item, days))}${renderOrderAnalysisSpan(item, g)}${renderOrderAmountSpan(item, g)}</span></td>
         <td>${outputNumberInput(item.name, 'stock', displayDecimal(E))}</td>
         <td>${outputNumberInput(item.name, 'k', displayDecimal(getK(item)))}</td>
         <td><span class="daily-cell">${outputNumberInput(item.name, 'l', displayDecimal(getL(item)))}${renderDailyAnalysisSpan(item.name)}</span></td>
