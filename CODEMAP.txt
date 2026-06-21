@@ -7,7 +7,7 @@
 - tests/orderhelper_static_checks.js: 정적 검증. 출력 즉시계산, 추천일, Firebase 동기화, 수동 하루사용량 우선, 최초 출력순서, 재고변동 환산 기준 보호
 - ORDER_LIST_ANALYSIS_HANDOFF.md: 발주 자동화 조사/진단 인계
 - /root/SiteBot/main_auto.pyw: PC 다운로드/SFA 분석 실행자. `/monitor/main_pc/sfa_order_request`를 읽고 `/monitor/main_pc/status.sfa_order` 상태를 올린다.
-- /root/my-first-project/scripts/orderhelper_usage_inference.py: 재고 history + SFA 실발주 엑셀/비교 이력으로 `이전재고+입고-다음재고` 실사용량과 발주단위 환산을 추정해 `/unitInference/latest`에 올린다. `--upload`는 리포트 전용이고 `/sfaActualHistory` 백필은 별도 명시 플래그가 필요하다.
+- /root/my-first-project/scripts/orderhelper_usage_inference.py: 재고 history + SFA 실발주 엑셀/비교 이력으로 `이전재고+입고-다음재고` 실사용량과 발주단위 환산을 추정해 `/unitInference/latest`에 올린다. 실사용 분석은 참고용이고, `/sfaActualHistory` 백필은 별도 명시 플래그가 필요하며, 수동 하루사용량 자동 write는 금지한다.
 - /root/my-first-project/scripts/ai_ops_common_monitor.py: 서버폰 Termux 상주 감시자. OrderHelper 요청/상태/PC heartbeat 정체와 `current`/`sfaCompare/latest`/`sfaActualHistory`/`unitInference/latest`/최근 `history`의 실발주 이력·단위 환산·실사용량 분석 누락 신호를 본다.
 
 ## 수정 시
@@ -15,4 +15,4 @@
 - 입력 동선, 계산식, SFA 대응, Firebase 경계가 바뀌면 APP_INTENT.md와 이 CODEMAP을 같이 갱신한다.
 - 라이브 반영 확인: `https://wk7007-wk.github.io/OrderHelper/` 에서 `APP_VERSION` 문자열 확인.
 - Termux 감시만 바뀐 경우 OrderHelper 웹 배포는 필요 없다. PC/SiteBot 실행 경계와 Firebase 상태 경로만 검증한다.
-- CLI 감시는 누락/정체/불일치 보고, `/unitInference/latest` 리포트 업로드, 코드/문서/배포 보정 역할이다. 발주 품목, 단위, 하루사용량 수동값, 환산, SFA 실발주 원본은 자동 확정하지 않는다.
+- CLI 감시는 누락/정체/불일치 보고, `/unitInference/latest` 리포트 업로드, 코드/문서/배포 보정 역할이다. 엑셀 실발주 이력은 참고 배지/툴팁에 즉시 반영하지만, 발주 품목, 단위, 하루사용량 수동값, 환산, SFA 실발주 원본은 자동 확정하지 않는다.

@@ -18,7 +18,7 @@ function mustNotMatch(pattern, message) {
   assert(!pattern.test(html), message);
 }
 
-mustMatch(/const APP_VERSION = '20260617-1';/, 'APP_VERSION must be bumped for manual daily usage and output order restore');
+mustMatch(/const APP_VERSION = '20260622-1';/, 'APP_VERSION must be bumped for immediate SFA actual history reference refresh');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -70,12 +70,14 @@ mustMatch(/let sfaLastRequestAt = 0;/, 'SFA status must track request time to ig
 mustMatch(/let lastSfaCompareStatusKey = '';/, 'SFA compare loader must dedupe completed status updates');
 mustMatch(/statusMs < sfaLastRequestAt/, 'SFA status must ignore stale states older than the latest request');
 mustMatch(/loadSfaCompareLatest\(true, hadPendingRequest\)/, 'fresh SFA completion must load visible comparison results');
+mustMatch(/renderSfaComparePanel\(data\);\s*if \(data\) await loadUsageHistory\(true\);/, 'fresh SFA comparison must reload usage history for daily analysis badges');
 mustMatch(/setInterval\(\(\) => loadSfaOrderStatus\(false\), 10000\);/, 'SFA status must refresh every 10 seconds');
 mustMatch(/mode: 'scan_pc_downloads'/, 'SFA request must target the PC download folder flow');
 mustMatch(/PC 다운로드 폴더 분석 요청함/, 'SFA request must give user feedback');
 mustMatch(/renderSfaStatus\(\{ state: 'requested'/, 'SFA request must update visible status immediately');
-mustMatch(/현재 수동값 자동변경 없음/, 'SFA compare panel must disclose that analysis does not edit manual daily values');
-mustMatch(/비교만 완료: 실발주값은 자동반영되지 않음/, 'SFA compare panel must disclose that analysis is not auto-apply');
+mustMatch(/수동 일사용\/발주값 자동변경 없음/, 'SFA compare panel must disclose that analysis does not edit manual daily/order values');
+mustMatch(/실사용 참고 즉시 반영/, 'SFA compare panel must disclose that actual order history refreshes reference badges');
+mustMatch(/실발주 이력은 실사용 참고에만 반영/, 'SFA compare panel must disclose that actual order history is reference-only');
 mustMatch(/sfaReviewRows\(comp\)/, 'SFA comparison must include matched differences and missing rows');
 mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
 mustMatch(/function buildConversionAnalysis\(history, currentSnapshot\)/, 'unit conversion analysis builder missing');
