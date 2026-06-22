@@ -30,7 +30,7 @@
 - `orderhelper_usage_inference.py --upload`는 `/unitInference/latest` 리포트만 갱신한다. `/sfaActualHistory` 백필은 별도 명시 플래그가 있을 때만 허용하며, 하루사용량 `overrides/*/l` 자동 write는 금지한다.
 
 ## C&I / AI Ops 경계
-- C&I는 PC/SiteBot heartbeat 정체, SFA 요청/상태 불일치, GitHub Pages 반영 실패, 계산/입력 회귀를 self_fix 후보로 올린다.
+- C&I는 PC/SiteBot heartbeat 정체, SFA 요청/상태 불일치, GitHub Pages 반영 실패, 계산/입력 회귀를 self_fix 후보로 올린다. OrderHelper main_pc heartbeat는 20분 초과~45분까지 warn, 45분 초과부터 error/self_fix로 본다.
 - 발주시스템 CLI 역할은 `/monitor/main_pc/*`, `/order/desk_q7m9r3a8/current`, `/order/desk_q7m9r3a8/sfaCompare/latest`, `/sfaActualHistory`, `/unitInference/latest`, 최근 `history`를 대조해 SFA 분석 완료 후 실발주 이력 누락, 단위 환산/실사용량 추정 리포트 누락, 하루사용량 분석 불능을 감지하는 것이다.
 - 자동 복구는 웹 코드/테스트/문서/배포 루프 보정까지 허용한다.
 - 발주 품목, 단위, 환산, 하루사용량 수동값, SFA 실발주 원본 확정은 자동으로 바꾸지 않는다.
