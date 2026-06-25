@@ -17,4 +17,4 @@
 - 라이브 반영 확인: `https://wk7007-wk.github.io/OrderHelper/` 에서 `APP_VERSION` 문자열 확인.
 - Termux 감시만 바뀐 경우 OrderHelper 웹 배포는 필요 없다. PC/SiteBot 실행 경계와 Firebase 상태 경로만 검증한다.
 - CLI 감시는 누락/정체/불일치 보고, `/unitInference/latest` 리포트 업로드, 코드/문서/배포 보정 역할이다. 엑셀 실발주 이력은 참고 배지/툴팁에 즉시 반영하지만, 발주 품목, 단위, 하루사용량 수동값, 환산, SFA 실발주 원본은 자동 확정하지 않는다.
-- 로컬 SFA 이력 백필 전후 매핑 검증: `orderhelper_usage_inference.py --validate-local-sfa-history`가 `local_sfa_backfill_low_confidence_rows=0`을 요구한다.
+- 로컬 SFA 이력 백필 전후 매핑 검증: `orderhelper_usage_inference.py --validate-local-sfa-history`가 `local_sfa_backfill_low_confidence_rows=0`을 요구한다. 2026-06-26 기준 `BBQ충진식패티(100g)(마일드)`와 `BBQ페퍼로니씬피자`는 `두마리치킨,파더스`와 별도 MASTER target이다.
