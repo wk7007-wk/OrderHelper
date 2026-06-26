@@ -278,8 +278,8 @@ const PIN_HASH = '38083c7ee9121e17401883566a148aa5c2e2d55dc53bc4a94a026517dbff3c
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30000;
 const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
-const AUTH_GEO = { storeLat: 37.2528352, storeLng: 127.4900516, radiusM: 150, deviceKey: 'bbq_desk_auth_device_v1', allowedDeviceHashes: ['d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08'],
-      allowedDevices:{"d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08":{"enabled":true,"label":"사장","updatedAt":"2026-06-26T18:39:12+00:00"}}, ipFactorReserved: true };
+const AUTH_GEO = { storeLat: 37.2528352, storeLng: 127.4900516, radiusM: 150, deviceKey: 'bbq_desk_auth_device_v1', allowedDeviceHashes: ['d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08','c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c'],
+      allowedDevices:{"d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08":{"enabled":true,"label":"사장","updatedAt":"2026-06-26T18:39:12+00:00"},"c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c":{"enabled":true,"label":"규","updatedAt":"2026-06-26T20:28:46+00:00"}}, ipFactorReserved: true };
 let pinAttempts = 0;
 let pinLockUntil = 0;
 let orderHelperStarted = false;
