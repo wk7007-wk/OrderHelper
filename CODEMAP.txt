@@ -3,7 +3,7 @@
 
 ## 파일 → 역할
 - APP_INTENT.md: 앱 목적, 사용자 결과, 절대 기준
-- index.html: 재고 입력, 수동 하루사용량 기준 발주량 계산, 최초 SFA 순서 출력보기 UI, Firebase 동기화, SFA 실발주 이력+재고변동 기반 발주단위 환산/하루 실사용량 참고 배지
+- index.html: 재고 입력, 수동 하루사용량 기준 발주량 계산, 최초 SFA 순서 출력보기 UI, Firebase 동기화, SFA 실발주 이력+재고변동 기반 발주단위 환산/하루 실사용량 참고 배지, PIN+단말 token+GPS 프론트 게이트
 - tests/orderhelper_static_checks.js: 정적 검증. 출력 즉시계산, 추천일, Firebase 동기화, 수동 하루사용량 우선, 최초 출력순서, 재고변동 환산 기준 보호
 - ORDER_LIST_ANALYSIS_HANDOFF.md: 발주 자동화 조사/진단 인계
 - /root/SiteBot/main_auto.pyw: PC 다운로드/SFA 분석 실행자. `/monitor/main_pc/sfa_order_request`를 읽고 `/monitor/main_pc/status.sfa_order` 상태를 올린다.
@@ -18,3 +18,4 @@
 - Termux 감시만 바뀐 경우 OrderHelper 웹 배포는 필요 없다. PC/SiteBot 실행 경계와 Firebase 상태 경로만 검증한다.
 - CLI 감시는 누락/정체/불일치 보고, `/unitInference/latest` 리포트 업로드, 코드/문서/배포 보정 역할이다. 엑셀 실발주 이력은 참고 배지/툴팁에 즉시 반영하지만, 발주 품목, 단위, 하루사용량 수동값, 환산, SFA 실발주 원본은 자동 확정하지 않는다.
 - 로컬 SFA 이력 백필 전후 매핑 검증: `orderhelper_usage_inference.py --validate-local-sfa-history`가 `local_sfa_backfill_low_confidence_rows=0`을 요구한다. 2026-06-26 기준 `BBQ충진식패티(100g)(마일드)`와 `BBQ페퍼로니씬피자`는 `두마리치킨,파더스`와 별도 MASTER target이다.
+- 보안 게이트: `PIN_HASH`, `AUTH_GEO.storeLat/storeLng`, `radiusM=150`, `body.auth-locked .app-shell`. 좌표 미설정 기본 차단, `?authDebug=1`은 로컬 개발에서만 GPS 우회. IP 인증/Firebase write 보호는 서버측 Auth/Rules 필요.

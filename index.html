@@ -122,13 +122,17 @@
   .snooze-actions button.primary { background: #e94560; }
 
   /* PIN 잠금 */
+  body.auth-locked .app-shell { display: none; }
   .pin-overlay { position: fixed; inset: 0; background: #1a1a2e; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
   .pin-overlay.authed { display: none; }
   .pin-overlay h2 { margin: 0; font-size: 18px; }
+  .pin-note { max-width: 300px; color: #aaa; font-size: 12px; line-height: 1.45; text-align: center; }
   .pin-overlay input { font-size: 28px; padding: 14px; width: 180px; text-align: center; background: #0f3460; color: #fff; border: 2px solid #0f3460; border-radius: 8px; letter-spacing: 8px; }
+  .pin-overlay input.device-name { width: 220px; font-size: 15px; letter-spacing: 0; }
   .pin-overlay input:focus { outline: none; border-color: #e94560; }
   .pin-overlay button { padding: 12px 32px; font-size: 16px; background: #e94560; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-  .pin-error { color: #ff4444; height: 18px; font-size: 13px; }
+  .pin-error { color: #ff4444; min-height: 18px; max-width: 320px; text-align: center; font-size: 13px; line-height: 1.35; }
+  .pin-error.ok { color: #2ecc71; }
 
   /* 모바일 (폰) */
   @media (max-width: 600px) {
@@ -153,15 +157,18 @@
   }
 </style>
 </head>
-<body>
+<body class="auth-locked">
 
 <div class="pin-overlay" id="pinOverlay">
   <h2>BBQ 발주</h2>
+  <div class="pin-note">PIN, 인증 단말, 매장 GPS 반경 확인 후 접근합니다.</div>
   <input type="password" inputmode="numeric" pattern="[0-9]*" id="pinInput" maxlength="4" placeholder="PIN" autocomplete="off">
+  <input class="device-name" type="text" id="deviceNameInput" maxlength="32" placeholder="단말명" autocomplete="off">
   <button onclick="checkPin()">확인</button>
   <div class="pin-error" id="pinError"></div>
 </div>
 
+<div class="app-shell">
 <div class="top">
   <h1>BBQ 발주</h1>
   <span class="badge" id="badge">발주 0개</span>
@@ -248,6 +255,7 @@
     </div>
   </form>
 </div>
+</div>
 
 <script>
 const APP_VERSION = '20260626-1';
@@ -270,50 +278,117 @@ const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846
 const AUTH_TTL_MS = 7 * 86400000;
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30000;
+const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
+const AUTH_GEO = { storeLat: null, storeLng: null, radiusM: 150, deviceKey: 'bbq_desk_auth_device_v1' };
 let pinAttempts = 0;
 let pinLockUntil = 0;
+let orderHelperStarted = false;
 
 async function hashPin(pin) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
+function setPinMessage(msg, ok=false) {
+  const el = document.getElementById('pinError');
+  el.textContent = msg;
+  el.classList.toggle('ok', ok);
+}
+function readAuthDevice() {
+  try { return JSON.parse(localStorage.getItem(AUTH_GEO.deviceKey) || 'null'); } catch { return null; }
+}
+function saveAuthDevice() {
+  const name = (document.getElementById('deviceNameInput')?.value || '').trim() || '단말';
+  const token = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+  const data = { token, name, approvedAt: Date.now() };
+  localStorage.setItem(AUTH_GEO.deviceKey, JSON.stringify(data));
+  return data;
+}
+function geoConfigured() {
+  return typeof AUTH_GEO.storeLat === 'number' && typeof AUTH_GEO.storeLng === 'number';
+}
+function distanceM(lat1, lon1, lat2, lon2) {
+  const R = 6371000, toRad = v => v * Math.PI / 180;
+  const p1 = toRad(lat1), p2 = toRad(lat2), dp = toRad(lat2 - lat1), dl = toRad(lon2 - lon1);
+  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function getPosition() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error('GPS 사용 불가')); return; }
+    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  });
+}
+async function verifyGps() {
+  if (AUTH_DEBUG) return true;
+  if (!geoConfigured()) throw new Error('매장 GPS 기준 설정 필요');
+  const pos = await getPosition();
+  const meter = distanceM(pos.coords.latitude, pos.coords.longitude, AUTH_GEO.storeLat, AUTH_GEO.storeLng);
+  if (meter > AUTH_GEO.radiusM) throw new Error(`매장 반경 밖입니다 (${Math.round(meter)}m)`);
+  return true;
+}
+function unlockOrderHelper() {
+  document.body.classList.remove('auth-locked');
+  document.getElementById('pinOverlay').classList.add('authed');
+  if (!orderHelperStarted) startOrderHelperApp();
+}
 async function checkPin() {
   const inp = document.getElementById('pinInput');
-  const errEl = document.getElementById('pinError');
   if (Date.now() < pinLockUntil) {
     const sec = Math.ceil((pinLockUntil - Date.now()) / 1000);
-    errEl.textContent = `잠시 후 다시 시도 (${sec}초)`;
+    setPinMessage(`잠시 후 다시 시도 (${sec}초)`);
     inp.value = '';
     return;
   }
+  setPinMessage('GPS 확인 중...');
   const h = await hashPin(inp.value);
   if (h === PIN_HASH) {
-    pinAttempts = 0;
-    const expiresAt = Date.now() + AUTH_TTL_MS;
-    localStorage.setItem('bbq_desk_auth_until', String(expiresAt));
-    sessionStorage.setItem('bbq_desk_auth', '1');
-    document.getElementById('pinOverlay').classList.add('authed');
-    inp.value = '';
+    try {
+      await verifyGps();
+      pinAttempts = 0;
+      const expiresAt = Date.now() + AUTH_TTL_MS;
+      localStorage.setItem('bbq_desk_auth_until', String(expiresAt));
+      sessionStorage.setItem('bbq_desk_auth', '1');
+      if (!readAuthDevice()) saveAuthDevice();
+      setPinMessage(AUTH_DEBUG ? '개발 검증 모드: GPS 우회됨' : '인증됨', true);
+      inp.value = '';
+      unlockOrderHelper();
+    } catch (e) {
+      setPinMessage(e.message || 'GPS 인증 실패');
+      inp.value = '';
+    }
   } else {
     pinAttempts++;
     if (pinAttempts >= PIN_MAX_ATTEMPTS) {
       pinLockUntil = Date.now() + PIN_LOCK_MS;
       pinAttempts = 0;
-      errEl.textContent = `${PIN_MAX_ATTEMPTS}회 틀림 — ${PIN_LOCK_MS/1000}초 후 다시 시도`;
+      setPinMessage(`${PIN_MAX_ATTEMPTS}회 틀림 — ${PIN_LOCK_MS/1000}초 후 다시 시도`);
     } else {
-      errEl.textContent = `비밀번호 틀림 (${pinAttempts}/${PIN_MAX_ATTEMPTS})`;
+      setPinMessage(`비밀번호 틀림 (${pinAttempts}/${PIN_MAX_ATTEMPTS})`);
     }
     inp.value = '';
-    setTimeout(() => { errEl.textContent = ''; }, 1800);
+    setTimeout(() => { setPinMessage(''); }, 1800);
   }
 }
-// 0510 인증 보존 — localStorage 7일 또는 기존 sessionStorage 호환
-const _authUntil = parseInt(localStorage.getItem('bbq_desk_auth_until') || '0');
-if (_authUntil > Date.now() || sessionStorage.getItem('bbq_desk_auth') === '1') {
-  document.getElementById('pinOverlay').classList.add('authed');
-} else {
+async function restoreAuthIfPossible() {
+  const saved = readAuthDevice();
+  const authUntil = parseInt(localStorage.getItem('bbq_desk_auth_until') || '0');
+  const pinOk = authUntil > Date.now() || sessionStorage.getItem('bbq_desk_auth') === '1';
+  const dev = document.getElementById('deviceNameInput');
+  if (saved?.name && dev) dev.value = saved.name;
+  if (AUTH_DEBUG) setPinMessage('개발 검증 모드: PIN은 필요, GPS만 우회');
+  if (pinOk && saved) {
+    try {
+      setPinMessage('GPS 확인 중...');
+      await verifyGps();
+      unlockOrderHelper();
+      return;
+    } catch (e) {
+      setPinMessage(e.message || 'GPS 인증 실패');
+    }
+  }
   document.getElementById('pinInput').focus();
 }
+restoreAuthIfPossible();
 document.getElementById('pinInput').addEventListener('keypress', e => {
   if (e.key === 'Enter') checkPin();
 });
@@ -2670,37 +2745,40 @@ try {
   }
 } catch {}
 
-// 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 + 구 품목명 갱신
-migrateRuntimeItemNames();
-actualOrders = cleanActualOrders();
+function startOrderHelperApp() {
+  if (orderHelperStarted) return;
+  orderHelperStarted = true;
+  // 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 + 구 품목명 갱신
+  migrateRuntimeItemNames();
+  actualOrders = cleanActualOrders();
 
-// MASTER에 있는데 entries에 없는 품목 보충 (마스터 갱신 대비)
-MASTER.forEach(item => {
-  if (!entries.some(e => e.name === item.name)) {
-    entries.push({ id: newId(), name: item.name, zone: '', stock: null });
-  }
-});
+  // MASTER에 있는데 entries에 없는 품목 보충 (마스터 갱신 대비)
+  MASTER.forEach(item => {
+    if (!entries.some(e => e.name === item.name)) {
+      entries.push({ id: newId(), name: item.name, zone: '', stock: null });
+    }
+  });
 
-// 발주일수 초기값
-const rec = recommendedDays();
-const sel = document.getElementById('orderDays');
-const savedDays = localStorage.getItem('bbq_orderDays');
-const savedDaysRule = localStorage.getItem(ORDER_DAYS_RULE_STORAGE_KEY);
-setOrderDaysValue(savedDaysRule === ORDER_DAYS_RULE_VERSION ? (savedDays || rec) : rec);
-document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
+  // 발주일수 초기값
+  const rec = recommendedDays();
+  const savedDays = localStorage.getItem('bbq_orderDays');
+  const savedDaysRule = localStorage.getItem(ORDER_DAYS_RULE_STORAGE_KEY);
+  setOrderDaysValue(savedDaysRule === ORDER_DAYS_RULE_VERSION ? (savedDays || rec) : rec);
+  document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
 
-document.getElementById('appVer').textContent = 'v' + APP_VERSION;
-bindBaseSalesInput();
-renderSalesInputs();
-render();
-loadUsageHistory(true);
-loadSfaOrderStatus(true);
-window.addEventListener('resize', updateStickyOffsets);
-// 디바이스 간 동기화: 페이지 열 때마다 + 5초 간격 폴링
-autoLoadFromFB(true);
-setInterval(() => autoLoadFromFB(true), 5000);
-setInterval(() => loadUsageHistory(true), 300000);
-setInterval(() => loadSfaOrderStatus(false), 10000);
+  document.getElementById('appVer').textContent = 'v' + APP_VERSION;
+  bindBaseSalesInput();
+  renderSalesInputs();
+  render();
+  loadUsageHistory(true);
+  loadSfaOrderStatus(true);
+  window.addEventListener('resize', updateStickyOffsets);
+  // 디바이스 간 동기화: 페이지 열 때마다 + 5초 간격 폴링
+  autoLoadFromFB(true);
+  setInterval(() => autoLoadFromFB(true), 5000);
+  setInterval(() => loadUsageHistory(true), 300000);
+  setInterval(() => loadSfaOrderStatus(false), 10000);
+}
 </script>
 </body>
 </html>
