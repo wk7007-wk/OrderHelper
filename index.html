@@ -161,7 +161,7 @@
 
 <div class="pin-overlay" id="pinOverlay">
   <h2>BBQ 발주</h2>
-  <div class="pin-note">PIN, 인증 단말, 매장 GPS 반경 확인 후 접근합니다.</div>
+  <div class="pin-note">PIN + CLI 허용 단말 또는 매장 GPS로 접근합니다.</div>
   <input type="password" inputmode="numeric" pattern="[0-9]*" id="pinInput" maxlength="4" placeholder="PIN" autocomplete="off">
   <input class="device-name" type="text" id="deviceNameInput" maxlength="32" placeholder="단말명" autocomplete="off">
   <button onclick="checkPin()">확인</button>
@@ -272,14 +272,13 @@ const BASE_SALES_STORAGE_VERSION = 'formula-280';
 const DEFAULT_SNOOZE_DAYS = 5;
 const MAX_SNOOZE_DAYS = 365;
 
-// PIN 잠금 (sha256("1234")). PIN 변경하려면 새 PIN의 sha256 해시로 교체.
-const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
-// 0510 보안 강화 — 5회 시도 후 30초 lock + 인증 7일 보존 (사용자 영향 0, brute force 차단)
-const AUTH_TTL_MS = 7 * 86400000;
+// PIN 잠금. PIN 변경 시 새 PIN의 SHA-256 해시로 교체.
+const PIN_HASH = '38083c7ee9121e17401883566a148aa5c2e2d55dc53bc4a94a026517dbff3c6b';
+// 0510 보안 강화 — 5회 시도 후 30초 lock. 단말 token은 CLI allowlist 등록 전에는 factor가 아니며 PIN은 항상 필요.
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30000;
 const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
-const AUTH_GEO = { storeLat: null, storeLng: null, radiusM: 150, deviceKey: 'bbq_desk_auth_device_v1' };
+const AUTH_GEO = { storeLat: 37.2528352, storeLng: 127.4900516, radiusM: 150, deviceKey: 'bbq_desk_auth_device_v1', allowedDeviceHashes: [], ipFactorReserved: true };
 let pinAttempts = 0;
 let pinLockUntil = 0;
 let orderHelperStarted = false;
@@ -296,12 +295,27 @@ function setPinMessage(msg, ok=false) {
 function readAuthDevice() {
   try { return JSON.parse(localStorage.getItem(AUTH_GEO.deviceKey) || 'null'); } catch { return null; }
 }
-function saveAuthDevice() {
+function ensureAuthDevice() {
+  let data = readAuthDevice();
   const name = (document.getElementById('deviceNameInput')?.value || '').trim() || '단말';
-  const token = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
-  const data = { token, name, approvedAt: Date.now() };
+  if (data?.token) {
+    if (data.name !== name) {
+      data = { ...data, name };
+      localStorage.setItem(AUTH_GEO.deviceKey, JSON.stringify(data));
+    }
+    return data;
+  }
+  data = { token: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()), name, createdAt: Date.now() };
   localStorage.setItem(AUTH_GEO.deviceKey, JSON.stringify(data));
   return data;
+}
+async function deviceHashText(device) {
+  try { return await hashPin(device.token); } catch { return '생성됨'; }
+}
+async function hasAllowedAuthDevice(device) {
+  const hashes = AUTH_GEO.allowedDeviceHashes || [];
+  if (!device?.token || !hashes.length) return false;
+  return hashes.includes(await hashPin(device.token));
 }
 function geoConfigured() {
   return typeof AUTH_GEO.storeLat === 'number' && typeof AUTH_GEO.storeLng === 'number';
@@ -318,13 +332,30 @@ function getPosition() {
     navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
   });
 }
+function hasTrustedIpFactor() {
+  // Static client cannot trust X-Forwarded-For or similar headers; reserve IP factor for server/hosting enforcement.
+  return false;
+}
 async function verifyGps() {
-  if (AUTH_DEBUG) return true;
+  if (AUTH_DEBUG) return 'debug';
   if (!geoConfigured()) throw new Error('매장 GPS 기준 설정 필요');
   const pos = await getPosition();
   const meter = distanceM(pos.coords.latitude, pos.coords.longitude, AUTH_GEO.storeLat, AUTH_GEO.storeLng);
   if (meter > AUTH_GEO.radiusM) throw new Error(`매장 반경 밖입니다 (${Math.round(meter)}m)`);
-  return true;
+  return 'gps';
+}
+async function verifyAuthFactor() {
+  const device = ensureAuthDevice();
+  if (await hasAllowedAuthDevice(device)) return 'device';
+  if (hasTrustedIpFactor()) return 'ip';
+  return await verifyGps();
+}
+function factorLabel(factor) {
+  if (factor === 'device') return '인증 단말';
+  if (factor === 'gps') return 'GPS';
+  if (factor === 'debug') return '개발 GPS 우회';
+  if (factor === 'ip') return '허용 IP';
+  return 'factor';
 }
 function unlockOrderHelper() {
   document.body.classList.remove('auth-locked');
@@ -339,21 +370,24 @@ async function checkPin() {
     inp.value = '';
     return;
   }
-  setPinMessage('GPS 확인 중...');
+  setPinMessage('인증 확인 중...');
+  if (!crypto.subtle) {
+    setPinMessage('이 브라우저는 PIN 검증을 지원하지 않습니다');
+    inp.value = '';
+    return;
+  }
   const h = await hashPin(inp.value);
   if (h === PIN_HASH) {
     try {
-      await verifyGps();
+      const factor = await verifyAuthFactor();
       pinAttempts = 0;
-      const expiresAt = Date.now() + AUTH_TTL_MS;
-      localStorage.setItem('bbq_desk_auth_until', String(expiresAt));
-      sessionStorage.setItem('bbq_desk_auth', '1');
-      if (!readAuthDevice()) saveAuthDevice();
-      setPinMessage(AUTH_DEBUG ? '개발 검증 모드: GPS 우회됨' : '인증됨', true);
+      localStorage.removeItem('bbq_desk_auth_until');
+      sessionStorage.removeItem('bbq_desk_auth');
+      setPinMessage(`인증됨 (${factorLabel(factor)})`, true);
       inp.value = '';
       unlockOrderHelper();
     } catch (e) {
-      setPinMessage(e.message || 'GPS 인증 실패');
+      setPinMessage(e.message || '인증 실패');
       inp.value = '';
     }
   } else {
@@ -371,21 +405,14 @@ async function checkPin() {
 }
 async function restoreAuthIfPossible() {
   const saved = readAuthDevice();
-  const authUntil = parseInt(localStorage.getItem('bbq_desk_auth_until') || '0');
-  const pinOk = authUntil > Date.now() || sessionStorage.getItem('bbq_desk_auth') === '1';
   const dev = document.getElementById('deviceNameInput');
   if (saved?.name && dev) dev.value = saved.name;
-  if (AUTH_DEBUG) setPinMessage('개발 검증 모드: PIN은 필요, GPS만 우회');
-  if (pinOk && saved) {
-    try {
-      setPinMessage('GPS 확인 중...');
-      await verifyGps();
-      unlockOrderHelper();
-      return;
-    } catch (e) {
-      setPinMessage(e.message || 'GPS 인증 실패');
-    }
-  }
+  localStorage.removeItem('bbq_desk_auth_until');
+  sessionStorage.removeItem('bbq_desk_auth');
+  const device = ensureAuthDevice();
+  const id = await deviceHashText(device);
+  if (AUTH_DEBUG) setPinMessage(`개발 검증 모드: PIN은 필요, GPS만 우회. 단말ID ${id}`, true);
+  else setPinMessage(`PIN + CLI 허용 단말 또는 매장 GPS. 단말ID ${id}`);
   document.getElementById('pinInput').focus();
 }
 restoreAuthIfPossible();
