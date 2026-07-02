@@ -21,6 +21,10 @@
 
 ## 데이터/경계 기준
 - 웹 도구와 SiteBot/SFA 자동입력 경계는 분리한다.
+- 이 프로젝트는 Web+SiteBot 기준의 웹 발주 보조다.
+- read-only preflight는 Firebase `/order/desk_q7m9r3a8` 경로와 이 문서의 기준만 먼저 확인한다.
+- Browser automation/SiteBot 증거가 필요할 때는 공장 PC에서 Playwright, DOM smoke, Axe, desktop/mobile screenshot, empty state를 확인한다.
+- 외부 사이트 live 조작, 발주/주문 write, 삭제, 제출은 별도 safety flow 또는 명시 승인 없이 진행하지 않는다.
 - Firebase 경로 이름에는 RTDB 금지 문자를 넣지 않는다.
 - GitHub Pages 반영 여부를 작업 완료와 별도로 확인한다.
 - 엑셀분석은 비교/실발주 확인 데이터와 참고 배지로만 쓰고, 수동 하루사용량/품목 단위표/재고/발주 원본을 별도 확인 없이 자동수정하지 않는다.
@@ -46,7 +50,7 @@
 - 직원폰 브라우저 이벤트 차이를 검증했는가.
 
 ## 완료 기준
-- 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase 양방향 동기화
+- 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
 - 최신 기준: `20260626-1` / 하루사용량 계산은 수동값 기준, 실사용량 분석은 참고 표시 전용, 엑셀 실발주 이력은 참고 배지 즉시 반영 / SFA 의미상 별도 품목은 별도 MASTER target 유지 / 출력순서는 최초 SFA 순서 고정 / 라이브 `https://wk7007-wk.github.io/OrderHelper/`
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
