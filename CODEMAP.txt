@@ -8,6 +8,7 @@
 - /order/desk_q7m9r3a8: read-only preflight source. records/state 확인용 Firebase 경로.
 - ORDER_LIST_ANALYSIS_HANDOFF.md: 발주 자동화 조사/진단 인계
 - /root/SiteBot/main_auto.pyw: PC 다운로드/SFA 분석 실행자. `/monitor/main_pc/sfa_order_request`를 읽고 `/monitor/main_pc/status.sfa_order` 상태를 올린다.
+- /sitebot/heartbeat/main_pc: OrderHelper의 SiteBot read-only preflight용 heartbeat evidence.
 - /root/StoreBot/bot/order_excel_analyzer.py: SFA 엑셀 parser/compare 공용 경로. `SFA_ITEM_MASTER_ALIASES`는 SFA 원문 품목명 → OrderHelper MASTER 명시 매핑이며, 전역 threshold를 낮추지 않는다. g/벌크/배달용/내점용 같은 규격·용도 표기는 오매칭 방지 신호로 본다.
 - /root/my-first-project/scripts/orderhelper_usage_inference.py: 재고 history + SFA 실발주 엑셀/비교 이력으로 `이전재고+입고-다음재고` 실사용량과 발주단위 환산을 추정해 `/unitInference/latest`에 올린다. 실사용 분석은 참고용이고, `/sfaActualHistory` 백필은 `--backfill-sfa-actual-history` 또는 `--bulk-backfill-local-sfa-actual-history` 명시 플래그가 필요하며, 수동 하루사용량 자동 write는 금지한다.
 - /root/my-first-project/scripts/ai_ops_common_monitor.py: 서버폰 Termux 상주 감시자. OrderHelper 요청/상태/PC heartbeat 정체와 `current`/`sfaCompare/latest`/`sfaActualHistory`/`unitInference/latest`/최근 `history`의 실발주 이력·단위 환산·실사용량 분석 누락 신호를 본다. main_pc heartbeat는 20분 초과~45분까지 warn, 45분 초과부터 error/self_fix다.

@@ -23,6 +23,9 @@
 - 웹 도구와 SiteBot/SFA 자동입력 경계는 분리한다.
 - 이 프로젝트는 Web+SiteBot 기준의 웹 발주 보조다.
 - read-only preflight는 Firebase `/order/desk_q7m9r3a8` 경로와 이 문서의 기준만 먼저 확인한다.
+- SiteBot 의존 preflight는 `/sitebot/heartbeat/main_pc` read-only evidence와 공장 PC browser/SiteBot evidence를 같이 본다.
+- read-only 기록 조회와 live 발주 실행은 분리한다.
+- 외부 사이트 live 발주/주문 submit, action, write, delete는 read-only preflight와 분리된 별도 safety flow 없이는 진행하지 않는다.
 - Browser automation/SiteBot 증거가 필요할 때는 공장 PC에서 Playwright, DOM smoke, Axe, desktop/mobile screenshot, empty state를 확인한다.
 - 외부 사이트 live 조작, 발주/주문 write, 삭제, 제출은 별도 safety flow 또는 명시 승인 없이 진행하지 않는다.
 - Firebase 경로 이름에는 RTDB 금지 문자를 넣지 않는다.
