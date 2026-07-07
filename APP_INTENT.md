@@ -42,7 +42,7 @@
 - 실발주 이력은 `/order/desk_q7m9r3a8/sfaActualHistory/{date}`, 단위/실사용 추정 리포트는 `/order/desk_q7m9r3a8/unitInference/latest`에 남긴다.
 - 로컬 SFA 엑셀 이력의 모든 발주 행은 OrderHelper MASTER 품목에 고신뢰 매핑되어야 한다. 부족한 품목은 전역 threshold를 낮추지 말고 명시 alias 또는 웹 마스터 보강으로 처리한 뒤 백필한다.
 - SFA 의미가 다른 품목은 숫자 통과를 위해 기존 MASTER에 묶지 않는다. 예: `BBQ충진식패티(100g)(마일드)`, `BBQ페퍼로니씬피자`는 `두마리치킨,파더스`와 별도 target이다.
-- 정적 프론트 인증은 `PIN 통과 AND (CLI 허용 단말 OR 승인된 desktop token OR 활성 grace desktop OR 서버/호스팅 허용 IP OR 매장 GPS 150m)` 구조다. PIN은 항상 필요하고, GPS 없는 desktop은 `/desktopAccess/devices/{deviceHash}` 승인 상태 또는 24시간 grace window에서만 fallback 통과한다.
+- 정적 프론트 인증은 `PIN 통과 AND (CLI 허용 단말 OR 승인된 desktop token OR 활성 grace desktop OR 서버/호스팅 허용 IP OR 매장 GPS 700m)` 구조다. PIN은 항상 필요하고, GPS 없는 desktop은 `/desktopAccess/devices/{deviceHash}` 승인 상태 또는 24시간 grace window에서만 fallback 통과한다.
 - IP allowlist는 CLI 기록/서버·호스팅 앞단 적용용이다. 정적 클라이언트의 임의 IP/X-Forwarded-For 값은 신뢰하지 않으며, desktop read model의 `recentIp`는 후보/감사용 보조값이다. Grace 중 수집된 단말은 `candidate/pending`이고 자동 영구 승인되지 않는다. `?authDebug=1`은 로컬 개발에서만 GPS 검증을 우회한다.
 - SFA 파일 스캔/분석 실행자는 PC/SiteBot이다. 서버폰 Termux AI Ops는 `/monitor/main_pc/*` 요청·상태·heartbeat 정체를 감시하고, 멈춤/오류 때 self_fix 분석으로 넘기는 운영 감시자다.
 - Termux 상주 모니터는 발주 품목, 단위, 환산, 하루사용량 수동값, SFA 실발주 원본을 자동 확정하거나 수정하지 않는다.
@@ -63,7 +63,7 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 기준: `20260707-7` / SFA 사이트 품목↔내부 발주항목 1:1 매칭, 사용자사이트 별명→실발주항목+환산값 default/effective 분석 payload, 날짜별 실사용량 비교 환산 후보, `발주1단위=체크/재고 N단위` 방향 고정, GPS 없는 desktop 승인/grace fallback, 단위 보정, 미매칭 확인, 수동/JSON 입출력 패널 / 하루사용량 계산은 수동값 기준, 실사용량 분석은 참고 표시 전용, 엑셀 실발주 이력은 참고 배지 즉시 반영 / SFA 의미상 별도 품목은 별도 MASTER target 유지 / 출력순서는 최초 SFA 순서 고정 / 라이브 `https://wk7007-wk.github.io/OrderHelper/`
+- 최신 기준: `20260707-8` / GPS 허용 반경 임시 700m / SFA 사이트 품목↔내부 발주항목 1:1 매칭, 사용자사이트 별명→실발주항목+환산값 default/effective 분석 payload, 날짜별 실사용량 비교 환산 후보, `발주1단위=체크/재고 N단위` 방향 고정, GPS 없는 desktop 승인/grace fallback, 단위 보정, 미매칭 확인, 수동/JSON 입출력 패널 / 하루사용량 계산은 수동값 기준, 실사용량 분석은 참고 표시 전용, 엑셀 실발주 이력은 참고 배지 즉시 반영 / SFA 의미상 별도 품목은 별도 MASTER target 유지 / 출력순서는 최초 SFA 순서 고정 / 라이브 `https://wk7007-wk.github.io/OrderHelper/`
 - 완료 포인터: `3d600a8 Add OrderHelper SFA item matching panel`; root pointer `759a867 Update OrderHelper matching pointer`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `git diff --check`. 실제 공장 PC 브라우저/SiteBot 화면 검증은 아직 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.

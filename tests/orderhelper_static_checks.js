@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260707-7';/, 'APP_VERSION must be bumped for the fixed order-unit-to-stock factor wording');
+mustMatch(/const APP_VERSION = '20260707-8';/, 'APP_VERSION must be bumped for the temporary 700m GPS radius');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -39,6 +39,8 @@ mustMatch(/const SFA_COMPARE_PATH = `\$\{FB_PATH\}\/sfaCompare\/latest`;/, 'SFA 
 mustMatch(/const SFA_ACTUAL_HISTORY_PATH = `\$\{FB_PATH\}\/sfaActualHistory`;/, 'SFA actual order history path missing');
 mustMatch(/const DESKTOP_ACCESS_PATH = `\$\{FB_PATH\}\/desktopAccess`;/, 'desktop access Firebase path missing');
 mustMatch(/const DESKTOP_GRACE_MS = 24 \* 60 \* 60 \* 1000;/, 'desktop grace window must be explicitly 24 hours');
+mustMatch(/radiusM: 700/, 'GPS auth radius must be temporarily 700m');
+mustMatch(/매장 GPS 700m/, 'auth UI must disclose the temporary 700m GPS radius');
 mustMatchPy(/--validate-local-sfa-history/, 'local SFA history mapping validation flag missing');
 mustMatchPy(/local_sfa_backfill_low_confidence_rows/, 'local SFA mapping validation must expose low-confidence row count');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
