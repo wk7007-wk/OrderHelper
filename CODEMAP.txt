@@ -22,5 +22,6 @@
 - Termux 감시만 바뀐 경우 OrderHelper 웹 배포는 필요 없다. PC/SiteBot 실행 경계와 Firebase 상태 경로만 검증한다.
 - CLI 감시는 누락/정체/불일치 보고, `/unitInference/latest` 리포트 업로드, 코드/문서/배포 보정 역할이다. 엑셀 실발주 이력은 참고 배지/툴팁에 즉시 반영하지만, 발주 품목, 단위, 하루사용량 수동값, 환산, SFA 실발주 원본은 자동 확정하지 않는다.
 - `orderSiteMappings`와 `orderUnitCorrections`는 원천 SFA 행을 바꾸지 않는 사용자 보정 상태다. 로컬 저장소와 `/current`/`history` payload에 분리 저장한다.
+- 최신 완료 포인터: `3d600a8 Add OrderHelper SFA item matching panel`. 후보 산정, 확정/후보/미매칭/충돌 상태, 내부 품목 수동 확정, 환산계수/묶음/최소발주/표기 보정, CSV/탭/JSON 입력과 JSON export가 완료됐다. 검증은 `node tests/orderhelper_static_checks.js`, `git diff --check`; 실제 공장 PC 브라우저/SiteBot 화면 검증은 별도다.
 - 로컬 SFA 이력 백필 전후 매핑 검증: `orderhelper_usage_inference.py --validate-local-sfa-history`가 `local_sfa_backfill_low_confidence_rows=0`을 요구한다. 2026-06-26 기준 `BBQ충진식패티(100g)(마일드)`와 `BBQ페퍼로니씬피자`는 `두마리치킨,파더스`와 별도 MASTER target이다.
 - 보안 게이트: `PIN_HASH`, `AUTH_GEO.storeLat/storeLng=37.2528352/127.4900516`, `radiusM=150`, `allowedDeviceHashes=[]`(CLI 등록 token SHA-256), `body.auth-locked .app-shell`. `PIN AND (CLI 허용 단말 OR 서버/호스팅 허용 IP OR GPS)` 구조이며, 웹 self-enrollment 없음. allowlist 관리는 `/root/my-first-project/scripts/hynix_auth_cli.py`. `?authDebug=1`은 로컬 개발에서만 GPS 우회. IP 인증/Firebase write 보호는 서버측 Auth/Rules 필요.

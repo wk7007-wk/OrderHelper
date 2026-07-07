@@ -13,10 +13,12 @@
 ## 현재 범위
 - 대상 프로젝트: `OrderHelper`
 - 역할: 직원폰 재고입력 웹 + Firebase `/order/` 기반 발주 보조
+- 2026-07-08 KST 현재 완료 포인터: `3d600a8 Add OrderHelper SFA item matching panel`. SFA/발주 항목 1:1 매칭, 단위 보정, 미매칭, 입출력 탭, 후보/확정/충돌 상태, 내부 품목 수동 확정, 환산계수/묶음/최소발주/display unit 보정, CSV/탭/JSON import와 JSON export 완료. 원천 SFA rows는 보존하고 `orderSiteMappings`/`orderUnitCorrections` 보정 저장으로 분리한다.
+- 검증/남은 확인: `node tests/orderhelper_static_checks.js`, `git diff --check` 통과. 실제 브라우저/SiteBot 화면 검증은 다음 세션에서 시작한다.
 - 현재 확인 수준:
   - `발주리스트` 원본 엑셀 구조 파악됨
   - `OrderHelper` 웹 UI 구조 파악됨
-  - BBQ SFA 발주창은 별도 자동입력 대상이며, 아직 구현 전 조사 단계
+  - BBQ SFA 자동 submit은 별도 safety flow 전까지 미구현/미실행이다.
 
 ## 2026-05-28 엔터 문제
 - 상태: **미해결 보고 후 진단/보강 진행**. 실기기에서 확인되기 전까지 해결 완료로 쓰지 않는다.
