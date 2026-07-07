@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260707-9';/, 'APP_VERSION must be bumped for inline alias correction controls');
+mustMatch(/const APP_VERSION = '20260707-10';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -101,11 +101,19 @@ mustMatch(/function toggleSfaComparePanel\(\)/, 'SFA comparison toggle missing')
 mustMatch(/function sfaStatusToastText\(data\)/, 'SFA status change toast handler missing');
 mustMatch(/let sfaLastRequestAt = 0;/, 'SFA status must track request time to ignore stale completion states');
 mustMatch(/let lastSfaCompareStatusKey = '';/, 'SFA compare loader must dedupe completed status updates');
+mustMatch(/let lastSfaResultAppliedAt = 0;/, 'SFA result application time must be tracked separately from Excel completion time');
 mustMatch(/statusMs < sfaLastRequestAt/, 'SFA status must ignore stale states older than the latest request');
 mustMatch(/loadSfaCompareLatest\(true, hadPendingRequest\)/, 'fresh SFA completion must load visible comparison results');
-mustMatch(/renderSfaComparePanel\(data\);\s*if \(data\) await loadUsageHistory\(true\);/, 'fresh SFA comparison must reload usage history for daily analysis badges');
+mustMatch(/function buildSfaAnalysisPayloadState\(data = lastSfaCompareData\)/, 'SFA payload state builder missing');
+mustMatch(/function refreshSfaResultViewsWithCurrentState\(data = lastSfaCompareData, reason = 'sfaResult'\)/, 'SFA result refresh helper missing');
+mustMatch(/lastSfaCompareData = data;\s*await autoLoadFromFB\(true\);\s*await loadUsageHistory\(true\);\s*refreshSfaResultViewsWithCurrentState\(data, 'latestCompare'\);/, 'fresh SFA comparison must load latest current/history before rebuilding alias and inline views');
+mustMatch(/if \(lastSfaCompareData && \(viewMode === 'output' \|\| document\.querySelector\('\.inline-alias-correction'\)\)\) render\(\);/, 'SFA history load must force main rows and inline alias controls to refresh');
+mustMatch(/const appliedText = lastSfaResultAppliedAt \? ` · 적용 \$\{sfaCompareTime\(lastSfaResultAppliedAt\)\}` : '';/, 'SFA compare meta must track UI application time');
+mustMatch(/완료 \$\{sfaCompareTime\(data\.savedAt\)\}` : ''\}\$\{appliedText\}/, 'SFA compare meta must separate Excel completion and UI application times');
 mustMatch(/setInterval\(\(\) => loadSfaOrderStatus\(false\), 10000\);/, 'SFA status must refresh every 10 seconds');
 mustMatch(/mode: 'scan_pc_downloads'/, 'SFA request must target the PC download folder flow');
+mustMatch(/const currentSaved = await flushCurrentBeforeSfaAnalysisRequest\(\);[\s\S]*const sfaAnalysisState = buildSfaAnalysisPayloadState\(lastSfaCompareData\);/, 'SFA request must save current state before building effective alias payload');
+mustMatch(/orderDays: sfaAnalysisState\.orderDays,[\s\S]*entries: sfaAnalysisState\.entries,[\s\S]*overrides: sfaAnalysisState\.overrides,[\s\S]*orderAliasMappings: sfaAnalysisState\.orderAliasMappings,[\s\S]*orderAliasMappingDrafts: sfaAnalysisState\.orderAliasMappingDrafts,[\s\S]*effectiveOrderAliasMappings: sfaAnalysisState\.effectiveOrderAliasMappings,/, 'SFA request payload must carry latest current state and rebuilt alias read models');
 mustMatch(/PC 다운로드 폴더 분석 요청함/, 'SFA request must give user feedback');
 mustMatch(/renderSfaStatus\(\{ state: 'requested'/, 'SFA request must update visible status immediately');
 mustMatch(/수동 일사용\/발주값 자동변경 없음/, 'SFA compare panel must disclose that analysis does not edit manual daily/order values');
@@ -392,6 +400,7 @@ this.__OrderHelperApi = {
   buildOrderAliasMatches,
   orderAliasMappingDraftsForPayload,
   effectiveOrderAliasMappingsForPayload,
+  buildSfaAnalysisPayloadState,
   parseManualSfaItemsText,
   siteItemAmount,
   recommendedOrderQty,
@@ -517,5 +526,11 @@ assert.strictEqual(aliasDraft.defaultConversionCandidate.source, 'usage', 'alias
 assert.strictEqual(aliasDraft.effectiveConversionFactor, 2, 'alias draft payload should use usage conversion as effective default');
 assert.strictEqual(aliasDraft.effectiveOrderUnitToStockFactor, 2, 'alias draft payload should expose effective orderUnitToStockFactor');
 assert.strictEqual(aliasDraft.conversionFactorMeaning, '발주 1단위가 체크/재고 몇 단위인지', 'alias draft payload should explain conversion factor direction');
+api.setAliasMappingsForCheck({ [cheeseAlias.aliasName]: { actualName: 'BBQ치즈볼', actualUnit: 'BOX', status: 'confirmed', conversionFactor: 3, conversionStatus: 'manual', conversionReason: '수동 확정' } });
+const sfaPayloadState = api.buildSfaAnalysisPayloadState(compareOnlyData);
+const confirmedAlias = sfaPayloadState.effectiveOrderAliasMappings[cheeseAlias.aliasName];
+assert.strictEqual(confirmedAlias.actualName, 'BBQ치즈볼', 'SFA payload state should preserve confirmed alias actual name during refresh');
+assert.strictEqual(confirmedAlias.conversionFactor, 3, 'SFA payload state should not overwrite manual conversion with a rebuilt default');
+assert.strictEqual(confirmedAlias.conversionStatus, 'manual', 'SFA payload state should preserve manual conversion status');
 
 console.log('OrderHelper static checks OK');

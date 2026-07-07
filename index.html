@@ -341,7 +341,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260707-9';
+const APP_VERSION = '20260707-10';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -863,6 +863,7 @@ let sfaActiveTab = 'match';
 let lastSfaCompareSavedAt = 0;
 let lastSfaCompareStatusKey = '';
 let lastSfaCompareData = null;
+let lastSfaResultAppliedAt = 0;
 let skipStockRenderOnceId = null;
 let pendingSnoozeName = null;
 let usageHistory = {};
@@ -1997,10 +1998,102 @@ async function loadUsageHistory(silent = true) {
     recomputeUsageAnalysis();
     updateAllDailyAnalysisCells();
     if (sfaCompareVisible && sfaActiveTab === 'alias') renderSfaAnalysisTab(lastSfaCompareData);
+    if (lastSfaCompareData && (viewMode === 'output' || document.querySelector('.inline-alias-correction'))) render();
   } catch (e) {
     console.warn('[usageAnalysis] load failed', e);
     if (!silent) toast('일사용 분석 기록 오류');
   }
+}
+
+function currentOrderDaysValue() {
+  const fromUi = parseInt(document.getElementById('orderDays')?.value || '', 10);
+  return Number.isFinite(fromUi) && fromUi > 0 ? fromUi : recommendedDays();
+}
+
+function currentCalcSnapshot(days = currentOrderDaysValue()) {
+  const calc = {};
+  MASTER.forEach(item => {
+    const g = calcG(item, days);
+    if (g > 0) {
+      calc[item.name] = {
+        qty: recommendedOrderQty(item, g),
+        stockNeed: Math.round(g * 100) / 100,
+        unit: item.unit,
+        stock: totalStock(item.name)
+      };
+    }
+  });
+  return calc;
+}
+
+function buildSfaAnalysisPayloadState(data = lastSfaCompareData) {
+  migrateRuntimeItemNames();
+  recomputeUsageAnalysis();
+  const days = currentOrderDaysValue();
+  const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(data);
+  const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(data);
+  return {
+    orderDays: days,
+    entries,
+    overrides,
+    actualOrders: cleanActualOrders(),
+    orderSiteMappings,
+    orderAliasMappings,
+    orderAliasMappingDrafts,
+    effectiveOrderAliasMappings,
+    orderUnitCorrections,
+    dailySales,
+    baseSales: getBaseSales(),
+    salesWeights: dailyWeights(days).map(x => Math.round(x * 1000) / 1000),
+    calc: currentCalcSnapshot(days)
+  };
+}
+
+function refreshSfaResultViewsWithCurrentState(data = lastSfaCompareData, reason = 'sfaResult') {
+  lastSfaCompareData = data || null;
+  if (!data) {
+    renderSfaComparePanel(null);
+    return buildSfaAnalysisPayloadState(null);
+  }
+  const state = buildSfaAnalysisPayloadState(data);
+  lastSfaResultAppliedAt = Date.now();
+  renderSfaComparePanel(data);
+  render();
+  pushDebugLog(`엑셀 결과 최신 입력/별명/환산 재적용: ${reason}`, 'debug', lastSfaResultAppliedAt);
+  return state;
+}
+
+function waitForSaveIdle(timeoutMs = 10000) {
+  const started = Date.now();
+  return new Promise(resolve => {
+    const check = () => {
+      if (!saveInFlight && !autoSaveTimer) {
+        resolve(!localDirty);
+        return;
+      }
+      if (Date.now() - started >= timeoutMs) {
+        resolve(false);
+        return;
+      }
+      setTimeout(check, 150);
+    };
+    check();
+  });
+}
+
+async function flushCurrentBeforeSfaAnalysisRequest() {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+  }
+  if (saveInFlight) {
+    pendingSave = true;
+    pendingSaveReason = 'sfaAnalysis';
+    return waitForSaveIdle();
+  }
+  if (!localDirty) return true;
+  await saveToFB('sfaAnalysis');
+  return !localDirty;
 }
 
 function recommendedDays() {
@@ -3318,7 +3411,7 @@ function analyzeManualSfaItems() {
     comparison: { matched: [], missing: [], extra: items },
     appliedActualOrders: {}
   };
-  renderSfaComparePanel(data);
+  refreshSfaResultViewsWithCurrentState(data, 'manualInput');
   showSfaComparePanel();
 }
 
@@ -3496,7 +3589,8 @@ function renderSfaComparePanel(data) {
   lastSfaCompareSavedAt = Number(data.savedAt || 0);
 
   title.textContent = data.ok ? '엑셀 오차' : '엑셀 구조 확인';
-  meta.textContent = `${fileName || '파일 미확인'} · ${sfaDateBasisText(history)}${data.savedAt ? ` · ${sfaCompareTime(data.savedAt)}` : ''}`;
+  const appliedText = lastSfaResultAppliedAt ? ` · 적용 ${sfaCompareTime(lastSfaResultAppliedAt)}` : '';
+  meta.textContent = `${fileName || '파일 미확인'} · ${sfaDateBasisText(history)}${data.savedAt ? ` · 완료 ${sfaCompareTime(data.savedAt)}` : ''}${appliedText}`;
   note.textContent = Object.keys(applied).length
     ? `실발주값 ${Object.keys(applied).length}개 이력 기록됨 · 수동 일사용/발주값 자동변경 없음 · 실사용 참고 즉시 반영`
     : '비교만 완료: 수동 일사용/발주값 자동변경 없음 · 실발주 이력은 실사용 참고에만 반영';
@@ -3525,9 +3619,14 @@ async function loadSfaCompareLatest(silent = true, forceShow = false) {
     const res = await fetch(`${FB_URL}${SFA_COMPARE_PATH}.json?_=` + Date.now());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    renderSfaComparePanel(data);
-    if (data) await loadUsageHistory(true);
-    if (data && viewMode === 'output') render();
+    if (data) {
+      lastSfaCompareData = data;
+      await autoLoadFromFB(true);
+      await loadUsageHistory(true);
+      refreshSfaResultViewsWithCurrentState(data, 'latestCompare');
+    } else {
+      renderSfaComparePanel(null);
+    }
     if (!silent && !data) toast('엑셀 분석 결과 없음');
   } catch (e) {
     console.warn('[sfaCompare] latest failed', e);
@@ -3609,17 +3708,32 @@ async function requestSfaOrderAnalysis() {
   if (btn) btn.disabled = true;
   const now = Date.now();
   sfaLastRequestAt = now;
-  const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(lastSfaCompareData);
-  const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(lastSfaCompareData);
+  const currentSaved = await flushCurrentBeforeSfaAnalysisRequest();
+  if (!currentSaved) {
+    sfaLastRequestAt = 0;
+    renderSfaStatus({ state: 'request_error', error: 'current save pending', updated_at: new Date().toISOString() });
+    toast('최신 저장 완료 후 다시 요청해주세요');
+    if (btn) btn.disabled = false;
+    return;
+  }
+  const sfaAnalysisState = buildSfaAnalysisPayloadState(lastSfaCompareData);
   const payload = {
     source: 'OrderHelper',
     mode: 'scan_pc_downloads',
     dirHint: 'C:\\Users\\wk771\\Downloads',
-    orderSiteMappings,
-    orderAliasMappings,
-    orderAliasMappingDrafts,
-    effectiveOrderAliasMappings,
-    orderUnitCorrections,
+    orderDays: sfaAnalysisState.orderDays,
+    entries: sfaAnalysisState.entries,
+    overrides: sfaAnalysisState.overrides,
+    actualOrders: sfaAnalysisState.actualOrders,
+    dailySales: sfaAnalysisState.dailySales,
+    baseSales: sfaAnalysisState.baseSales,
+    salesWeights: sfaAnalysisState.salesWeights,
+    calc: sfaAnalysisState.calc,
+    orderSiteMappings: sfaAnalysisState.orderSiteMappings,
+    orderAliasMappings: sfaAnalysisState.orderAliasMappings,
+    orderAliasMappingDrafts: sfaAnalysisState.orderAliasMappingDrafts,
+    effectiveOrderAliasMappings: sfaAnalysisState.effectiveOrderAliasMappings,
+    orderUnitCorrections: sfaAnalysisState.orderUnitCorrections,
     requestedAt: now,
     requestedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19)
   };
@@ -3656,6 +3770,7 @@ function saveReasonLabel(reason) {
   if (reason === 'mapping') return '매칭보정 저장';
   if (reason === 'aliasMapping') return '별명매칭 저장';
   if (reason === 'unitCorrection') return '단위보정 저장';
+  if (reason === 'sfaAnalysis') return '엑셀요청 전 저장';
   return '자동저장';
 }
 
@@ -3665,6 +3780,7 @@ function lastSavedLabel(reason) {
   if (reason === 'mapping') return '매칭보정';
   if (reason === 'aliasMapping') return '별명매칭';
   if (reason === 'unitCorrection') return '단위보정';
+  if (reason === 'sfaAnalysis') return '엑셀요청 전 저장';
   return '자동저장';
 }
 
