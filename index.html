@@ -53,11 +53,15 @@
   .sfa-tab.active { background: #e94560; border-color: #e94560; color: #fff; }
   .sfa-match-row { display: grid; grid-template-columns: 68px minmax(150px, 1.2fr) minmax(160px, 1fr) minmax(110px, .7fr); gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(15, 52, 96, 0.35); }
   .sfa-match-row.confirmed { border-color: rgba(34, 197, 94, 0.34); background: rgba(34, 197, 94, 0.08); }
+  .sfa-match-row.manual { border-color: rgba(20, 184, 166, 0.36); background: rgba(20, 184, 166, 0.09); }
+  .sfa-match-row.default { border-color: rgba(96, 165, 250, 0.38); background: rgba(37, 99, 235, 0.1); }
   .sfa-match-row.candidate { border-color: rgba(59, 130, 246, 0.36); background: rgba(59, 130, 246, 0.09); }
   .sfa-match-row.conflict { border-color: rgba(239, 68, 68, 0.44); background: rgba(239, 68, 68, 0.11); }
   .sfa-match-row.unmatched { border-color: rgba(249, 115, 22, 0.4); background: rgba(249, 115, 22, 0.1); }
   .sfa-match-status { font-size: 11px; font-weight: 900; }
   .sfa-match-row.confirmed .sfa-match-status { color: #bbf7d0; }
+  .sfa-match-row.manual .sfa-match-status { color: #99f6e4; }
+  .sfa-match-row.default .sfa-match-status { color: #bfdbfe; }
   .sfa-match-row.candidate .sfa-match-status { color: #bfdbfe; }
   .sfa-match-row.conflict .sfa-match-status { color: #fecaca; }
   .sfa-match-row.unmatched .sfa-match-status { color: #fed7aa; }
@@ -65,6 +69,7 @@
   .sfa-match-meta { color: #9aa7b7; font-size: 11px; line-height: 1.35; white-space: normal; }
   .sfa-select, .sfa-edit, .sfa-textarea { width: 100%; background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 7px 8px; font-size: 12px; }
   .sfa-select:focus, .sfa-edit:focus, .sfa-textarea:focus { outline: none; border-color: #e94560; }
+  .sfa-alias-fields { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(74px, .65fr) minmax(62px, .45fr); gap: 5px; align-items: center; }
   .sfa-unit-fields { display: grid; grid-template-columns: repeat(3, minmax(52px, 1fr)); gap: 5px; }
   .sfa-unit-fields label { display: grid; gap: 3px; color: #9aa7b7; font-size: 10px; }
   .sfa-io-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
@@ -72,6 +77,11 @@
   .sfa-output { min-height: 150px; max-height: 280px; overflow: auto; margin: 0; padding: 8px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(8, 14, 24, 0.62); color: #dbeafe; font-size: 11px; white-space: pre-wrap; }
   .sfa-mini-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .sfa-mini-actions button { background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 6px 9px; font-size: 11px; font-weight: 800; }
+  .desktop-access-grid { display: grid; gap: 5px; }
+  .desktop-access-row { display: grid; grid-template-columns: 80px minmax(160px, 1fr) minmax(120px, .6fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(15, 52, 96, 0.35); }
+  .desktop-access-row.approved { border-color: rgba(34, 197, 94, 0.34); background: rgba(34, 197, 94, 0.08); }
+  .desktop-access-row.pending { border-color: rgba(249, 115, 22, 0.4); background: rgba(249, 115, 22, 0.1); }
+  .desktop-access-row button { background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 6px 9px; font-size: 11px; font-weight: 800; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; min-width: 760px; border-collapse: collapse; }
   thead { background: #0f3460; z-index: 5; }
@@ -178,8 +188,11 @@
     .sfa-panel-actions button { flex: 1; padding: 8px 9px; }
     .sfa-row { grid-template-columns: 46px minmax(0, 1fr) auto; }
     .sfa-match-row { grid-template-columns: 56px minmax(0, 1fr); }
+    .desktop-access-row { grid-template-columns: 1fr; }
     .sfa-match-row .sfa-select,
+    .sfa-match-row .sfa-alias-fields,
     .sfa-match-row .sfa-unit-fields { grid-column: 1 / -1; }
+    .sfa-alias-fields { grid-template-columns: 1fr; }
     .sfa-io-grid { grid-template-columns: 1fr; }
     .table-wrap { border-top: 1px solid #0f3460; }
   }
@@ -189,7 +202,7 @@
 
 <div class="pin-overlay" id="pinOverlay">
   <h2>BBQ 발주</h2>
-  <div class="pin-note">PIN + CLI 허용 단말 또는 매장 GPS로 접근합니다.</div>
+  <div class="pin-note">PIN + 허용 단말, 승인 데스크탑, 임시 개방, 또는 매장 GPS로 접근합니다.</div>
   <input type="password" inputmode="numeric" pattern="[0-9]*" id="pinInput" maxlength="4" placeholder="PIN" autocomplete="off">
   <input class="device-name" type="text" id="deviceNameInput" maxlength="32" placeholder="단말명" autocomplete="off">
   <button onclick="checkPin()">확인</button>
@@ -210,6 +223,7 @@
   <button id="modeBtn" onclick="toggleMode()">출력 보기</button>
   <button id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis()">엑셀분석</button>
   <button id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel()">오차보기</button>
+  <button id="desktopAccessBtn" type="button" onclick="toggleDesktopAccessPanel()">접근관리</button>
   <span class="status-pill idle" id="sfaStatus">엑셀 대기</span>
   <button class="primary" onclick="flushAutoSave('manual')">저장</button>
   <span class="status-pill idle" id="saveState">동기화됨</span>
@@ -230,11 +244,29 @@
   <div class="sfa-counts" id="sfaCompareCounts"></div>
   <div class="sfa-tabs" id="sfaAnalysisTabs">
     <button class="sfa-tab active" type="button" data-tab="match" onclick="setSfaAnalysisTab('match')">1:1 매칭</button>
+    <button class="sfa-tab" type="button" data-tab="alias" onclick="setSfaAnalysisTab('alias')">별명 검수</button>
     <button class="sfa-tab" type="button" data-tab="unit" onclick="setSfaAnalysisTab('unit')">단위 보정</button>
     <button class="sfa-tab" type="button" data-tab="unmatched" onclick="setSfaAnalysisTab('unmatched')">미매칭</button>
     <button class="sfa-tab" type="button" data-tab="io" onclick="setSfaAnalysisTab('io')">입출력</button>
   </div>
   <div class="sfa-list" id="sfaCompareBody"></div>
+</div>
+
+<div class="sfa-panel hidden" id="desktopAccessPanel">
+  <div class="sfa-panel-head">
+    <span class="sfa-panel-title">데스크탑 접근</span>
+    <span class="sfa-panel-meta" id="desktopAccessMeta">상태 확인 전</span>
+    <span class="sfa-panel-note">IP만으로 영구 허용하지 않음</span>
+    <span class="sfa-panel-actions">
+      <button type="button" onclick="loadDesktopAccessState(false)">새로고침</button>
+      <button type="button" onclick="recordCurrentDesktopCandidate()">현재 후보등록</button>
+      <button type="button" onclick="approveCurrentDesktopDevice()">현재 승인</button>
+      <button type="button" onclick="startDesktopGraceWindow()">24시간 개방</button>
+      <button type="button" onclick="stopDesktopGraceWindow()">개방 종료</button>
+      <button type="button" onclick="hideDesktopAccessPanel()">닫기</button>
+    </span>
+  </div>
+  <div class="desktop-access-grid" id="desktopAccessBody"></div>
 </div>
 
 <div class="sales-row">
@@ -292,7 +324,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260707-1';
+const APP_VERSION = '20260707-7';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -300,6 +332,7 @@ const SFA_ORDER_REQUEST_PATH = '/monitor/main_pc/sfa_order_request';
 const SFA_ORDER_STATUS_PATH = '/monitor/main_pc/sfa_order';
 const SFA_COMPARE_PATH = `${FB_PATH}/sfaCompare/latest`;
 const SFA_ACTUAL_HISTORY_PATH = `${FB_PATH}/sfaActualHistory`;
+const DESKTOP_ACCESS_PATH = `${FB_PATH}/desktopAccess`;
 const USAGE_ANALYSIS_MAX_DAYS = 90;
 const DEFAULT_BASE_SALES = 280;
 const BASE_SALES_STORAGE_VERSION = 'formula-280';
@@ -311,12 +344,15 @@ const PIN_HASH = '38083c7ee9121e17401883566a148aa5c2e2d55dc53bc4a94a026517dbff3c
 // 0510 보안 강화 — 5회 시도 후 30초 lock. 단말 token은 CLI allowlist 등록 전에는 factor가 아니며 PIN은 항상 필요.
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30000;
+const DESKTOP_GRACE_MS = 24 * 60 * 60 * 1000;
 const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
 const AUTH_GEO = { storeLat: 37.2528352, storeLng: 127.4900516, radiusM: 150, deviceKey: 'bbq_desk_auth_device_v1', allowedDeviceHashes: ['d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08','c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c'],
       allowedDevices:{"d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08":{"enabled":true,"label":"사장","updatedAt":"2026-06-26T18:39:12+00:00"},"c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c":{"enabled":true,"label":"메인피시","updatedAt":"2026-06-27T11:30:18+00:00","phoneLast4":"0000"}}, ipFactorReserved: true };
 let pinAttempts = 0;
 let pinLockUntil = 0;
 let orderHelperStarted = false;
+let desktopAccessState = { devices: {}, grace: {} };
+let desktopAccessVisible = false;
 
 async function hashPin(pin) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
@@ -352,6 +388,87 @@ async function hasAllowedAuthDevice(device) {
   if (!device?.token || !hashes.length) return false;
   return hashes.includes(await hashPin(device.token));
 }
+function isLikelyDesktopClient() {
+  const nav = navigator || {};
+  const ua = String(nav.userAgent || '').toLowerCase();
+  const platform = String(nav.platform || '').toLowerCase();
+  const touch = Number(nav.maxTouchPoints || 0);
+  if (/windows|macintosh|linux x86|x11/.test(ua) || /win|mac|linux/.test(platform)) return touch <= 2;
+  return false;
+}
+function desktopAccessDeviceRecord(hash) {
+  return desktopAccessState?.devices?.[hash] || null;
+}
+function isDesktopGraceActive(state = desktopAccessState, now = Date.now()) {
+  const grace = state?.grace || {};
+  return grace.enabled === true && Number(grace.expiresAt || 0) > now;
+}
+function desktopDeviceApproved(hash, state = desktopAccessState) {
+  const row = state?.devices?.[hash] || {};
+  return row.enabled !== false && row.status === 'approved' && row.isDesktop === true;
+}
+async function fetchPublicIp() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json', { cache: 'no-store' });
+    if (!res.ok) return '';
+    const data = await res.json();
+    return String(data.ip || '').slice(0, 80);
+  } catch {
+    return '';
+  }
+}
+function desktopDevicePayload(device, hash, extra = {}) {
+  const now = Date.now();
+  return {
+    deviceHash: hash,
+    deviceName: String(device?.name || '단말').slice(0, 60),
+    userAgent: String(navigator.userAgent || '').slice(0, 240),
+    platform: String(navigator.platform || '').slice(0, 80),
+    language: String(navigator.language || '').slice(0, 40),
+    isDesktop: isLikelyDesktopClient(),
+    lastSeen: now,
+    lastSeenKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19),
+    ...extra
+  };
+}
+async function loadDesktopAccessState(silent = true) {
+  try {
+    const res = await fetch(`${FB_URL}${DESKTOP_ACCESS_PATH}.json?_=` + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    desktopAccessState = await res.json() || { devices: {}, grace: {} };
+    renderDesktopAccessPanel();
+    return desktopAccessState;
+  } catch (e) {
+    console.warn('[desktopAccess] load failed', e);
+    if (!silent) toast('접근관리 로드 실패');
+    return desktopAccessState || { devices: {}, grace: {} };
+  }
+}
+async function patchDesktopDevice(hash, payload) {
+  const res = await fetch(`${FB_URL}${DESKTOP_ACCESS_PATH}/devices/${hash}.json`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+}
+async function recordDesktopAuthCandidate(device, hash, reason = 'gps_unavailable', state = desktopAccessState) {
+  const existing = state?.devices?.[hash] || {};
+  const ip = await fetchPublicIp();
+  const status = existing.status === 'approved' ? 'approved' : (isDesktopGraceActive(state) ? 'candidate' : 'pending');
+  const payload = desktopDevicePayload(device, hash, {
+    status,
+    enabled: existing.enabled !== false,
+    firstSeen: existing.firstSeen || Date.now(),
+    recentIp: ip || existing.recentIp || '',
+    reason,
+    approvedAt: existing.approvedAt || null,
+    approvedBy: existing.approvedBy || ''
+  });
+  await patchDesktopDevice(hash, payload);
+  desktopAccessState.devices = { ...(desktopAccessState.devices || {}), [hash]: { ...existing, ...payload } };
+  renderDesktopAccessPanel();
+  return payload;
+}
 function geoConfigured() {
   return typeof AUTH_GEO.storeLat === 'number' && typeof AUTH_GEO.storeLng === 'number';
 }
@@ -382,15 +499,169 @@ async function verifyGps() {
 async function verifyAuthFactor() {
   const device = ensureAuthDevice();
   if (await hasAllowedAuthDevice(device)) return 'device';
+  const hash = await deviceHashText(device);
+  const state = await loadDesktopAccessState(true);
+  if (desktopDeviceApproved(hash, state)) {
+    await recordDesktopAuthCandidate(device, hash, 'approved_desktop', state).catch(e => console.warn('[desktopAccess] approved touch failed', e));
+    return 'desktop';
+  }
   if (hasTrustedIpFactor()) return 'ip';
-  return await verifyGps();
+  try {
+    return await verifyGps();
+  } catch (e) {
+    if (isLikelyDesktopClient() || String(e?.message || '').includes('GPS')) {
+      await recordDesktopAuthCandidate(device, hash, e?.message || 'gps_unavailable', state).catch(err => console.warn('[desktopAccess] candidate write failed', err));
+      if (isDesktopGraceActive(state)) return 'desktop-grace';
+      throw new Error(`GPS 확인 실패. 데스크탑 후보로 기록됨: ${hash.slice(0, 12)}`);
+    }
+    throw e;
+  }
 }
 function factorLabel(factor) {
   if (factor === 'device') return '인증 단말';
+  if (factor === 'desktop') return '승인 데스크탑';
+  if (factor === 'desktop-grace') return '임시 데스크탑';
   if (factor === 'gps') return 'GPS';
   if (factor === 'debug') return '개발 GPS 우회';
   if (factor === 'ip') return '허용 IP';
   return 'factor';
+}
+function desktopAccessTimeText(ms) {
+  const n = Number(ms || 0);
+  if (!Number.isFinite(n) || n <= 0) return '-';
+  return new Date(n).toLocaleString('ko-KR', { hour12: false });
+}
+function desktopAccessStatusText(status) {
+  if (status === 'approved') return '승인';
+  if (status === 'candidate') return '후보';
+  return '대기';
+}
+function renderDesktopAccessPanel() {
+  const meta = document.getElementById('desktopAccessMeta');
+  const body = document.getElementById('desktopAccessBody');
+  if (!meta || !body) return;
+  const state = desktopAccessState || { devices: {}, grace: {} };
+  const graceActive = isDesktopGraceActive(state);
+  const expiresAt = Number(state.grace?.expiresAt || 0);
+  meta.textContent = graceActive
+    ? `임시 개방 중 · 만료 ${desktopAccessTimeText(expiresAt)}`
+    : '임시 개방 꺼짐';
+  const rows = Object.entries(state.devices || {})
+    .map(([hash, row]) => ({ hash, row }))
+    .sort((a, b) => Number(b.row.lastSeen || 0) - Number(a.row.lastSeen || 0));
+  if (!rows.length) {
+    body.innerHTML = '<div class="sfa-panel-meta">등록된 데스크탑 후보 없음</div>';
+    return;
+  }
+  body.innerHTML = rows.map(({ hash, row }) => {
+    const status = row.status === 'approved' ? 'approved' : 'pending';
+    const detail = [
+      row.deviceName || '단말',
+      row.recentIp ? `IP ${row.recentIp}` : 'IP 미확인',
+      row.platform || '',
+      row.lastSeen ? `최근 ${desktopAccessTimeText(row.lastSeen)}` : ''
+    ].filter(Boolean).join(' · ');
+    const ua = String(row.userAgent || '').slice(0, 90);
+    const approveButton = row.status === 'approved'
+      ? '<span class="sfa-panel-meta">승인됨</span>'
+      : `<button type="button" onclick="approveDesktopDevice('${escapeHtml(hash)}')">승인</button>`;
+    return `<div class="desktop-access-row ${status}">
+      <div class="sfa-match-status">${escapeHtml(desktopAccessStatusText(row.status))}</div>
+      <div>
+        <div class="sfa-match-name">${escapeHtml(hash.slice(0, 16))}</div>
+        <div class="sfa-match-meta">${escapeHtml(detail)}<br>${escapeHtml(ua)}</div>
+      </div>
+      <div class="sfa-match-meta">${escapeHtml(row.reason || '')}</div>
+      <div>${approveButton}</div>
+    </div>`;
+  }).join('');
+}
+async function toggleDesktopAccessPanel() {
+  desktopAccessVisible = !desktopAccessVisible;
+  const panel = document.getElementById('desktopAccessPanel');
+  if (!panel) return;
+  panel.classList.toggle('hidden', !desktopAccessVisible);
+  if (desktopAccessVisible) await loadDesktopAccessState(false);
+  updateStickyOffsets();
+}
+function hideDesktopAccessPanel() {
+  desktopAccessVisible = false;
+  document.getElementById('desktopAccessPanel')?.classList.add('hidden');
+  updateStickyOffsets();
+}
+async function currentDesktopHashAndDevice() {
+  const device = ensureAuthDevice();
+  return { device, hash: await deviceHashText(device) };
+}
+async function recordCurrentDesktopCandidate() {
+  try {
+    const state = await loadDesktopAccessState(true);
+    const { device, hash } = await currentDesktopHashAndDevice();
+    await recordDesktopAuthCandidate(device, hash, 'manual_candidate', state);
+    toast('현재 단말 후보 등록됨');
+  } catch (e) {
+    console.warn('[desktopAccess] candidate failed', e);
+    toast('현재 단말 후보 등록 실패');
+  }
+}
+async function approveDesktopDevice(hash) {
+  try {
+    const now = Date.now();
+    await patchDesktopDevice(hash, {
+      status: 'approved',
+      enabled: true,
+      approvedAt: now,
+      approvedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19),
+      approvedBy: 'orderhelper_ui'
+    });
+    await loadDesktopAccessState(true);
+    toast('데스크탑 단말 승인됨');
+  } catch (e) {
+    console.warn('[desktopAccess] approve failed', e);
+    toast('데스크탑 승인 실패');
+  }
+}
+async function approveCurrentDesktopDevice() {
+  try {
+    await recordCurrentDesktopCandidate();
+    const { hash } = await currentDesktopHashAndDevice();
+    await approveDesktopDevice(hash);
+  } catch (e) {
+    console.warn('[desktopAccess] current approve failed', e);
+    toast('현재 단말 승인 실패');
+  }
+}
+async function startDesktopGraceWindow() {
+  try {
+    const now = Date.now();
+    const payload = {
+      enabled: true,
+      startedAt: now,
+      expiresAt: now + DESKTOP_GRACE_MS,
+      updatedAt: now,
+      updatedBy: 'orderhelper_ui'
+    };
+    const res = await fetch(`${FB_URL}${DESKTOP_ACCESS_PATH}/grace.json`, { method: 'PUT', body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    await loadDesktopAccessState(true);
+    toast('24시간 데스크탑 임시 개방 시작');
+  } catch (e) {
+    console.warn('[desktopAccess] grace start failed', e);
+    toast('임시 개방 시작 실패');
+  }
+}
+async function stopDesktopGraceWindow() {
+  try {
+    const now = Date.now();
+    const payload = { enabled: false, updatedAt: now, updatedBy: 'orderhelper_ui' };
+    const res = await fetch(`${FB_URL}${DESKTOP_ACCESS_PATH}/grace.json`, { method: 'PATCH', body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    await loadDesktopAccessState(true);
+    toast('데스크탑 임시 개방 종료');
+  } catch (e) {
+    console.warn('[desktopAccess] grace stop failed', e);
+    toast('임시 개방 종료 실패');
+  }
 }
 function unlockOrderHelper() {
   document.body.classList.remove('auth-locked');
@@ -447,7 +718,7 @@ async function restoreAuthIfPossible() {
   const device = ensureAuthDevice();
   const id = await deviceHashText(device);
   if (AUTH_DEBUG) setPinMessage(`개발 검증 모드: PIN은 필요, GPS만 우회. 단말ID ${id}`, true);
-  else setPinMessage(`PIN + CLI 허용 단말 또는 매장 GPS. 단말ID ${id}`);
+  else setPinMessage(`PIN + 허용 단말/승인 데스크탑/매장 GPS. 단말ID ${id}`);
   document.getElementById('pinInput').focus();
 }
 restoreAuthIfPossible();
@@ -564,6 +835,7 @@ let debugLogs = [];
 let outputOrder = [];
 let actualOrders = {};
 let orderSiteMappings = {};
+let orderAliasMappings = {};
 let orderUnitCorrections = {};
 let conversionAnalysis = {};
 let sfaStatusInitialized = false;
@@ -637,6 +909,39 @@ function sanitizeOrderSiteMappings(source = {}) {
   return out;
 }
 
+function sanitizeOrderAliasMappings(source = {}) {
+  const known = knownItemNameSet();
+  const out = {};
+  const allowedStatuses = new Set(['candidate', 'default', 'confirmed', 'manual']);
+  Object.entries(source || {}).forEach(([key, value]) => {
+    if (!key || !value || typeof value !== 'object' || Array.isArray(value)) return;
+    const aliasName = canonicalItemName(value.aliasName || key);
+    if (!known.has(aliasName)) return;
+    const actualName = String(value.actualName || value.targetName || '').trim().slice(0, 160);
+    if (!actualName) return;
+    const row = {
+      aliasName,
+      actualName,
+      actualUnit: String(value.actualUnit || value.siteUnit || '').slice(0, 40),
+      status: allowedStatuses.has(value.status) ? value.status : 'confirmed',
+      source: String(value.source || 'user').slice(0, 40),
+      score: Number.isFinite(Number(value.score)) ? Number(value.score) : 0,
+      reason: String(value.reason || '').slice(0, 240),
+      updatedAt: Number(value.updatedAt || Date.now())
+    };
+    const conversionFactor = sanitizePositiveNumber(value.conversionFactor ?? value.factor);
+    if (conversionFactor) {
+      row.conversionFactor = conversionFactor;
+      row.conversionStatus = allowedStatuses.has(value.conversionStatus) ? value.conversionStatus : 'default';
+      row.conversionSource = String(value.conversionSource || value.source || '').slice(0, 60);
+      row.conversionScore = Number.isFinite(Number(value.conversionScore)) ? Number(value.conversionScore) : 0;
+      row.conversionReason = String(value.conversionReason || '').slice(0, 240);
+    }
+    out[aliasName] = row;
+  });
+  return out;
+}
+
 function sanitizePositiveNumber(value) {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -670,6 +975,7 @@ function migrateRuntimeItemNames() {
   outputOrder = migrateOutputOrder(outputOrder);
   actualOrders = migrateNamedObject(actualOrders);
   orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+  orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
   orderUnitCorrections = sanitizeOrderUnitCorrections(orderUnitCorrections);
 }
 
@@ -691,6 +997,7 @@ const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';
 const ACTUAL_ORDER_STORAGE_KEY = 'bbq_actual_orders';
 const ACTUAL_ORDER_DATE_STORAGE_KEY = 'bbq_actual_orders_date';
 const ORDER_SITE_MAPPING_STORAGE_KEY = 'bbq_order_site_mappings';
+const ORDER_ALIAS_MAPPING_STORAGE_KEY = 'bbq_order_alias_mappings';
 const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';
 const SFA_MANUAL_ITEMS_STORAGE_KEY = 'bbq_sfa_manual_items';
 const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
@@ -1178,7 +1485,7 @@ function orderAnalysisTitle(item, stockNeed) {
   const manualFactor = manualUnitFactorForItem(item);
   if (manualFactor) {
     const details = [
-      `사용자 단위 보정: 1${parts.orderUnit || '발주'}=${fmt(manualFactor, 2)}${parts.checkUnit || '체크'}`,
+      `사용자 단위 보정: ${conversionDirectionText(manualFactor, parts.orderUnit || '발주', parts.checkUnit || '체크')}`,
       manual.orderMultiple ? `묶음 ${fmt(manual.orderMultiple, 1)}${parts.orderUnit || ''}` : '',
       manual.minOrderQty ? `최소 ${fmt(manual.minOrderQty, 1)}${parts.orderUnit || ''}` : '',
       manual.packUnit ? `표기 ${manual.packUnit}` : ''
@@ -1187,16 +1494,16 @@ function orderAnalysisTitle(item, stockNeed) {
   }
   const analysis = conversionAnalysis[item.name];
   if (analysis?.source === 'movement' && Number.isFinite(analysis.factor)) {
-    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 발주환산 1${parts.orderUnit || '발주단위'}=${fmt(analysis.factor, 2)}${parts.checkUnit || '재고단위'} (재고 변동 ${analysis.samples}건).`;
+    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. ${conversionDirectionText(analysis.factor, parts.orderUnit || '발주단위', parts.checkUnit || '재고단위')} (재고 변동 ${analysis.samples}건). 예: 체크 10개=발주 1박스이면 환산값 10.`;
   }
   if (analysis?.source === 'item' && Number.isFinite(analysis.factor)) {
-    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 품목 기록 ${analysis.samples}건 기준 1${parts.orderUnit || '발주'}=${fmt(analysis.factor, 2)}${parts.checkUnit || '재고'}`;
+    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 품목 기록 ${analysis.samples}건 기준 ${conversionDirectionText(analysis.factor, parts.orderUnit || '발주', parts.checkUnit || '재고')}`;
   }
   if (analysis?.source === 'unit' && Number.isFinite(analysis.factor)) {
     const useText = conversionFactorForItem(item) ? '발주량 계산에 적용됨' : '참고만 표시됨';
-    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 같은 단위 기록 ${analysis.samples}건 기준 1${parts.orderUnit || '발주'}=${fmt(analysis.factor, 2)}${parts.checkUnit || '재고'} (${useText})`;
+    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 같은 단위 기록 ${analysis.samples}건 기준 ${conversionDirectionText(analysis.factor, parts.orderUnit || '발주', parts.checkUnit || '재고')} (${useText})`;
   }
-  if (!parts.same) return `단위 분석 대기: 체크 ${parts.checkUnit || '-'} / 발주 ${parts.orderUnit || '-'}. 실제 넣은 발주칸을 한 번 확인하면 이후 패턴에 반영됩니다.`;
+  if (!parts.same) return `단위 분석 대기: 환산값은 발주 1${parts.orderUnit || '단위'}가 체크/재고 몇 ${parts.checkUnit || '단위'}인지입니다. 예: 체크 10개=발주 1박스이면 환산값 10. 실제 넣은 발주칸을 한 번 확인하면 이후 패턴에 반영됩니다.`;
   return '실제 SFA 입력 여부 미확인';
 }
 
@@ -1473,6 +1780,7 @@ function orderQtyFromRecord(record, name) {
     const parts = item ? orderUnitParts(item) : { same: true };
     if (!orderUnitToStockFactor && !parts.same) return { qty: 0, source: 'actual_unconverted', actualQty: actual, orderUnitToStockFactor: null };
     const stockNeed = stockNeedFromRecord(record, name);
+    // orderUnitToStockFactor direction: one order unit contains this many stock/check units.
     const convertedActual = orderUnitToStockFactor ? actual * orderUnitToStockFactor : actual;
     return { qty: convertedActual || stockNeed || actual, source: 'actual', actualQty: actual, orderUnitToStockFactor };
   }
@@ -1491,6 +1799,7 @@ function orderQtyForInterval(prev, curr, name) {
     }
     const actualQty = intervalActual.qty;
     const factor = orderUnitToStockFactor || 1;
+    // Convert actual SFA order units into the stock/check unit basis before usage analysis.
     const convertedActual = actualQty * factor;
     return {
       qty: convertedActual,
@@ -1620,7 +1929,7 @@ function usageAnalysisTitle(analysis) {
   if (!analysis) return '';
   const last = analysis.last;
   const orderLabel = last?.orderSource === 'actual'
-    ? `구간실발주 ${fmt(last.actualQty, 0)} / 발주환산 1발주=${fmt(last.orderUnitToStockFactor || 1, 2)}재고 / 재고환산 ${fmt(last.orderQty, 2)}${last.actualDates?.length ? ` / ${last.actualDates.join(',')}` : ''}`
+    ? `구간실발주 ${fmt(last.actualQty, 0)} / 환산값 발주1=체크/재고 ${fmt(last.orderUnitToStockFactor || 1, 2)} / 재고환산 ${fmt(last.orderQty, 2)}${last.actualDates?.length ? ` / ${last.actualDates.join(',')}` : ''}`
     : `전회계산발주 ${fmt(last.orderQty, 2)}`;
   const recent = last ? ` / 최근 기준매출환산 ${fmt(last.daily, 2)}/일, raw ${fmt(last.rawDaily, 2)}/일 (${last.from}→${last.to}, 매출가중 ${fmt(last.salesWeightSum, 2)}일분 ${last.salesWeightBasis}${last.salesWeightMissing ? ` missing ${last.salesWeightMissing}` : ''}, ${orderLabel})` : '';
   const basis = analysis.source === 'actual' ? '실발주+재고 실사용' : '계산발주 참고';
@@ -1670,6 +1979,7 @@ async function loadUsageHistory(silent = true) {
     sfaActualHistory = sfaRes.ok ? (await sfaRes.json() || {}) : {};
     recomputeUsageAnalysis();
     updateAllDailyAnalysisCells();
+    if (sfaCompareVisible && sfaActiveTab === 'alias') renderSfaAnalysisTab(lastSfaCompareData);
   } catch (e) {
     console.warn('[usageAnalysis] load failed', e);
     if (!silent) toast('일사용 분석 기록 오류');
@@ -1925,6 +2235,532 @@ function bestMasterCandidatesForSite(row, limit = 3) {
     .slice(0, limit);
 }
 
+function actualOrderItemName(row) {
+  return String(row?.actualName || row?.sfa_name || row?.siteName || row?.name || row?.source_name || '').trim();
+}
+
+function actualOrderItemUnit(row) {
+  return String(row?.actualUnit || row?.sfa_unit || row?.siteUnit || row?.unit || '').trim();
+}
+
+function actualOrderCandidateKey(name, unit = '') {
+  const nameKey = normalizeSiteItemName(name) || String(name || '').trim();
+  const unitKey = normalizeOrderUnit(unit) || '-';
+  return `${nameKey || '-'}|${unitKey}`;
+}
+
+function addActualOrderCandidate(map, row, source, details = {}) {
+  const actualName = actualOrderItemName(row);
+  if (!actualName) return;
+  const actualUnit = actualOrderItemUnit(row);
+  const key = actualOrderCandidateKey(actualName, actualUnit);
+  const current = map.get(key) || {
+    actualKey: key,
+    actualName,
+    actualUnit,
+    qtyTotal: 0,
+    amountTotal: 0,
+    evidenceCount: 0,
+    sources: new Set(),
+    expectedNames: new Set(),
+    dates: new Set(),
+    matchScore: 0
+  };
+  const qty = Number(row?.sfa_qty ?? row?.siteQty ?? row?.qty ?? details.qty ?? 0);
+  const amount = siteItemAmount(row) || Number(details.amount || 0) || 0;
+  if (Number.isFinite(qty) && qty > 0) current.qtyTotal += qty;
+  if (Number.isFinite(amount) && amount > 0) current.amountTotal += amount;
+  current.evidenceCount += 1;
+  if (source) current.sources.add(source);
+  const expectedName = canonicalItemName(details.expectedName || row?.expected_name || '');
+  if (expectedName && knownItemNameSet().has(expectedName)) current.expectedNames.add(expectedName);
+  const dateKey = normalizeHistoryDateKey(details.dateKey || row?.orderDateKey || row?.orderDate || '');
+  if (dateKey) current.dates.add(dateKey);
+  const score = Number(details.score ?? row?.score ?? 0);
+  if (Number.isFinite(score) && score > current.matchScore) current.matchScore = score;
+  map.set(key, current);
+}
+
+function collectActualOrderCandidates(data = lastSfaCompareData) {
+  const map = new Map();
+  const latestSource = data?.file?.name === '수동 입력' ? '수동입력' : '최근SFA';
+  siteRowsFromSfaData(data).forEach(row => addActualOrderCandidate(map, row, latestSource, {
+    dateKey: data?.historySummary?.selectedDate
+  }));
+  (data?.comparison?.matched || []).forEach(row => addActualOrderCandidate(map, {
+    name: row.sfa_name,
+    qty: row.sfa_qty,
+    unit: row.sfa_unit,
+    amount: row.sfa_amount,
+    row_index: row.row_index
+  }, '비교행', {
+    expectedName: row.expected_name,
+    score: row.score,
+    dateKey: data?.historySummary?.selectedDate
+  }));
+  Object.entries(sfaActualHistory || {}).forEach(([key, record]) => {
+    if (!record || typeof record !== 'object') return;
+    const dateKey = normalizeHistoryDateKey(record.orderDateKey || record.orderDate || key);
+    (Array.isArray(record.rows) ? record.rows : []).forEach(row => addActualOrderCandidate(map, row, '실발주이력', {
+      expectedName: row.expected_name,
+      score: row.score,
+      dateKey
+    }));
+    Object.entries(record.actualOrders || {}).forEach(([name, qty]) => addActualOrderCandidate(map, {
+      name,
+      qty,
+      unit: ''
+    }, '실발주키', { expectedName: name, dateKey }));
+  });
+  return Array.from(map.values()).map(row => ({
+    ...row,
+    sources: Array.from(row.sources),
+    expectedNames: Array.from(row.expectedNames),
+    dates: Array.from(row.dates).sort()
+  })).sort((a, b) => b.evidenceCount - a.evidenceCount || a.actualName.localeCompare(b.actualName, 'ko', { numeric: true }));
+}
+
+function aliasCandidateReason(candidate) {
+  if (!candidate) return '후보 없음';
+  return [
+    candidate.sources?.join('/') || '',
+    candidate.evidenceCount ? `근거 ${candidate.evidenceCount}건` : '',
+    candidate.qtyTotal ? `수량 ${fmt(candidate.qtyTotal, 1)}` : '',
+    candidate.dates?.length ? candidate.dates.slice(-2).join(',') : '',
+    candidate.expectedNames?.length ? `기존 ${candidate.expectedNames.slice(0, 2).join(',')}` : ''
+  ].filter(Boolean).join(' · ');
+}
+
+function bestActualCandidatesForAlias(aliasName, candidates = collectActualOrderCandidates(), limit = 5) {
+  const canonicalAlias = canonicalItemName(aliasName || '');
+  return candidates.map(candidate => {
+    const knownExpected = candidate.expectedNames?.includes(canonicalAlias);
+    const score = knownExpected
+      ? Math.max(0.98, Number(candidate.matchScore || 0))
+      : scoreSiteToMaster(candidate.actualName, canonicalAlias);
+    return { ...candidate, score, reason: aliasCandidateReason(candidate) };
+  })
+    .filter(candidate => candidate.score >= 0.45 || candidate.expectedNames?.includes(canonicalAlias))
+    .sort((a, b) => b.score - a.score || b.evidenceCount - a.evidenceCount || a.actualName.localeCompare(b.actualName, 'ko', { numeric: true }))
+    .slice(0, limit);
+}
+
+function conversionSourceLabel(source) {
+  if (source === 'usage') return '실사용량 비교';
+  if (source === 'manualUnit') return '단위보정';
+  if (source === 'compare') return '최근비교';
+  if (source === 'movement') return '재고추정';
+  if (source === 'item') return '품목기록';
+  if (source === 'unit') return '단위패턴';
+  if (source === 'same') return '동일단위';
+  if (source === 'saved') return '저장값';
+  return source || '분석';
+}
+
+function normalizeConversionFactor(value) {
+  const n = sanitizePositiveNumber(value);
+  if (!n) return null;
+  return Math.round(n * 1000) / 1000;
+}
+
+function conversionDirectionText(factor, orderUnit = '발주단위', checkUnit = '체크/재고') {
+  const labelOrderUnit = orderUnit || '발주단위';
+  const labelCheckUnit = checkUnit || '체크/재고';
+  return `환산값=발주 1${labelOrderUnit}가 체크/재고 ${fmt(factor, 3)}${labelCheckUnit}에 해당`;
+}
+
+function actualNameKeyForUsage(name) {
+  return normalizeSiteItemName(name) || String(name || '').trim();
+}
+
+function usageEstimateFromRecord(record, name) {
+  const row = calcRowFromRecord(record, name) || {};
+  const stockFromMap = record?.stockMap?.has(name) ? Number(record.stockMap.get(name)) : NaN;
+  const stockFromRow = Number(row.stock ?? row.checkedStock ?? row.checked_stock ?? row.stock_qty);
+  const checkedStockQty = Number.isFinite(stockFromMap) ? stockFromMap : stockFromRow;
+  const directNeed = Number(row.stockNeed ?? row.expected_stock_need ?? row.stock_need);
+  if (Number.isFinite(directNeed) && directNeed > 0) {
+    const neededOrExpectedQty = Number.isFinite(checkedStockQty) ? checkedStockQty + directNeed : directNeed;
+    return {
+      usageEstimate: directNeed,
+      neededOrExpectedQty,
+      checkedStockQty: Number.isFinite(checkedStockQty) ? checkedStockQty : null,
+      basis: 'stockNeed'
+    };
+  }
+  const neededOrExpectedQty = Number(
+    row.neededOrExpectedQty ??
+    row.neededStockQty ??
+    row.expectedStockQty ??
+    row.requiredStockQty ??
+    row.targetStockQty ??
+    row.targetStock ??
+    row.neededStock ??
+    row.expectedQty
+  );
+  if (!Number.isFinite(neededOrExpectedQty) || !Number.isFinite(checkedStockQty)) return null;
+  return {
+    usageEstimate: neededOrExpectedQty - checkedStockQty,
+    neededOrExpectedQty,
+    checkedStockQty,
+    basis: 'expectedMinusStock'
+  };
+}
+
+function actualOrderQtyForUsageDate(dateKey, item, actualNameKeys, data = lastSfaCompareData) {
+  const targetDate = normalizeHistoryDateKey(dateKey);
+  if (!targetDate) return null;
+  let qty = 0;
+  let rows = 0;
+  const sources = new Set();
+  const seen = new Set();
+  const acceptsRow = (row, source, fallbackDate = '') => {
+    const rowDate = normalizeHistoryDateKey(row?.orderDateKey || row?.orderDate || fallbackDate);
+    if (rowDate && rowDate !== targetDate) return;
+    const actualName = actualOrderItemName(row);
+    const actualKey = actualNameKeyForUsage(actualName);
+    const expectedName = canonicalItemName(row?.expected_name || row?.expectedName || '');
+    if (expectedName !== item.name && (!actualKey || !actualNameKeys.has(actualKey))) return;
+    const n = Number(row?.sfa_qty ?? row?.siteQty ?? row?.qty ?? row?.actualQty ?? 0);
+    if (!Number.isFinite(n) || n <= 0) return;
+    const key = `${source}|${targetDate}|${expectedName}|${actualKey}|${n}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    qty += n;
+    rows += 1;
+    sources.add(source);
+  };
+
+  Object.entries(sfaActualHistory || {}).forEach(([key, record]) => {
+    if (!record || typeof record !== 'object' || key === 'latest') return;
+    const recordDate = normalizeHistoryDateKey(record.orderDateKey || record.orderDate || key);
+    if (recordDate !== targetDate) return;
+    (Array.isArray(record.rows) ? record.rows : []).forEach(row => acceptsRow(row, '실발주이력', recordDate));
+    Object.entries(record.actualOrders || {}).forEach(([name, value]) => {
+      const actualKey = actualNameKeyForUsage(name);
+      if (canonicalItemName(name) !== item.name && (!actualKey || !actualNameKeys.has(actualKey))) return;
+      acceptsRow({ name, qty: value, expected_name: item.name, orderDateKey: recordDate }, '실발주키', recordDate);
+    });
+  });
+
+  const dataDate = normalizeHistoryDateKey(data?.historySummary?.selectedDate);
+  if (dataDate === targetDate) {
+    (data?.comparison?.matched || []).forEach(row => acceptsRow(row, '최근비교', dataDate));
+    siteRowsFromSfaData(data).forEach(row => acceptsRow(row, '최근SFA', dataDate));
+  }
+
+  return qty > 0 ? { qty, rows, sources: Array.from(sources) } : null;
+}
+
+function summarizeUsageConversionSamples(samples, skipped = 0) {
+  const clean = samples.filter(sample => Number.isFinite(sample.factor) && sample.factor > 0).sort((a, b) => a.factor - b.factor);
+  if (!clean.length) return null;
+  let kept = clean;
+  if (clean.length >= 4) {
+    const q1 = clean[Math.floor((clean.length - 1) * 0.25)].factor;
+    const q3 = clean[Math.floor((clean.length - 1) * 0.75)].factor;
+    const iqr = q3 - q1;
+    const low = iqr > 0 ? q1 - (1.5 * iqr) : q1 * 0.5;
+    const high = iqr > 0 ? q3 + (1.5 * iqr) : q3 * 1.5;
+    kept = clean.filter(sample => sample.factor >= low && sample.factor <= high);
+    if (!kept.length) kept = clean;
+  }
+  const summary = summarizeFactors(kept.map(sample => sample.factor));
+  if (!summary) return null;
+  const dates = kept.map(sample => sample.dateKey).filter(Boolean).sort();
+  const skippedTotal = skipped + (clean.length - kept.length);
+  return {
+    ...summary,
+    source: 'usage',
+    totalSamples: clean.length,
+    skipped: skippedTotal,
+    dateStart: dates[0] || '',
+    dateEnd: dates[dates.length - 1] || '',
+    examples: kept.slice(-2)
+  };
+}
+
+function usageConversionScore(summary) {
+  if (!summary) return 0;
+  let score = 0.7 + (Math.min(Number(summary.samples || 0), 5) * 0.045);
+  const spread = Number(summary.spread || 999);
+  if (summary.samples >= 2 && spread <= 1.5) score += 0.04;
+  if (summary.samples >= 3 && spread <= 1.25) score += 0.05;
+  if (summary.samples >= 3 && spread <= 1.1) score += 0.03;
+  if (summary.skipped) score -= Math.min(0.08, summary.skipped * 0.015);
+  return Math.max(0.55, Math.min(0.97, score));
+}
+
+function usageConversionReason(summary) {
+  if (!summary) return '';
+  const range = summary.dateStart && summary.dateEnd ? `${summary.dateStart}~${summary.dateEnd}` : '날짜미상';
+  const skipped = ` · 제외 ${summary.skipped || 0}건`;
+  return `실사용량 비교 ${summary.samples}건 ${range} · ${conversionDirectionText(summary.factor)} · 예: 체크 10개=발주 1박스이면 10 · 편차 ${fmt(summary.spread || 1, 2)}${skipped}`;
+}
+
+function usageBasedConversionCandidateForAlias(item, data = lastSfaCompareData, records = null) {
+  records = records || historyRecordsWithCurrent(usageHistory, currentAnalysisSnapshot());
+  if (!records.length) return null;
+  const actualNameKeys = new Set();
+  const saved = orderAliasMappings[item.name];
+  if (saved?.actualName) actualNameKeys.add(actualNameKeyForUsage(saved.actualName));
+  bestActualCandidatesForAlias(item.name, collectActualOrderCandidates(data), 8)
+    .forEach(candidate => actualNameKeys.add(actualNameKeyForUsage(candidate.actualName)));
+  let skipped = 0;
+  const samples = [];
+  records.forEach(record => {
+    const usage = usageEstimateFromRecord(record, item.name);
+    if (!usage || !Number.isFinite(usage.usageEstimate) || usage.usageEstimate <= 0) {
+      skipped += 1;
+      return;
+    }
+    const actual = actualOrderQtyForUsageDate(record.dateKey, item, actualNameKeys, data);
+    if (!actual?.qty) {
+      skipped += 1;
+      return;
+    }
+    const factor = usage.usageEstimate / actual.qty;
+    if (!Number.isFinite(factor) || factor <= 0 || factor > 500) {
+      skipped += 1;
+      return;
+    }
+    samples.push({
+      dateKey: record.dateKey,
+      factor,
+      usageEstimate: usage.usageEstimate,
+      actualQty: actual.qty,
+      checkedStockQty: usage.checkedStockQty,
+      neededOrExpectedQty: usage.neededOrExpectedQty,
+      basis: usage.basis,
+      sources: actual.sources
+    });
+  });
+  const summary = summarizeUsageConversionSamples(samples, skipped);
+  if (!summary) return null;
+  return {
+    factor: summary.factor,
+    source: 'usage',
+    score: usageConversionScore(summary),
+    reason: usageConversionReason(summary),
+    summary
+  };
+}
+
+function addConversionCandidate(map, factor, source, score, reason = '') {
+  const clean = normalizeConversionFactor(factor);
+  if (!clean) return;
+  const key = String(clean);
+  const current = map.get(key);
+  const row = {
+    factor: clean,
+    source,
+    score: Number.isFinite(Number(score)) ? Number(score) : 0,
+    reason: reason || `${conversionSourceLabel(source)} 기준`
+  };
+  if (!current || row.score > current.score) map.set(key, row);
+}
+
+function conversionCandidatesForAlias(item, data = lastSfaCompareData, usageRecords = null) {
+  const map = new Map();
+  const saved = orderAliasMappings[item.name];
+  if (saved?.conversionFactor) {
+    addConversionCandidate(map, saved.conversionFactor, 'saved', 1, saved.conversionReason || '저장된 환산값');
+  }
+  const manualFactor = manualUnitFactorForItem(item);
+  if (manualFactor) {
+    addConversionCandidate(map, manualFactor, 'manualUnit', 0.99, '단위 보정 탭 사용자 환산값');
+  }
+  (data?.comparison?.matched || []).forEach(row => {
+    const expectedName = canonicalItemName(row?.expected_name || '');
+    if (expectedName !== item.name) return;
+    const stockNeed = Number(row?.expected_stock_need);
+    const sfaQty = Number(row?.sfa_qty);
+    if (!Number.isFinite(stockNeed) || stockNeed <= 0 || !Number.isFinite(sfaQty) || sfaQty <= 0) return;
+    const score = Math.max(0.6, Number(row?.score || 0));
+    addConversionCandidate(map, stockNeed / sfaQty, 'compare', score, `앱 체크필요 ${fmt(stockNeed, 2)} / 실발주 ${fmt(sfaQty, 2)}`);
+  });
+  const usageCandidate = usageBasedConversionCandidateForAlias(item, data, usageRecords);
+  if (usageCandidate) {
+    addConversionCandidate(map, usageCandidate.factor, usageCandidate.source, usageCandidate.score, usageCandidate.reason);
+  }
+  const analysis = conversionAnalysis[item.name];
+  if (analysis?.factor) {
+    const scoreBySource = { movement: 0.92, item: 0.86, unit: 0.76, same: 0.7 };
+    const source = analysis.source || 'analysis';
+    const reason = [
+      `${conversionSourceLabel(source)} ${analysis.samples || 0}건`,
+      analysis.spread ? `편차 ${fmt(analysis.spread, 2)}` : ''
+    ].filter(Boolean).join(' · ');
+    addConversionCandidate(map, analysis.factor, source, scoreBySource[source] || 0.68, reason);
+  }
+  if (orderUnitParts(item).same) {
+    addConversionCandidate(map, 1, 'same', 0.66, '체크단위와 발주단위가 같음');
+  }
+  return Array.from(map.values())
+    .sort((a, b) => b.score - a.score || a.factor - b.factor)
+    .slice(0, 5);
+}
+
+function conversionCandidateReason(candidate) {
+  if (!candidate) return '환산 후보 없음';
+  return `${conversionSourceLabel(candidate.source)} · ${conversionDirectionText(candidate.factor)} · ${Math.round((candidate.score || 0) * 100)}%${candidate.reason ? ' · ' + candidate.reason : ''}`;
+}
+
+function isUserSelectedAliasStatus(status) {
+  return status === 'confirmed' || status === 'manual';
+}
+
+function candidatePayload(candidate) {
+  if (!candidate) return null;
+  return {
+    actualName: candidate.actualName || '',
+    actualUnit: candidate.actualUnit || '',
+    score: Math.round((candidate.score || 0) * 1000) / 1000,
+    reason: candidate.reason || ''
+  };
+}
+
+function conversionCandidatePayload(candidate) {
+  if (!candidate) return null;
+  return {
+    factor: candidate.factor,
+    orderUnitToStockFactor: candidate.factor,
+    factorMeaning: 'orderUnitToStockFactor: 발주 1단위가 체크/재고 몇 단위인지',
+    source: candidate.source,
+    score: Math.round((candidate.score || 0) * 1000) / 1000,
+    reason: candidate.reason || ''
+  };
+}
+
+function buildOrderAliasMatches(data = lastSfaCompareData) {
+  const actualCandidates = collectActualOrderCandidates(data);
+  const usageRecords = historyRecordsWithCurrent(usageHistory, currentAnalysisSnapshot());
+  const rows = MASTER.slice().sort(defaultOutputCompare).map(item => {
+    const aliasName = item.name;
+    const saved = orderAliasMappings[aliasName];
+    const candidates = bestActualCandidatesForAlias(aliasName, actualCandidates);
+    const conversionCandidates = conversionCandidatesForAlias(item, data, usageRecords);
+    const savedActualLocked = Boolean(saved?.actualName && isUserSelectedAliasStatus(saved.status || 'confirmed'));
+    const selectedCandidate = savedActualLocked
+      ? actualCandidates.find(candidate => candidate.actualName === saved.actualName) || null
+      : null;
+    const defaultCandidate = candidates[0] || null;
+    const conversionDefault = conversionCandidates.find(candidate => candidate.source !== 'saved') || conversionCandidates[0] || null;
+    const savedConversionFactor = normalizeConversionFactor(saved?.conversionFactor);
+    const savedConversionLocked = Boolean(savedConversionFactor && isUserSelectedAliasStatus(saved?.conversionStatus || ''));
+    const actualName = savedActualLocked ? saved.actualName : (defaultCandidate?.actualName || '');
+    const actualUnit = savedActualLocked
+      ? (saved.actualUnit || selectedCandidate?.actualUnit || '')
+      : (defaultCandidate?.actualUnit || '');
+    const score = savedActualLocked ? Number(saved.score || 1) : Number(defaultCandidate?.score || 0);
+    const status = savedActualLocked ? (saved.status || 'confirmed') : (defaultCandidate ? 'default' : 'unmatched');
+    const conversionFactor = savedConversionLocked ? savedConversionFactor : (conversionDefault?.factor || null);
+    const conversionStatus = savedConversionLocked ? (saved.conversionStatus || 'confirmed') : (conversionDefault ? 'default' : 'unmatched');
+    return {
+      aliasName,
+      aliasUnit: item.unit || '',
+      actualName,
+      actualUnit,
+      savedActualName: savedActualLocked ? saved.actualName : '',
+      savedActualUnit: savedActualLocked ? (saved.actualUnit || '') : '',
+      defaultActualName: defaultCandidate?.actualName || '',
+      defaultActualUnit: defaultCandidate?.actualUnit || '',
+      defaultCandidate,
+      effectiveActualName: actualName,
+      effectiveActualUnit: actualUnit,
+      score,
+      source: savedActualLocked ? 'user' : (defaultCandidate ? 'default' : 'suggested'),
+      status,
+      conversionFactor,
+      conversionStatus,
+      savedConversionFactor: savedConversionLocked ? savedConversionFactor : null,
+      defaultConversionFactor: conversionDefault?.factor || null,
+      effectiveConversionFactor: conversionFactor,
+      effectiveConversionStatus: conversionStatus,
+      conversionCandidates,
+      conversionDefault,
+      conversionReason: savedConversionLocked ? (saved?.conversionReason || conversionCandidateReason(conversionDefault)) : conversionCandidateReason(conversionDefault),
+      candidates,
+      suggested: defaultCandidate,
+      reason: (savedActualLocked ? saved?.reason : '') || defaultCandidate?.reason || '실발주 후보 없음'
+    };
+  });
+  const selectedCounts = {};
+  rows.forEach(row => {
+    if (row.actualName && ['confirmed', 'manual'].includes(row.status)) selectedCounts[row.actualName] = (selectedCounts[row.actualName] || 0) + 1;
+  });
+  rows.forEach(row => {
+    if (row.actualName && ['confirmed', 'manual'].includes(row.status) && selectedCounts[row.actualName] > 1) row.status = 'conflict';
+  });
+  return rows.sort((a, b) => {
+    const order = { conflict: 0, unmatched: 1, default: 2, candidate: 2, confirmed: 3, manual: 3 };
+    return (order[a.status] ?? 9) - (order[b.status] ?? 9) || defaultOutputCompare({ name: a.aliasName }, { name: b.aliasName });
+  });
+}
+
+function orderAliasMappingDraftsForPayload(data = lastSfaCompareData) {
+  return buildOrderAliasMatches(data).map(row => ({
+    aliasName: row.aliasName,
+    aliasUnit: row.aliasUnit,
+    actualName: row.effectiveActualName || '',
+    actualUnit: row.effectiveActualUnit || '',
+    savedActualName: row.savedActualName || '',
+    savedActualUnit: row.savedActualUnit || '',
+    defaultActualName: row.defaultActualName || '',
+    defaultActualUnit: row.defaultActualUnit || '',
+    defaultCandidate: candidatePayload(row.defaultCandidate),
+    effectiveActualName: row.effectiveActualName || '',
+    effectiveActualUnit: row.effectiveActualUnit || '',
+    status: row.status,
+    effectiveStatus: row.status,
+    score: Math.round((row.score || 0) * 1000) / 1000,
+    reason: row.reason || '',
+    conversionFactor: row.conversionFactor || null,
+    orderUnitToStockFactor: row.conversionFactor || null,
+    conversionFactorMeaning: '발주 1단위가 체크/재고 몇 단위인지',
+    conversionStatus: row.conversionStatus,
+    savedConversionFactor: row.savedConversionFactor || null,
+    defaultConversionFactor: row.defaultConversionFactor || null,
+    defaultOrderUnitToStockFactor: row.defaultConversionFactor || null,
+    defaultConversionCandidate: conversionCandidatePayload(row.conversionDefault),
+    effectiveConversionFactor: row.effectiveConversionFactor || null,
+    effectiveOrderUnitToStockFactor: row.effectiveConversionFactor || null,
+    effectiveConversionStatus: row.effectiveConversionStatus,
+    conversionScore: Math.round(((row.conversionDefault?.score) || 0) * 1000) / 1000,
+    conversionReason: row.conversionReason || '',
+    conversionCandidates: row.conversionCandidates.map(conversionCandidatePayload),
+    actualCandidates: row.candidates.map(candidatePayload)
+  }));
+}
+
+function effectiveOrderAliasMappingsForPayload(data = lastSfaCompareData) {
+  const out = {};
+  buildOrderAliasMatches(data).forEach(row => {
+    if (!row.effectiveActualName) return;
+    out[row.aliasName] = {
+      aliasName: row.aliasName,
+      aliasUnit: row.aliasUnit,
+      actualName: row.effectiveActualName,
+      actualUnit: row.effectiveActualUnit,
+      status: row.status,
+      source: row.source,
+      score: Math.round((row.score || 0) * 1000) / 1000,
+      defaultActualName: row.defaultActualName || '',
+      confirmedActualName: row.savedActualName || '',
+      conversionFactor: row.effectiveConversionFactor || null,
+      orderUnitToStockFactor: row.effectiveConversionFactor || null,
+      conversionFactorMeaning: '발주 1단위가 체크/재고 몇 단위인지',
+      conversionStatus: row.effectiveConversionStatus,
+      defaultConversionFactor: row.defaultConversionFactor || null,
+      defaultOrderUnitToStockFactor: row.defaultConversionFactor || null,
+      confirmedConversionFactor: row.savedConversionFactor || null,
+      reason: row.reason || '',
+      conversionReason: row.conversionReason || ''
+    };
+  });
+  return out;
+}
+
 function buildOrderSiteMatches(data = lastSfaCompareData) {
   const rows = siteRowsFromSfaData(data);
   const lookup = comparisonRowLookup(data);
@@ -1983,9 +2819,19 @@ function buildOrderSiteMatches(data = lastSfaCompareData) {
 
 function sfaStatusText(status) {
   if (status === 'confirmed') return '확정';
+  if (status === 'default') return '기본';
   if (status === 'candidate') return '후보';
+  if (status === 'manual') return '수동';
   if (status === 'conflict') return '충돌';
   return '미매칭';
+}
+
+function conversionStatusText(status) {
+  if (status === 'manual') return '직접';
+  if (status === 'confirmed') return '확정';
+  if (status === 'default') return '기본';
+  if (status === 'candidate') return '후보';
+  return '미확정';
 }
 
 function masterSelectHtml(row) {
@@ -2014,6 +2860,68 @@ function sfaMatchRowHtml(row) {
     </div>
     ${masterSelectHtml(row)}
     <div class="sfa-match-meta">${escapeHtml(row.targetUnit || candidateText)}</div>
+  </div>`;
+}
+
+function aliasActualSelectHtml(row) {
+  const optionByName = new Map();
+  row.candidates.forEach(candidate => {
+    if (!candidate.actualName || optionByName.has(candidate.actualName)) return;
+    optionByName.set(candidate.actualName, candidate);
+  });
+  if (row.actualName && !optionByName.has(row.actualName)) {
+    optionByName.set(row.actualName, {
+      actualName: row.actualName,
+      actualUnit: row.actualUnit,
+      score: 1,
+      reason: '저장된 확정값'
+    });
+  }
+  const options = ['<option value="">미확정</option>'].concat(Array.from(optionByName.values()).map(candidate => {
+    const selected = candidate.actualName === row.actualName ? ' selected' : '';
+    const scoreText = candidate.score ? ` ${Math.round(candidate.score * 100)}%` : '';
+    const unitText = candidate.actualUnit ? ` · ${candidate.actualUnit}` : '';
+    return `<option value="${escapeHtml(candidate.actualName)}"${selected}>${escapeHtml(candidate.actualName + unitText + scoreText)}</option>`;
+  }));
+  return `<select class="sfa-select sfa-alias-select" data-alias-name="${escapeHtml(row.aliasName)}">${options.join('')}</select>`;
+}
+
+function aliasConversionFieldsHtml(row) {
+  const current = normalizeConversionFactor(row.conversionFactor);
+  const options = ['<option value="">환산값: 발주1=체크/재고</option>'].concat(row.conversionCandidates.map(candidate => {
+    const selected = current && Math.abs(candidate.factor - current) < 0.0005 ? ' selected' : '';
+    const label = `발주1=체크 ${fmt(candidate.factor, 3)} · ${conversionSourceLabel(candidate.source)} ${Math.round((candidate.score || 0) * 100)}%`;
+    return `<option value="${escapeHtml(candidate.factor)}"${selected}>${escapeHtml(label)}</option>`;
+  }));
+  return `<select class="sfa-select sfa-alias-factor-select" data-alias-name="${escapeHtml(row.aliasName)}">${options.join('')}</select>
+    <input class="sfa-edit sfa-alias-factor-input" type="number" inputmode="decimal" step="0.001" data-alias-name="${escapeHtml(row.aliasName)}" value="${escapeHtml(current ?? '')}" placeholder="예: 10">`;
+}
+
+function aliasMatchRowHtml(row) {
+  const candidateText = row.candidates.length
+    ? row.candidates.map(candidate => `${candidate.actualName} ${Math.round(candidate.score * 100)}%`).join(' · ')
+    : '추천 없음';
+  const conversionText = row.conversionFactor
+    ? `환산값 발주1=체크/재고 ${fmt(row.conversionFactor, 3)} · ${conversionStatusText(row.conversionStatus)}`
+    : '환산 후보 없음';
+  const meta = [
+    row.aliasUnit ? `표시단위 ${row.aliasUnit}` : '',
+    row.score ? `추천점수 ${Math.round(row.score * 100)}%` : '',
+    row.source === 'user' ? '사용자 확정' : '기본 선택',
+    '예: 체크 10개=발주 1박스이면 환산값 10',
+    conversionText
+  ].filter(Boolean).join(' · ');
+  const actualText = row.actualName
+    ? `${row.actualName}${row.actualUnit ? ' · ' + row.actualUnit : ''}`
+    : candidateText;
+  return `<div class="sfa-match-row ${row.status}">
+    <div class="sfa-match-status">${sfaStatusText(row.status)}</div>
+    <div>
+      <div class="sfa-match-name">${escapeHtml(row.aliasName)}</div>
+      <div class="sfa-match-meta">${escapeHtml(meta || '사용자사이트 별명')}</div>
+    </div>
+    <div class="sfa-alias-fields">${aliasActualSelectHtml(row)}${aliasConversionFieldsHtml(row)}</div>
+    <div class="sfa-match-meta">${escapeHtml(actualText)}<br>${escapeHtml(row.reason || '')}<br>${escapeHtml(row.conversionReason || '')}</div>
   </div>`;
 }
 
@@ -2078,7 +2986,7 @@ function unitCorrectionRowHtml(item) {
 }
 
 function setSfaAnalysisTab(tab) {
-  sfaActiveTab = ['match', 'unit', 'unmatched', 'io'].includes(tab) ? tab : 'match';
+  sfaActiveTab = ['match', 'alias', 'unit', 'unmatched', 'io'].includes(tab) ? tab : 'match';
   renderSfaAnalysisTab(lastSfaCompareData);
 }
 
@@ -2108,6 +3016,92 @@ function setOrderSiteMapping(siteKey, targetName, siteName = '', siteUnit = '') 
   persistOrderCorrections('mapping');
 }
 
+function setOrderAliasMapping(aliasName, actualName) {
+  const itemName = canonicalItemName(aliasName || '');
+  if (!knownItemNameSet().has(itemName)) return;
+  const nextActual = String(actualName || '').trim();
+  if (!nextActual) {
+    delete orderAliasMappings[itemName];
+  } else {
+    const currentRow = buildOrderAliasMatches(lastSfaCompareData).find(row => row.aliasName === itemName);
+    const candidate = currentRow?.candidates?.find(row => row.actualName === nextActual) ||
+      collectActualOrderCandidates(lastSfaCompareData).find(row => row.actualName === nextActual);
+    const conversionDefault = currentRow?.conversionDefault || currentRow?.conversionCandidates?.[0] || null;
+    const existing = orderAliasMappings[itemName] || {};
+    const conversionFactor = normalizeConversionFactor(existing.conversionFactor) || conversionDefault?.factor || null;
+    const existingConversionLocked = Boolean(normalizeConversionFactor(existing.conversionFactor) && isUserSelectedAliasStatus(existing.conversionStatus));
+    orderAliasMappings[itemName] = {
+      aliasName: itemName,
+      actualName: nextActual,
+      actualUnit: candidate?.actualUnit || '',
+      status: 'confirmed',
+      source: 'user',
+      score: Number(candidate?.score || 1),
+      reason: candidate?.reason || '사용자 실발주항목 확정',
+      ...(conversionFactor ? {
+        conversionFactor,
+        conversionStatus: existingConversionLocked ? existing.conversionStatus : 'default',
+        conversionSource: existing.conversionSource || conversionDefault?.source || '',
+        conversionScore: Number(existing.conversionScore || conversionDefault?.score || 0),
+        conversionReason: existing.conversionReason || conversionCandidateReason(conversionDefault)
+      } : {}),
+      updatedAt: Date.now()
+    };
+  }
+  orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
+  persistOrderCorrections('aliasMapping');
+}
+
+function setOrderAliasConversion(aliasName, value, mode = 'candidate') {
+  const itemName = canonicalItemName(aliasName || '');
+  if (!knownItemNameSet().has(itemName)) return;
+  const factor = normalizeConversionFactor(value);
+  const currentRow = buildOrderAliasMatches(lastSfaCompareData).find(row => row.aliasName === itemName);
+  const existing = orderAliasMappings[itemName] || {};
+  if (!factor) {
+    if (!existing.actualName) return;
+    const next = { ...existing };
+    delete next.conversionFactor;
+    delete next.conversionStatus;
+    delete next.conversionSource;
+    delete next.conversionScore;
+    delete next.conversionReason;
+    next.updatedAt = Date.now();
+    if (isUserSelectedAliasStatus(next.status)) {
+      orderAliasMappings[itemName] = next;
+    } else {
+      delete orderAliasMappings[itemName];
+    }
+    orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
+    persistOrderCorrections('aliasMapping');
+    return;
+  }
+  const selectedConversion = currentRow?.conversionCandidates?.find(candidate => Math.abs(candidate.factor - factor) < 0.0005) || null;
+  const existingActualLocked = Boolean(existing.actualName && isUserSelectedAliasStatus(existing.status));
+  const actualCandidate = existingActualLocked
+    ? currentRow?.candidates?.find(candidate => candidate.actualName === existing.actualName)
+    : currentRow?.candidates?.find(candidate => candidate.actualName === currentRow?.effectiveActualName) || currentRow?.defaultCandidate || currentRow?.suggested;
+  const actualName = existingActualLocked ? existing.actualName : (currentRow?.effectiveActualName || actualCandidate?.actualName || '');
+  if (!actualName) return;
+  orderAliasMappings[itemName] = {
+    aliasName: itemName,
+    actualName,
+    actualUnit: existingActualLocked ? (existing.actualUnit || actualCandidate?.actualUnit || '') : (currentRow?.effectiveActualUnit || actualCandidate?.actualUnit || ''),
+    status: existingActualLocked ? (existing.status || 'confirmed') : 'default',
+    source: existingActualLocked ? (existing.source || 'user') : 'default',
+    score: Number(existing.score || actualCandidate?.score || 0),
+    reason: existing.reason || actualCandidate?.reason || '기본 실발주 후보',
+    conversionFactor: factor,
+    conversionStatus: mode === 'manual' ? 'manual' : 'confirmed',
+    conversionSource: selectedConversion?.source || mode,
+    conversionScore: Number(selectedConversion?.score || 0),
+    conversionReason: selectedConversion ? conversionCandidateReason(selectedConversion) : '사용자 직접 입력',
+    updatedAt: Date.now()
+  };
+  orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
+  persistOrderCorrections('aliasMapping');
+}
+
 function setOrderUnitCorrection(name, field, value) {
   const itemName = canonicalItemName(name || '');
   if (!knownItemNameSet().has(itemName)) return;
@@ -2134,6 +3128,21 @@ function bindSfaCorrectionInputs() {
   document.querySelectorAll('.sfa-match-select').forEach(sel => {
     sel.addEventListener('change', e => {
       setOrderSiteMapping(e.target.dataset.siteKey, e.target.value, e.target.dataset.siteName || '', e.target.dataset.siteUnit || '');
+    });
+  });
+  document.querySelectorAll('.sfa-alias-select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      setOrderAliasMapping(e.target.dataset.aliasName, e.target.value);
+    });
+  });
+  document.querySelectorAll('.sfa-alias-factor-select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      setOrderAliasConversion(e.target.dataset.aliasName, e.target.value, 'candidate');
+    });
+  });
+  document.querySelectorAll('.sfa-alias-factor-input').forEach(inp => {
+    inp.addEventListener('change', e => {
+      setOrderAliasConversion(e.target.dataset.aliasName, e.target.value, 'manual');
     });
   });
   document.querySelectorAll('.sfa-unit-input').forEach(inp => {
@@ -2217,6 +3226,7 @@ function analyzeManualSfaItems() {
 
 function sfaIoOutput(data) {
   const matches = buildOrderSiteMatches(data);
+  const aliasMatches = buildOrderAliasMatches(data);
   const unitRows = unitCorrectionRows(data).map(item => ({
     name: item.name,
     unit: item.unit,
@@ -2233,6 +3243,27 @@ function sfaIoOutput(data) {
       targetName: row.targetName,
       status: sfaStatusText(row.status),
       score: Math.round((row.score || 0) * 100) / 100
+    })),
+    aliasMappings: aliasMatches.map(row => ({
+      aliasName: row.aliasName,
+      aliasUnit: row.aliasUnit,
+      actualName: row.actualName,
+      actualUnit: row.actualUnit,
+      defaultActualName: row.defaultActualName || '',
+      effectiveActualName: row.effectiveActualName || '',
+      status: sfaStatusText(row.status),
+      score: Math.round((row.score || 0) * 100) / 100,
+      conversionFactor: row.conversionFactor,
+      conversionStatus: row.conversionStatus,
+      defaultConversionFactor: row.defaultConversionFactor || null,
+      effectiveConversionFactor: row.effectiveConversionFactor || null,
+      conversionCandidates: row.conversionCandidates.map(candidate => ({
+        factor: candidate.factor,
+        source: candidate.source,
+        score: Math.round((candidate.score || 0) * 100) / 100,
+        reason: candidate.reason
+      })),
+      reason: row.reason
     })),
     unitCorrections: unitRows
   }, null, 2);
@@ -2254,6 +3285,12 @@ function renderSfaAnalysisTab(data = lastSfaCompareData) {
       </div>
       <pre class="sfa-output">${escapeHtml(data ? sfaIoOutput(data) : '분석 결과 없음')}</pre>
     </div>`;
+    return;
+  }
+  if (sfaActiveTab === 'alias') {
+    const aliasRows = buildOrderAliasMatches(data);
+    body.innerHTML = aliasRows.length ? aliasRows.map(aliasMatchRowHtml).join('') : '<div class="sfa-panel-meta">별명 검수 대상 없음</div>';
+    bindSfaCorrectionInputs();
     return;
   }
   if (!data) {
@@ -2355,6 +3392,9 @@ function renderSfaComparePanel(data) {
   const matchRows = buildOrderSiteMatches(data);
   const confirmedCount = matchRows.filter(row => row.status === 'confirmed').length;
   const openCount = matchRows.filter(row => row.status !== 'confirmed').length + expectedMissingRows(data).length;
+  const aliasRows = buildOrderAliasMatches(data);
+  const aliasConfirmedCount = aliasRows.filter(row => row.status === 'confirmed').length;
+  const aliasOpenCount = aliasRows.filter(row => row.status !== 'confirmed').length;
   lastSfaCompareSavedAt = Number(data.savedAt || 0);
 
   title.textContent = data.ok ? '엑셀 오차' : '엑셀 구조 확인';
@@ -2370,6 +3410,8 @@ function renderSfaComparePanel(data) {
     sfaCountChip('SFA만', extra.length),
     sfaCountChip('확정', confirmedCount, 'low'),
     sfaCountChip('미매칭', openCount, openCount ? 'medium' : ''),
+    sfaCountChip('별명확정', aliasConfirmedCount, 'low'),
+    sfaCountChip('별명미확정', aliasOpenCount, aliasOpenCount ? 'medium' : ''),
   ].join('');
 
   if (!data.ok) {
@@ -2469,11 +3511,16 @@ async function requestSfaOrderAnalysis() {
   if (btn) btn.disabled = true;
   const now = Date.now();
   sfaLastRequestAt = now;
+  const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(lastSfaCompareData);
+  const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(lastSfaCompareData);
   const payload = {
     source: 'OrderHelper',
     mode: 'scan_pc_downloads',
     dirHint: 'C:\\Users\\wk771\\Downloads',
     orderSiteMappings,
+    orderAliasMappings,
+    orderAliasMappingDrafts,
+    effectiveOrderAliasMappings,
     orderUnitCorrections,
     requestedAt: now,
     requestedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19)
@@ -2509,6 +3556,7 @@ function saveReasonLabel(reason) {
   if (reason === 'manual') return '수동저장';
   if (reason === 'reset') return '재고 리셋 저장';
   if (reason === 'mapping') return '매칭보정 저장';
+  if (reason === 'aliasMapping') return '별명매칭 저장';
   if (reason === 'unitCorrection') return '단위보정 저장';
   return '자동저장';
 }
@@ -2517,6 +3565,7 @@ function lastSavedLabel(reason) {
   if (reason === 'manual') return '저장';
   if (reason === 'reset') return '리셋저장';
   if (reason === 'mapping') return '매칭보정';
+  if (reason === 'aliasMapping') return '별명매칭';
   if (reason === 'unitCorrection') return '단위보정';
   return '자동저장';
 }
@@ -3041,6 +4090,7 @@ function saveLocal(reason = 'auto') {
   localStorage.setItem(ACTUAL_ORDER_STORAGE_KEY, JSON.stringify(actualOrders));
   localStorage.setItem(ACTUAL_ORDER_DATE_STORAGE_KEY, kstDateKey(Date.now()));
   localStorage.setItem(ORDER_SITE_MAPPING_STORAGE_KEY, JSON.stringify(orderSiteMappings));
+  localStorage.setItem(ORDER_ALIAS_MAPPING_STORAGE_KEY, JSON.stringify(orderAliasMappings));
   localStorage.setItem(ORDER_UNIT_CORRECTION_STORAGE_KEY, JSON.stringify(orderUnitCorrections));
   if (baseSales == null) localStorage.removeItem('bbq_baseSales');
   else {
@@ -3161,7 +4211,9 @@ async function saveToFB(reason = 'manual') {
   const salesWeights = dailyWeights(days).map(x => Math.round(x * 1000) / 1000);
   outputOrder = [];
   actualOrders = cleanActualOrders();
-  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, orderSiteMappings, orderUnitCorrections, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
+  const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(lastSfaCompareData);
+  const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(lastSfaCompareData);
+  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
@@ -3268,6 +4320,7 @@ function applyFBData(data) {
     actualOrders = {};
   }
   if (Object.prototype.hasOwnProperty.call(data, 'orderSiteMappings')) orderSiteMappings = sanitizeOrderSiteMappings(data.orderSiteMappings);
+  if (Object.prototype.hasOwnProperty.call(data, 'orderAliasMappings')) orderAliasMappings = sanitizeOrderAliasMappings(data.orderAliasMappings);
   if (Object.prototype.hasOwnProperty.call(data, 'orderUnitCorrections')) orderUnitCorrections = sanitizeOrderUnitCorrections(data.orderUnitCorrections);
   if (Object.prototype.hasOwnProperty.call(data, 'dailySales')) dailySales = Array.isArray(data.dailySales) ? data.dailySales : [];
   if (Object.prototype.hasOwnProperty.call(data, 'baseSales')) {
@@ -3390,6 +4443,8 @@ try {
   if (ao && aoDate === kstDateKey(Date.now())) actualOrders = cleanActualOrders(JSON.parse(ao));
   const osm = localStorage.getItem(ORDER_SITE_MAPPING_STORAGE_KEY);
   if (osm) orderSiteMappings = sanitizeOrderSiteMappings(JSON.parse(osm));
+  const oam = localStorage.getItem(ORDER_ALIAS_MAPPING_STORAGE_KEY);
+  if (oam) orderAliasMappings = sanitizeOrderAliasMappings(JSON.parse(oam));
   const ouc = localStorage.getItem(ORDER_UNIT_CORRECTION_STORAGE_KEY);
   if (ouc) orderUnitCorrections = sanitizeOrderUnitCorrections(JSON.parse(ouc));
   const ds = localStorage.getItem('bbq_dailySales'); if (ds) dailySales = JSON.parse(ds);

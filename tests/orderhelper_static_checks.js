@@ -31,12 +31,14 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260707-1';/, 'APP_VERSION must be bumped for the order-site matching UI');
+mustMatch(/const APP_VERSION = '20260707-7';/, 'APP_VERSION must be bumped for the fixed order-unit-to-stock factor wording');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
 mustMatch(/const SFA_COMPARE_PATH = `\$\{FB_PATH\}\/sfaCompare\/latest`;/, 'SFA latest comparison path missing');
 mustMatch(/const SFA_ACTUAL_HISTORY_PATH = `\$\{FB_PATH\}\/sfaActualHistory`;/, 'SFA actual order history path missing');
+mustMatch(/const DESKTOP_ACCESS_PATH = `\$\{FB_PATH\}\/desktopAccess`;/, 'desktop access Firebase path missing');
+mustMatch(/const DESKTOP_GRACE_MS = 24 \* 60 \* 60 \* 1000;/, 'desktop grace window must be explicitly 24 hours');
 mustMatchPy(/--validate-local-sfa-history/, 'local SFA history mapping validation flag missing');
 mustMatchPy(/local_sfa_backfill_low_confidence_rows/, 'local SFA mapping validation must expose low-confidence row count');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
@@ -80,8 +82,11 @@ mustMatch(/name:"신선육\(10호\)-뼈한마리",unit:"박\/박스"/, 'fresh me
 mustMatch(/function requestSfaOrderAnalysis\(\)/, 'SFA analysis request button handler missing');
 mustMatch(/id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis\(\)"/, 'SFA analysis request button missing');
 mustMatch(/id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel\(\)">오차보기<\/button>/, 'SFA compare result button missing');
+mustMatch(/id="desktopAccessBtn" type="button" onclick="toggleDesktopAccessPanel\(\)">접근관리<\/button>/, 'desktop access management button missing');
+mustMatch(/id="desktopAccessPanel"/, 'desktop access panel missing');
 mustMatch(/id="sfaComparePanel"/, 'SFA compare panel missing');
 mustMatch(/data-tab="match" onclick="setSfaAnalysisTab\('match'\)">1:1 매칭<\/button>/, '1:1 matching tab missing');
+mustMatch(/data-tab="alias" onclick="setSfaAnalysisTab\('alias'\)">별명 검수<\/button>/, 'alias review tab missing');
 mustMatch(/data-tab="unit" onclick="setSfaAnalysisTab\('unit'\)">단위 보정<\/button>/, 'unit correction tab missing');
 mustMatch(/data-tab="unmatched" onclick="setSfaAnalysisTab\('unmatched'\)">미매칭<\/button>/, 'unmatched tab missing');
 mustMatch(/data-tab="io" onclick="setSfaAnalysisTab\('io'\)">입출력<\/button>/, 'analysis IO tab missing');
@@ -112,17 +117,60 @@ mustMatch(/const observedDelivery = currStock - prevStock \+ expectedUsage;/, 's
 mustMatch(/result\[item\.name\] = \{ \.\.\.movement, source: 'movement'/, 'movement-derived conversion must override manual unit labels when usable');
 mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order quantity converter missing');
 mustMatch(/let orderSiteMappings = \{\};/, 'order-site mapping correction state missing');
+mustMatch(/let orderAliasMappings = \{\};/, 'order alias mapping correction state missing');
 mustMatch(/let orderUnitCorrections = \{\};/, 'order-unit correction state missing');
 mustMatch(/const ORDER_SITE_MAPPING_STORAGE_KEY = 'bbq_order_site_mappings';/, 'order-site mapping local storage key missing');
+mustMatch(/const ORDER_ALIAS_MAPPING_STORAGE_KEY = 'bbq_order_alias_mappings';/, 'order alias mapping local storage key missing');
 mustMatch(/const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';/, 'order-unit correction local storage key missing');
 mustMatch(/function normalizeSiteItemName\(text\)/, 'site item normalizer missing');
 mustMatch(/function scoreSiteToMaster\(siteName, masterName\)/, 'site/master score helper missing');
 mustMatch(/function buildOrderSiteMatches\(data = lastSfaCompareData\)/, 'order-site matching builder missing');
+mustMatch(/function collectActualOrderCandidates\(data = lastSfaCompareData\)/, 'actual order candidate collector missing');
+mustMatch(/function bestActualCandidatesForAlias\(aliasName, candidates = collectActualOrderCandidates\(\), limit = 5\)/, 'alias candidate scorer missing');
+mustMatch(/function usageEstimateFromRecord\(record, name\)/, 'usage estimate resolver missing');
+mustMatch(/function actualOrderQtyForUsageDate\(dateKey, item, actualNameKeys, data = lastSfaCompareData\)/, 'date-matched SFA actual order resolver missing');
+mustMatch(/function usageBasedConversionCandidateForAlias\(item, data = lastSfaCompareData, records = null\)/, 'usage-based conversion candidate builder missing');
+mustMatch(/function conversionCandidatesForAlias\(item, data = lastSfaCompareData, usageRecords = null\)/, 'alias conversion candidate builder missing');
+mustMatch(/function orderAliasMappingDraftsForPayload\(data = lastSfaCompareData\)/, 'alias draft payload builder missing');
+mustMatch(/function effectiveOrderAliasMappingsForPayload\(data = lastSfaCompareData\)/, 'effective alias mapping payload builder missing');
+mustMatch(/function buildOrderAliasMatches\(data = lastSfaCompareData\)/, 'order alias matching builder missing');
+mustMatch(/const usageRecords = historyRecordsWithCurrent\(usageHistory, currentAnalysisSnapshot\(\)\);/, 'alias matching should build usage conversion records once');
 mustMatch(/function setOrderSiteMapping\(siteKey, targetName, siteName = '', siteUnit = ''\)/, 'order-site mapping setter missing');
+mustMatch(/function setOrderAliasMapping\(aliasName, actualName\)/, 'order alias mapping setter missing');
+mustMatch(/function setOrderAliasConversion\(aliasName, value, mode = 'candidate'\)/, 'order alias conversion setter missing');
+mustMatch(/const allowedStatuses = new Set\(\['candidate', 'default', 'confirmed', 'manual'\]\);/, 'alias mapping sanitizer must preserve default status');
+mustMatch(/if \(status === 'default'\) return '기본';/, 'alias default status must be visible in UI');
+mustMatch(/function conversionStatusText\(status\)/, 'conversion status label helper missing');
+mustMatch(/effectiveOrderAliasMappings,/, 'SFA request payload must include effective alias mappings');
+mustMatch(/if \(source === 'usage'\) return '실사용량 비교';/, 'usage-based conversion source label missing');
+mustMatch(/function conversionDirectionText\(factor, orderUnit = '발주단위', checkUnit = '체크\/재고'\)/, 'conversion direction helper missing');
+mustMatch(/환산값=발주 1\$\{labelOrderUnit\}가 체크\/재고 \$\{fmt\(factor, 3\)\}\$\{labelCheckUnit\}에 해당/, 'conversion direction helper must define stock/check units per one order unit');
+mustMatch(/실사용량 비교 \$\{summary\.samples\}건/, 'usage-based conversion reason must show sample count');
+mustMatch(/예: 체크 10개=발주 1박스이면 10/, 'conversion UI/reason must include the user example');
+mustMatch(/제외 \$\{summary\.skipped \|\| 0\}건/, 'usage-based conversion reason must show skipped/outlier count');
 mustMatch(/function setOrderUnitCorrection\(name, field, value\)/, 'order-unit correction setter missing');
+mustMatch(/class="sfa-select sfa-alias-factor-select"/, 'alias conversion candidate selector missing');
+mustMatch(/class="sfa-edit sfa-alias-factor-input"/, 'alias conversion direct input missing');
+mustMatch(/환산값: 발주1=체크\/재고/, 'alias conversion selector must state the factor direction');
+mustMatch(/placeholder="예: 10"/, 'alias conversion direct input should show the 10-per-box example value');
+mustMatch(/환산값 발주1=체크\/재고 \$\{fmt\(row\.conversionFactor, 3\)\}/, 'alias row must show fixed conversion direction');
+mustMatch(/orderUnitToStockFactor: candidate\.factor/, 'conversion candidate payload must include orderUnitToStockFactor alias');
+mustMatch(/conversionFactorMeaning: '발주 1단위가 체크\/재고 몇 단위인지'/, 'analysis payload must include conversion factor meaning');
 mustMatch(/function parseManualSfaItemsText\(text\)/, 'manual analysis input parser missing');
 mustMatch(/function fillSfaManualItemsSample\(\)/, 'manual analysis sample filler missing');
 mustMatch(/function renderSfaAnalysisTab\(data = lastSfaCompareData\)/, 'analysis tab renderer missing');
+mustMatch(/function loadDesktopAccessState\(silent = true\)/, 'desktop access state loader missing');
+mustMatch(/function recordDesktopAuthCandidate\(device, hash, reason = 'gps_unavailable', state = desktopAccessState\)/, 'desktop auth candidate recorder missing');
+mustMatch(/function desktopDeviceApproved\(hash, state = desktopAccessState\)/, 'approved desktop device fallback missing');
+mustMatch(/row\.enabled !== false && row\.status === 'approved' && row\.isDesktop === true/, 'approved fallback must remain desktop-token scoped');
+mustMatch(/function isDesktopGraceActive\(state = desktopAccessState, now = Date\.now\(\)\)/, 'desktop grace expiry check missing');
+mustMatch(/function startDesktopGraceWindow\(\)/, 'desktop grace start action missing');
+mustMatch(/function approveDesktopDevice\(hash\)/, 'desktop candidate approval action missing');
+mustMatch(/status: 'approved'[\s\S]*approvedBy: 'orderhelper_ui'/, 'desktop approval must persist approved status and source');
+mustMatch(/status = existing\.status === 'approved' \? 'approved' : \(isDesktopGraceActive\(state\) \? 'candidate' : 'pending'\)/, 'grace candidates must not become approved automatically');
+mustMatch(/if \(desktopDeviceApproved\(hash, state\)\)[\s\S]*return 'desktop';/, 'approved desktop must pass GPS fallback');
+mustMatch(/if \(isDesktopGraceActive\(state\)\) return 'desktop-grace';/, 'active grace window must allow temporary desktop fallback');
+mustMatch(/function hasTrustedIpFactor\(\) \{[\s\S]*return false;\s*\}/, 'IP-only factor must not be trusted by the static client');
 mustMatch(/Array\.isArray\(parsed\.mappings\)/, 'manual analysis input must accept exported mapping JSON');
 mustMatch(/const manualFactor = manualUnitFactorForItem\(item\);\s*if \(manualFactor\) return manualFactor;/, 'manual unit factor must override inferred conversion');
 mustMatch(/if \(multiple\) out = Math\.ceil\(\(out - 1e-9\) \/ multiple\) \* multiple;/, 'manual order multiple must round up order qty');
@@ -130,7 +178,7 @@ mustMatch(/if \(minOrderQty\) out = Math\.max\(out, minOrderQty\);/, 'manual min
 mustMatch(/spread: max \/ Math\.max\(min, 1e-9\)/, 'unit conversion summaries must track consistency spread');
 mustMatch(/analysis\?\.source === 'unit'[\s\S]*Number\(analysis\.samples \|\| 0\) >= 3[\s\S]*Number\(analysis\.spread \|\| 999\) <= 1\.25/, 'stable unit-pair patterns must be used for order quantity conversion');
 mustMatch(/같은 단위 기록 \$\{analysis\.samples\}건 기준/, 'unit-pair conversion analysis must be visible to the user');
-mustMatch(/단위환산 분석: orderUnitToStockFactor \$\{fmt\(analysis\.factor, 2\)\}\. 발주환산 1\$\{parts\.orderUnit \|\| '발주단위'\}=\$\{fmt\(analysis\.factor, 2\)\}\$\{parts\.checkUnit \|\| '재고단위'\} \(재고 변동 \$\{analysis\.samples\}건\)\./, 'movement-derived unit conversion must be disclosed separately from amount analysis');
+mustMatch(/단위환산 분석: orderUnitToStockFactor \$\{fmt\(analysis\.factor, 2\)\}\. \$\{conversionDirectionText\(analysis\.factor, parts\.orderUnit \|\| '발주단위', parts\.checkUnit \|\| '재고단위'\)\} \(재고 변동 \$\{analysis\.samples\}건\)\. 예: 체크 10개=발주 1박스이면 환산값 10\./, 'movement-derived unit conversion must disclose fixed factor direction');
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
 mustMatch(/function renderOrderAmountSpan\(item, stockNeed\)/, 'output order amount renderer missing');
@@ -151,12 +199,13 @@ mustMatch(/updateDailyAnalysisForName\(name\);\s*updateOutputOrderForName\(name\
 mustMatch(/setOverrideValue\(name, field, value\);\s*saveLocal\(\);\s*updateOutputOrderForName\(name\);/, 'output buffer/daily edits must refresh order quantity');
 mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l changes must save');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
-mustMatch(/actualOrders, orderSiteMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include actual orders and corrections');
+mustMatch(/actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include actual orders and corrections');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
 mustMatch(/const convertedActual = orderUnitToStockFactor \? actual \* orderUnitToStockFactor : actual;/, 'usage analysis must convert actual SFA order quantity back to stock-check units');
+mustMatch(/orderUnitToStockFactor direction: one order unit contains this many stock\/check units\./, 'orderUnitToStockFactor direction comment missing');
 mustMatch(/function actualOrderForInterval\(prev, curr, name\)/, 'usage analysis must join SFA actual orders by stock interval');
 mustMatch(/function orderQtyForInterval\(prev, curr, name\)/, 'usage analysis must convert interval SFA orders to stock units');
-mustMatch(/구간실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 발주환산 1발주=\$\{fmt\(last\.orderUnitToStockFactor \|\| 1, 2\)\}재고 \/ 재고환산 \$\{fmt\(last\.orderQty, 2\)\}/, 'analysis title must disclose interval actual order and stock conversion');
+mustMatch(/구간실발주 \$\{fmt\(last\.actualQty, 0\)\} \/ 환산값 발주1=체크\/재고 \$\{fmt\(last\.orderUnitToStockFactor \|\| 1, 2\)\} \/ 재고환산 \$\{fmt\(last\.orderQty, 2\)\}/, 'analysis title must disclose interval actual order and fixed stock conversion direction');
 mustMatch(/실발주\+재고 실사용/, 'analysis title must identify actual usage basis');
 mustMatch(/최근 기준매출환산/, 'analysis title must disclose the recent history context');
 mustMatch(/function getL\(item\) \{\s*return baseDailyUsage\(item\);\s*\}/, 'manual daily usage must remain the calculation/display value');
@@ -175,7 +224,7 @@ mustMatch(/function getOutputItems\(days\)/, 'output item sort helper missing');
 mustMatch(/function moveOutputItem\(name, direction\)/, 'output move helper missing');
 mustMatch(/return MASTER\.filter\(item => calcG\(item, days\) > 0\)\.sort\(defaultOutputCompare\);/, 'output view must use the initial default order');
 mustMatch(/localStorage\.removeItem\(OUTPUT_ORDER_STORAGE_KEY\)/, 'stored custom output order must be cleared locally');
-mustMatch(/outputOrder, actualOrders, orderSiteMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include output, actual order, and corrections');
+mustMatch(/outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include output, actual order, and corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'outputOrder'\)\) outputOrder = \[\];/, 'Firebase sync must ignore saved custom output order');
 mustNotMatch(/outputOrder = visibleNames\.concat\(remaining\);/, 'output move must not persist custom order');
 mustNotMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(outputOrder\)\)/, 'custom output order must not be stored locally');
@@ -216,6 +265,7 @@ mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderDays'\)\) s
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'entries'\)\) entries = migrateEntriesByName\(data\.entries\);/, 'Firebase sync must apply empty entries payloads by ownership check');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'overrides'\)\) overrides = migrateNamedObject\(data\.overrides\);/, 'Firebase sync must apply cleared overrides payloads');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderSiteMappings'\)\) orderSiteMappings = sanitizeOrderSiteMappings\(data\.orderSiteMappings\);/, 'Firebase sync must apply order-site mapping corrections');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderAliasMappings'\)\) orderAliasMappings = sanitizeOrderAliasMappings\(data\.orderAliasMappings\);/, 'Firebase sync must apply order alias mapping corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderUnitCorrections'\)\) orderUnitCorrections = sanitizeOrderUnitCorrections\(data\.orderUnitCorrections\);/, 'Firebase sync must apply order-unit corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
@@ -297,7 +347,7 @@ const sandbox = {
     randomUUID() { return 'test-device'; },
     subtle: { digest: async () => new Uint8Array(32).buffer },
   },
-  navigator: { geolocation: { getCurrentPosition() {} } },
+  navigator: { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)', platform: 'Linux x86_64', language: 'ko-KR', maxTouchPoints: 0, geolocation: { getCurrentPosition() {} } },
   window: { addEventListener() {} },
   document: {
     body: makeElement('body'),
@@ -324,12 +374,19 @@ this.__OrderHelperApi = {
   normalizeSiteItemName,
   scoreSiteToMaster,
   buildOrderSiteMatches,
+  collectActualOrderCandidates,
+  buildOrderAliasMatches,
+  orderAliasMappingDraftsForPayload,
+  effectiveOrderAliasMappingsForPayload,
   parseManualSfaItemsText,
   siteItemAmount,
   recommendedOrderQty,
   conversionFactorForItem,
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
+  setAliasMappingsForCheck(value) { orderAliasMappings = sanitizeOrderAliasMappings(value); },
+  setUsageHistoryForCheck(value) { usageHistory = value || {}; },
+  setSfaActualHistoryForCheck(value) { sfaActualHistory = value || {}; },
 };`, sandbox);
 
 const api = sandbox.__OrderHelperApi;
@@ -355,10 +412,96 @@ assert.deepStrictEqual(plain(api.parseManualSfaItemsText(JSON.stringify({ mappin
 const compareOnlyData = {
   ok: true,
   items: [{ name: 'BBQ치즈볼', unit: 'BOX', row_index: 9 }],
-  comparison: { matched: [{ row_index: 9, sfa_name: 'BBQ치즈볼', sfa_qty: 5, sfa_unit: 'BOX', sfa_amount: '12,000', expected_name: '냉동-치즈볼-BBQ치즈볼(크림)', score: 0.96 }], missing: [], extra: [] },
+  comparison: { matched: [{ row_index: 9, sfa_name: 'BBQ치즈볼', sfa_qty: 5, sfa_unit: 'BOX', sfa_amount: '12,000', expected_name: '냉동-치즈볼-BBQ치즈볼(크림)', expected_stock_need: 10, score: 0.96 }], missing: [], extra: [] },
 };
 matches = api.buildOrderSiteMatches(compareOnlyData);
 assert.strictEqual(matches[0].siteQty, 5, 'matching builder should preserve comparison quantity when source row lacks it');
 assert.strictEqual(matches[0].amount, 12000, 'matching builder should preserve comparison amount when source row lacks it');
+let aliasRows = api.buildOrderAliasMatches(compareOnlyData);
+let cheeseAlias = aliasRows.find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+assert(cheeseAlias, 'alias matching builder should include MASTER aliases');
+assert.strictEqual(cheeseAlias.status, 'default', 'high-confidence alias suggestion must become the default selection until user saves it');
+assert.strictEqual(cheeseAlias.actualName, 'BBQ치즈볼', 'alias matching builder should preselect the default actual SFA item name');
+assert.strictEqual(cheeseAlias.defaultActualName, 'BBQ치즈볼', 'alias matching builder should expose the default actual SFA item name');
+assert.strictEqual(cheeseAlias.effectiveActualName, 'BBQ치즈볼', 'alias matching builder should use the default actual name as effective value');
+assert.strictEqual(cheeseAlias.suggested.actualName, 'BBQ치즈볼', 'alias matching builder should keep the highest SFA item as suggested/default candidate');
+assert.strictEqual(cheeseAlias.conversionFactor, 2, 'alias matching builder should prefill conversion default from expected stock need / SFA qty');
+assert.strictEqual(cheeseAlias.conversionStatus, 'default', 'conversion default must stay default until user confirms or edits it');
+assert.strictEqual(cheeseAlias.effectiveConversionFactor, 2, 'alias matching builder should use the default conversion as effective value');
+assert(cheeseAlias.conversionCandidates.some(row => row.factor === 2 && row.source === 'compare'), 'conversion candidates should include compare-derived factor');
+let aliasDraft = api.orderAliasMappingDraftsForPayload(compareOnlyData).find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+assert.strictEqual(aliasDraft.status, 'default', 'alias draft should preserve default status');
+assert.strictEqual(aliasDraft.defaultActualName, 'BBQ치즈볼', 'alias draft should include default actual name');
+assert.strictEqual(aliasDraft.effectiveActualName, 'BBQ치즈볼', 'alias draft should include effective actual name');
+assert.strictEqual(aliasDraft.defaultConversionFactor, 2, 'alias draft should include default conversion factor');
+assert.strictEqual(aliasDraft.effectiveConversionFactor, 2, 'alias draft should include effective conversion factor');
+let effectiveAliases = api.effectiveOrderAliasMappingsForPayload(compareOnlyData);
+assert.strictEqual(effectiveAliases[cheeseAlias.aliasName].actualName, 'BBQ치즈볼', 'effective alias payload should use default actual name when no confirmed mapping exists');
+assert.strictEqual(effectiveAliases[cheeseAlias.aliasName].conversionFactor, 2, 'effective alias payload should use default conversion when no manual conversion exists');
+api.setAliasMappingsForCheck({ [cheeseAlias.aliasName]: { actualName: 'BBQ치즈볼', actualUnit: 'BOX' } });
+aliasRows = api.buildOrderAliasMatches(compareOnlyData);
+cheeseAlias = aliasRows.find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+assert.strictEqual(cheeseAlias.status, 'confirmed', 'saved alias mapping should mark the alias as confirmed');
+assert.strictEqual(cheeseAlias.actualName, 'BBQ치즈볼', 'saved alias mapping should preserve the selected actual order item');
+api.setAliasMappingsForCheck({ [cheeseAlias.aliasName]: { actualName: 'BBQ치즈볼', actualUnit: 'BOX', status: 'confirmed', conversionFactor: 2.5, conversionStatus: 'manual', conversionReason: '직접 입력' } });
+aliasRows = api.buildOrderAliasMatches(compareOnlyData);
+cheeseAlias = aliasRows.find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+assert.strictEqual(cheeseAlias.conversionFactor, 2.5, 'saved alias mapping should preserve manual conversion factor');
+assert.strictEqual(cheeseAlias.conversionStatus, 'manual', 'saved alias mapping should preserve manual conversion status');
+aliasDraft = api.orderAliasMappingDraftsForPayload(compareOnlyData).find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+assert.strictEqual(aliasDraft.conversionFactor, 2.5, 'alias draft payload should include conversion factor');
+api.setAliasMappingsForCheck({});
+api.setSfaActualHistoryForCheck({
+  '20260701': {
+    rows: [{ expected_name: '냉동-치즈볼-BBQ황금알치즈볼', sfa_name: 'BBQ황금알치즈볼', sfa_qty: 1, sfa_unit: 'BOX', score: 0.97 }]
+  }
+});
+const historyCandidates = api.collectActualOrderCandidates(null);
+assert(historyCandidates.some(row => row.actualName === 'BBQ황금알치즈볼'), 'actual order candidates should include SFA actual history rows');
+api.setUsageHistoryForCheck({
+  '20260701': {
+    savedAt: Date.UTC(2026, 6, 1),
+    dateKey: '20260701',
+    entries: [{ name: '냉동-치즈볼-BBQ치즈볼(크림)', stock: 4 }],
+    calc: { '냉동-치즈볼-BBQ치즈볼(크림)': { stockNeed: 10, stock: 4 } }
+  },
+  '20260702': {
+    savedAt: Date.UTC(2026, 6, 2),
+    dateKey: '20260702',
+    entries: [{ name: '냉동-치즈볼-BBQ치즈볼(크림)', stock: 5 }],
+    calc: { '냉동-치즈볼-BBQ치즈볼(크림)': { stockNeed: 12, stock: 5 } }
+  },
+  '20260703': {
+    savedAt: Date.UTC(2026, 6, 3),
+    dateKey: '20260703',
+    entries: [{ name: '냉동-치즈볼-BBQ치즈볼(크림)', stock: 6 }],
+    calc: { '냉동-치즈볼-BBQ치즈볼(크림)': { stockNeed: 8, stock: 6 } }
+  }
+});
+api.setSfaActualHistoryForCheck({
+  '20260701': {
+    rows: [{ expected_name: '냉동-치즈볼-BBQ치즈볼(크림)', sfa_name: 'BBQ치즈볼', sfa_qty: 5, sfa_unit: 'BOX', score: 0.97 }]
+  },
+  '20260702': {
+    rows: [{ expected_name: '냉동-치즈볼-BBQ치즈볼(크림)', sfa_name: 'BBQ치즈볼', sfa_qty: 6, sfa_unit: 'BOX', score: 0.97 }]
+  },
+  '20260703': {
+    rows: [{ expected_name: '냉동-치즈볼-BBQ치즈볼(크림)', sfa_name: 'BBQ치즈볼', sfa_qty: 4, sfa_unit: 'BOX', score: 0.97 }]
+  }
+});
+aliasRows = api.buildOrderAliasMatches({ comparison: { matched: [], missing: [], extra: [] } });
+cheeseAlias = aliasRows.find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+const usageConversion = cheeseAlias.conversionCandidates.find(row => row.source === 'usage');
+assert(usageConversion, 'usage-based conversion candidate should be generated from dated stock and actual order history');
+assert.strictEqual(usageConversion.factor, 2, 'usage-based conversion should use usageEstimate / actual SFA qty as stock-per-order factor');
+assert(usageConversion.reason.includes('실사용량 비교 3건'), 'usage-based conversion reason should show sample count');
+assert(usageConversion.reason.includes('환산값=발주 1') && usageConversion.reason.includes('체크/재고') && usageConversion.reason.includes('2'), 'usage-based conversion reason should disclose stock/check units per one order unit');
+assert(usageConversion.reason.includes('예: 체크 10개=발주 1박스이면 10'), 'usage-based conversion reason should include the user example');
+assert.strictEqual(cheeseAlias.conversionDefault.source, 'usage', 'stable usage-based conversion should become the default conversion candidate');
+aliasDraft = api.orderAliasMappingDraftsForPayload({ comparison: { matched: [], missing: [], extra: [] } }).find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+assert.strictEqual(aliasDraft.defaultConversionCandidate.source, 'usage', 'alias draft payload should preserve usage conversion evidence source');
+assert.strictEqual(aliasDraft.effectiveConversionFactor, 2, 'alias draft payload should use usage conversion as effective default');
+assert.strictEqual(aliasDraft.effectiveOrderUnitToStockFactor, 2, 'alias draft payload should expose effective orderUnitToStockFactor');
+assert.strictEqual(aliasDraft.conversionFactorMeaning, '발주 1단위가 체크/재고 몇 단위인지', 'alias draft payload should explain conversion factor direction');
 
 console.log('OrderHelper static checks OK');
