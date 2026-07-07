@@ -64,7 +64,7 @@
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
 - 최신 기준: `20260707-9` / 체크 입력 행 inline 별명·환산 보정 / GPS 허용 반경 임시 700m / SFA 사이트 품목↔내부 발주항목 1:1 매칭, 사용자사이트 별명→실발주항목+환산값 default/effective 분석 payload, 날짜별 실사용량 비교 환산 후보, `발주1단위=체크/재고 N단위` 방향 고정, GPS 없는 desktop 승인/grace fallback, 단위 보정, 미매칭 확인, 수동/JSON 입출력 패널 / 하루사용량 계산은 수동값 기준, 실사용량 분석은 참고 표시 전용, 엑셀 실발주 이력은 참고 배지 즉시 반영 / SFA 의미상 별도 품목은 별도 MASTER target 유지 / 출력순서는 최초 SFA 순서 고정 / 라이브 `https://wk7007-wk.github.io/OrderHelper/`
-- 완료 포인터: `3d600a8 Add OrderHelper SFA item matching panel`; root pointer `759a867 Update OrderHelper matching pointer`.
+- 완료 포인터: `d72de17 Add inline alias correction controls`; 이전 root pointer `759a867 Update OrderHelper matching pointer`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `git diff --check`. 실제 공장 PC 브라우저/SiteBot 화면 검증은 아직 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.
