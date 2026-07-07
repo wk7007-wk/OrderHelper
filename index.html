@@ -48,6 +48,30 @@
   .sfa-row .item { white-space: normal; word-break: keep-all; color: #e5e7eb; }
   .sfa-row .qty { text-align: right; font-variant-numeric: tabular-nums; color: #fff; font-weight: 800; }
   .sfa-row .reason { grid-column: 2 / 4; color: #9aa7b7; font-size: 11px; white-space: normal; }
+  .sfa-tabs { display: flex; gap: 5px; flex-wrap: wrap; }
+  .sfa-tab { background: rgba(15, 52, 96, 0.72); color: #cbd5e1; border: 1px solid rgba(49, 90, 141, 0.72); border-radius: 6px; padding: 6px 10px; font-size: 11px; font-weight: 800; cursor: pointer; }
+  .sfa-tab.active { background: #e94560; border-color: #e94560; color: #fff; }
+  .sfa-match-row { display: grid; grid-template-columns: 68px minmax(150px, 1.2fr) minmax(160px, 1fr) minmax(110px, .7fr); gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(15, 52, 96, 0.35); }
+  .sfa-match-row.confirmed { border-color: rgba(34, 197, 94, 0.34); background: rgba(34, 197, 94, 0.08); }
+  .sfa-match-row.candidate { border-color: rgba(59, 130, 246, 0.36); background: rgba(59, 130, 246, 0.09); }
+  .sfa-match-row.conflict { border-color: rgba(239, 68, 68, 0.44); background: rgba(239, 68, 68, 0.11); }
+  .sfa-match-row.unmatched { border-color: rgba(249, 115, 22, 0.4); background: rgba(249, 115, 22, 0.1); }
+  .sfa-match-status { font-size: 11px; font-weight: 900; }
+  .sfa-match-row.confirmed .sfa-match-status { color: #bbf7d0; }
+  .sfa-match-row.candidate .sfa-match-status { color: #bfdbfe; }
+  .sfa-match-row.conflict .sfa-match-status { color: #fecaca; }
+  .sfa-match-row.unmatched .sfa-match-status { color: #fed7aa; }
+  .sfa-match-name { white-space: normal; word-break: keep-all; color: #e5e7eb; }
+  .sfa-match-meta { color: #9aa7b7; font-size: 11px; line-height: 1.35; white-space: normal; }
+  .sfa-select, .sfa-edit, .sfa-textarea { width: 100%; background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 7px 8px; font-size: 12px; }
+  .sfa-select:focus, .sfa-edit:focus, .sfa-textarea:focus { outline: none; border-color: #e94560; }
+  .sfa-unit-fields { display: grid; grid-template-columns: repeat(3, minmax(52px, 1fr)); gap: 5px; }
+  .sfa-unit-fields label { display: grid; gap: 3px; color: #9aa7b7; font-size: 10px; }
+  .sfa-io-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .sfa-textarea { min-height: 150px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.35; }
+  .sfa-output { min-height: 150px; max-height: 280px; overflow: auto; margin: 0; padding: 8px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(8, 14, 24, 0.62); color: #dbeafe; font-size: 11px; white-space: pre-wrap; }
+  .sfa-mini-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .sfa-mini-actions button { background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 6px 9px; font-size: 11px; font-weight: 800; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; min-width: 760px; border-collapse: collapse; }
   thead { background: #0f3460; z-index: 5; }
@@ -153,6 +177,10 @@
     .sfa-panel-actions { width: 100%; margin-left: 0; }
     .sfa-panel-actions button { flex: 1; padding: 8px 9px; }
     .sfa-row { grid-template-columns: 46px minmax(0, 1fr) auto; }
+    .sfa-match-row { grid-template-columns: 56px minmax(0, 1fr); }
+    .sfa-match-row .sfa-select,
+    .sfa-match-row .sfa-unit-fields { grid-column: 1 / -1; }
+    .sfa-io-grid { grid-template-columns: 1fr; }
     .table-wrap { border-top: 1px solid #0f3460; }
   }
 </style>
@@ -200,6 +228,12 @@
     </span>
   </div>
   <div class="sfa-counts" id="sfaCompareCounts"></div>
+  <div class="sfa-tabs" id="sfaAnalysisTabs">
+    <button class="sfa-tab active" type="button" data-tab="match" onclick="setSfaAnalysisTab('match')">1:1 매칭</button>
+    <button class="sfa-tab" type="button" data-tab="unit" onclick="setSfaAnalysisTab('unit')">단위 보정</button>
+    <button class="sfa-tab" type="button" data-tab="unmatched" onclick="setSfaAnalysisTab('unmatched')">미매칭</button>
+    <button class="sfa-tab" type="button" data-tab="io" onclick="setSfaAnalysisTab('io')">입출력</button>
+  </div>
   <div class="sfa-list" id="sfaCompareBody"></div>
 </div>
 
@@ -258,7 +292,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260626-1';
+const APP_VERSION = '20260707-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -279,7 +313,7 @@ const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30000;
 const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
 const AUTH_GEO = { storeLat: 37.2528352, storeLng: 127.4900516, radiusM: 150, deviceKey: 'bbq_desk_auth_device_v1', allowedDeviceHashes: ['d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08','c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c'],
-      allowedDevices:{"d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08":{"enabled":true,"label":"사장","updatedAt":"2026-06-26T18:39:12+00:00"},"c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c":{"enabled":true,"label":"규","updatedAt":"2026-06-26T20:28:46+00:00"}}, ipFactorReserved: true };
+      allowedDevices:{"d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08":{"enabled":true,"label":"사장","updatedAt":"2026-06-26T18:39:12+00:00"},"c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c":{"enabled":true,"label":"메인피시","updatedAt":"2026-06-27T11:30:18+00:00","phoneLast4":"0000"}}, ipFactorReserved: true };
 let pinAttempts = 0;
 let pinLockUntil = 0;
 let orderHelperStarted = false;
@@ -529,11 +563,14 @@ let saveLogs = [];
 let debugLogs = [];
 let outputOrder = [];
 let actualOrders = {};
+let orderSiteMappings = {};
+let orderUnitCorrections = {};
 let conversionAnalysis = {};
 let sfaStatusInitialized = false;
 let lastSfaStatusKey = '';
 let sfaLastRequestAt = 0;
 let sfaCompareVisible = false;
+let sfaActiveTab = 'match';
 let lastSfaCompareSavedAt = 0;
 let lastSfaCompareStatusKey = '';
 let lastSfaCompareData = null;
@@ -583,11 +620,57 @@ function migrateOutputOrder(order = outputOrder) {
   return (Array.isArray(order) ? order : []).map(name => canonicalItemName(name));
 }
 
+function sanitizeOrderSiteMappings(source = {}) {
+  const known = knownItemNameSet();
+  const out = {};
+  Object.entries(source || {}).forEach(([key, value]) => {
+    if (!key || !value || typeof value !== 'object' || Array.isArray(value)) return;
+    const targetName = canonicalItemName(value.targetName || '');
+    if (!known.has(targetName)) return;
+    out[key] = {
+      targetName,
+      siteName: String(value.siteName || '').slice(0, 120),
+      siteUnit: String(value.siteUnit || '').slice(0, 40),
+      updatedAt: Number(value.updatedAt || Date.now())
+    };
+  });
+  return out;
+}
+
+function sanitizePositiveNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function sanitizeOrderUnitCorrections(source = {}) {
+  const known = knownItemNameSet();
+  const out = {};
+  Object.entries(source || {}).forEach(([name, value]) => {
+    const itemName = canonicalItemName(name || '');
+    if (!known.has(itemName) || !value || typeof value !== 'object' || Array.isArray(value)) return;
+    const row = {};
+    const factor = sanitizePositiveNumber(value.factor);
+    const orderMultiple = sanitizePositiveNumber(value.orderMultiple);
+    const minOrderQty = sanitizePositiveNumber(value.minOrderQty);
+    if (factor) row.factor = factor;
+    if (orderMultiple) row.orderMultiple = orderMultiple;
+    if (minOrderQty) row.minOrderQty = minOrderQty;
+    if (value.packUnit) row.packUnit = String(value.packUnit).slice(0, 40);
+    if (Object.keys(row).length) {
+      row.updatedAt = Number(value.updatedAt || Date.now());
+      out[itemName] = row;
+    }
+  });
+  return out;
+}
+
 function migrateRuntimeItemNames() {
   entries = migrateEntriesByName(entries);
   overrides = migrateNamedObject(overrides);
   outputOrder = migrateOutputOrder(outputOrder);
   actualOrders = migrateNamedObject(actualOrders);
+  orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+  orderUnitCorrections = sanitizeOrderUnitCorrections(orderUnitCorrections);
 }
 
 function storedStockForName(stocks, name) {
@@ -607,6 +690,9 @@ const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';
 const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';
 const ACTUAL_ORDER_STORAGE_KEY = 'bbq_actual_orders';
 const ACTUAL_ORDER_DATE_STORAGE_KEY = 'bbq_actual_orders_date';
+const ORDER_SITE_MAPPING_STORAGE_KEY = 'bbq_order_site_mappings';
+const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';
+const SFA_MANUAL_ITEMS_STORAGE_KEY = 'bbq_sfa_manual_items';
 const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
 const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';
 function newId() { return 'e' + (nextId++); }
@@ -945,8 +1031,36 @@ function buildConversionAnalysis(history, currentSnapshot) {
   return result;
 }
 
+function unitCorrectionForItem(name) {
+  const correction = orderUnitCorrections[canonicalItemName(name || '')];
+  return correction && typeof correction === 'object' ? correction : {};
+}
+
+function hasManualUnitCorrection(name) {
+  const correction = unitCorrectionForItem(name);
+  return Object.keys(correction).some(key => key !== 'updatedAt');
+}
+
+function manualUnitFactorForItem(item) {
+  const factor = sanitizePositiveNumber(unitCorrectionForItem(item?.name).factor);
+  return factor || null;
+}
+
+function applyOrderUnitCorrectionQty(item, qty) {
+  let out = Number(qty);
+  if (!Number.isFinite(out) || out <= 0) return 0;
+  const correction = unitCorrectionForItem(item?.name);
+  const multiple = sanitizePositiveNumber(correction.orderMultiple);
+  const minOrderQty = sanitizePositiveNumber(correction.minOrderQty);
+  if (multiple) out = Math.ceil((out - 1e-9) / multiple) * multiple;
+  if (minOrderQty) out = Math.max(out, minOrderQty);
+  return roundOrderQty(out);
+}
+
 function conversionFactorForItem(item) {
   const parts = orderUnitParts(item);
+  const manualFactor = manualUnitFactorForItem(item);
+  if (manualFactor) return manualFactor;
   const analysis = conversionAnalysis[item.name];
   if (analysis?.source === 'movement' && Number.isFinite(analysis.factor) && analysis.factor > 0) return analysis.factor;
   if (parts.same) return 1;
@@ -967,10 +1081,10 @@ function recommendedOrderQty(item, stockNeed) {
   const need = Number(stockNeed);
   if (!Number.isFinite(need) || need <= 0) return 0;
   const factor = conversionFactorForItem(item);
-  if (factor) return roundOrderQty(need / factor);
+  if (factor) return applyOrderUnitCorrectionQty(item, roundOrderQty(need / factor));
   const parts = orderUnitParts(item);
-  if (!parts.same) return 1;
-  return roundOrderQty(need);
+  if (!parts.same) return applyOrderUnitCorrectionQty(item, 1);
+  return applyOrderUnitCorrectionQty(item, roundOrderQty(need));
 }
 
 function outputOrderQty(item, days) {
@@ -1015,7 +1129,11 @@ function sfaUnitPriceFromRow(row) {
 
 function expectedOrderAmountForItem(item, stockNeed) {
   const matched = lastSfaCompareData?.comparison?.matched || [];
-  const row = matched.find(r => canonicalItemName(r?.expected_name || '') === item.name);
+  let row = matched.find(r => canonicalItemName(r?.expected_name || '') === item.name);
+  if (!row && lastSfaCompareData) {
+    const mapped = buildOrderSiteMatches(lastSfaCompareData).find(r => r.targetName === item.name && r.amount);
+    if (mapped) row = { sfa_qty: mapped.siteQty, sfa_amount: mapped.amount, sfa_name: mapped.siteName };
+  }
   const price = sfaUnitPriceFromRow(row);
   if (!price) return null;
   const recommendedQty = recommendedOrderQty(item, stockNeed);
@@ -1038,6 +1156,8 @@ function orderAnalysisText(item, stockNeed) {
   const actual = getActualOrder(item.name);
   if (actual !== null) return '확인';
   const parts = orderUnitParts(item);
+  const manualFactor = manualUnitFactorForItem(item);
+  if (manualFactor) return `보정 ${fmt(manualFactor, 1)}`;
   const analysis = conversionAnalysis[item.name];
   if (analysis?.source === 'movement' && Number.isFinite(analysis.factor)) {
     return `재고추정 ${fmt(analysis.factor, 1)}`;
@@ -1054,6 +1174,17 @@ function orderAnalysisTitle(item, stockNeed) {
   const actual = getActualOrder(item.name);
   const parts = orderUnitParts(item);
   if (actual !== null) return `실발주 ${actual}${parts.orderUnit || ''} 확인됨`;
+  const manual = unitCorrectionForItem(item.name);
+  const manualFactor = manualUnitFactorForItem(item);
+  if (manualFactor) {
+    const details = [
+      `사용자 단위 보정: 1${parts.orderUnit || '발주'}=${fmt(manualFactor, 2)}${parts.checkUnit || '체크'}`,
+      manual.orderMultiple ? `묶음 ${fmt(manual.orderMultiple, 1)}${parts.orderUnit || ''}` : '',
+      manual.minOrderQty ? `최소 ${fmt(manual.minOrderQty, 1)}${parts.orderUnit || ''}` : '',
+      manual.packUnit ? `표기 ${manual.packUnit}` : ''
+    ].filter(Boolean);
+    return details.join(' · ');
+  }
   const analysis = conversionAnalysis[item.name];
   if (analysis?.source === 'movement' && Number.isFinite(analysis.factor)) {
     return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 발주환산 1${parts.orderUnit || '발주단위'}=${fmt(analysis.factor, 2)}${parts.checkUnit || '재고단위'} (재고 변동 ${analysis.samples}건).`;
@@ -1669,6 +1800,503 @@ function sfaCountChip(label, value, tone = '') {
   return `<span class="sfa-count ${tone}">${escapeHtml(label)} ${escapeHtml(value)}</span>`;
 }
 
+function normalizeSiteItemName(text) {
+  return String(text || '')
+    .toUpperCase()
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/^(냉동|배달소스|비닐)-/, '')
+    .replace(/[ㆍ·]/g, '')
+    .replace(/[^0-9A-Z가-힣]+/g, '');
+}
+
+function siteSizeMarkers(text) {
+  return new Set(Array.from(String(text || '').matchAll(/\((대|중|소)\)/g)).map(match => match[1]));
+}
+
+function siteVariantMarkers(text) {
+  const raw = String(text || '').toUpperCase();
+  const markers = new Set(Array.from(raw.matchAll(/(\d+(?:\.\d+)?)\s*G\b/g)).map(match => `${parseInt(match[1], 10)}G`));
+  if (raw.includes('벌크')) markers.add('BULK');
+  if (raw.includes('배달용') || raw.includes('전송용')) markers.add('DELIVERY');
+  if (raw.includes('내점용')) markers.add('DINEIN');
+  return markers;
+}
+
+function setsDisjoint(left, right) {
+  if (!left.size || !right.size) return false;
+  for (const value of left) {
+    if (right.has(value)) return false;
+  }
+  return true;
+}
+
+function bigramSet(text) {
+  const chars = Array.from(text || '');
+  if (chars.length <= 1) return new Set(chars);
+  const out = new Set();
+  for (let i = 0; i < chars.length - 1; i++) out.add(chars[i] + chars[i + 1]);
+  return out;
+}
+
+function diceScore(leftText, rightText) {
+  const left = bigramSet(leftText);
+  const right = bigramSet(rightText);
+  if (!left.size || !right.size) return 0;
+  let hit = 0;
+  left.forEach(piece => { if (right.has(piece)) hit += 1; });
+  return (2 * hit) / (left.size + right.size);
+}
+
+function scoreSiteToMaster(siteName, masterName) {
+  if (setsDisjoint(siteSizeMarkers(siteName), siteSizeMarkers(masterName))) return 0;
+  if (setsDisjoint(siteVariantMarkers(siteName), siteVariantMarkers(masterName))) return 0;
+  const left = normalizeSiteItemName(siteName);
+  const right = normalizeSiteItemName(masterName);
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  if (left.includes(right) || right.includes(left)) return 0.93;
+  const dice = diceScore(left, right);
+  const leftCore = left.replace(/(BBQ|치킨|소스|냉동|박스|BOX|BON|EA)/g, '');
+  const rightCore = right.replace(/(BBQ|치킨|소스|냉동|박스|BOX|BON|EA)/g, '');
+  const core = diceScore(leftCore, rightCore);
+  return Math.max(dice, core * 0.96);
+}
+
+function siteItemName(row) {
+  return String(row?.sfa_name || row?.name || row?.source_name || row?.expected_name || '').trim();
+}
+
+function siteItemUnit(row) {
+  return String(row?.sfa_unit || row?.unit || '').trim();
+}
+
+function siteItemQty(row) {
+  const n = Number(row?.sfa_qty ?? row?.qty ?? row?.expected_qty ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function siteItemAmount(row) {
+  return parseMoney(row?.sfa_amount ?? row?.amount ?? row?.total_amount ?? row?.total);
+}
+
+function orderSiteItemKey(row) {
+  const name = normalizeSiteItemName(siteItemName(row));
+  const unit = normalizeOrderUnit(siteItemUnit(row));
+  return `${name || '-'}|${unit || '-'}`;
+}
+
+function siteRowsFromSfaData(data) {
+  const seen = new Set();
+  const rows = [];
+  const push = row => {
+    const name = siteItemName(row);
+    if (!name) return;
+    const key = orderSiteItemKey(row);
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push({ ...row, _siteKey: key });
+  };
+  (Array.isArray(data?.items) ? data.items : []).forEach(push);
+  const comp = data?.comparison || {};
+  (comp.matched || []).forEach(row => push({ name: row.sfa_name, qty: row.sfa_qty, unit: row.sfa_unit, amount: row.sfa_amount, row_index: row.row_index }));
+  (comp.extra || []).forEach(push);
+  return rows;
+}
+
+function comparisonRowLookup(data) {
+  const byIndex = new Map();
+  const byKey = new Map();
+  (data?.comparison?.matched || []).forEach(row => {
+    if (row.row_index !== undefined && row.row_index !== null) byIndex.set(String(row.row_index), row);
+    byKey.set(orderSiteItemKey({ name: row.sfa_name, unit: row.sfa_unit }), row);
+  });
+  return { byIndex, byKey };
+}
+
+function bestMasterCandidatesForSite(row, limit = 3) {
+  return MASTER.map(item => ({
+    name: item.name,
+    unit: item.unit || '',
+    score: scoreSiteToMaster(siteItemName(row), item.name)
+  }))
+    .filter(item => item.score >= 0.55)
+    .sort((a, b) => b.score - a.score || defaultOutputCompare({ name: a.name, sfaSeq: MASTER.find(m => m.name === a.name)?.sfaSeq }, { name: b.name, sfaSeq: MASTER.find(m => m.name === b.name)?.sfaSeq }))
+    .slice(0, limit);
+}
+
+function buildOrderSiteMatches(data = lastSfaCompareData) {
+  const rows = siteRowsFromSfaData(data);
+  const lookup = comparisonRowLookup(data);
+  const out = rows.map(row => {
+    const siteKey = row._siteKey || orderSiteItemKey(row);
+    const correction = orderSiteMappings[siteKey];
+    const compareRow = row.row_index !== undefined && row.row_index !== null
+      ? lookup.byIndex.get(String(row.row_index)) || lookup.byKey.get(siteKey)
+      : lookup.byKey.get(siteKey);
+    const candidates = bestMasterCandidatesForSite(row);
+    let targetName = '';
+    let score = 0;
+    let source = 'none';
+    if (correction?.targetName) {
+      targetName = correction.targetName;
+      score = 1;
+      source = 'user';
+    } else if (compareRow?.expected_name) {
+      targetName = canonicalItemName(compareRow.expected_name);
+      score = Number(compareRow.score || 0);
+      source = 'analysis';
+    } else if (candidates[0]?.score >= 0.84) {
+      targetName = candidates[0].name;
+      score = candidates[0].score;
+      source = 'local';
+    }
+    let status = 'unmatched';
+    if (targetName) status = source === 'user' || score >= 0.82 ? 'confirmed' : 'candidate';
+    return {
+      siteKey,
+      siteName: siteItemName(row) || siteItemName(compareRow),
+      siteUnit: siteItemUnit(row) || siteItemUnit(compareRow),
+      siteQty: siteItemQty(row) || siteItemQty(compareRow),
+      amount: siteItemAmount(row) || siteItemAmount(compareRow),
+      targetName,
+      targetUnit: MASTER.find(item => item.name === targetName)?.unit || '',
+      score,
+      source,
+      status,
+      candidates,
+      compareRow
+    };
+  });
+  const targetCounts = {};
+  out.forEach(row => {
+    if (row.targetName) targetCounts[row.targetName] = (targetCounts[row.targetName] || 0) + 1;
+  });
+  out.forEach(row => {
+    if (row.targetName && targetCounts[row.targetName] > 1) row.status = 'conflict';
+  });
+  return out.sort((a, b) => {
+    const order = { conflict: 0, unmatched: 1, candidate: 2, confirmed: 3 };
+    return (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.siteName.localeCompare(b.siteName, 'ko', { numeric: true });
+  });
+}
+
+function sfaStatusText(status) {
+  if (status === 'confirmed') return '확정';
+  if (status === 'candidate') return '후보';
+  if (status === 'conflict') return '충돌';
+  return '미매칭';
+}
+
+function masterSelectHtml(row) {
+  const options = ['<option value="">선택</option>'].concat(MASTER.slice().sort(defaultOutputCompare).map(item => {
+    const selected = item.name === row.targetName ? ' selected' : '';
+    return `<option value="${escapeHtml(item.name)}"${selected}>${escapeHtml(item.name)}</option>`;
+  }));
+  return `<select class="sfa-select sfa-match-select" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">${options.join('')}</select>`;
+}
+
+function sfaMatchRowHtml(row) {
+  const candidateText = row.candidates.length
+    ? row.candidates.map(item => `${item.name} ${Math.round(item.score * 100)}%`).join(' · ')
+    : '후보 없음';
+  const meta = [
+    row.siteUnit ? `사이트단위 ${row.siteUnit}` : '',
+    row.siteQty ? `수량 ${fmt(row.siteQty, 1)}` : '',
+    row.score ? `점수 ${Math.round(row.score * 100)}%` : '',
+    row.source === 'user' ? '사용자 보정' : ''
+  ].filter(Boolean).join(' · ');
+  return `<div class="sfa-match-row ${row.status}">
+    <div class="sfa-match-status">${sfaStatusText(row.status)}</div>
+    <div>
+      <div class="sfa-match-name">${escapeHtml(row.siteName)}</div>
+      <div class="sfa-match-meta">${escapeHtml(meta || candidateText)}</div>
+    </div>
+    ${masterSelectHtml(row)}
+    <div class="sfa-match-meta">${escapeHtml(row.targetUnit || candidateText)}</div>
+  </div>`;
+}
+
+function expectedMissingRows(data) {
+  return (data?.comparison?.missing || []).map(row => ({
+    name: row.expected_name || row.name || '',
+    qty: row.expected_qty ?? row.qty ?? 0,
+    unit: row.expected_unit || row.unit || '',
+    reason: row.reason || '사이트 행 없음'
+  })).filter(row => row.name);
+}
+
+function unitCorrectionRows(data = lastSfaCompareData) {
+  const names = new Set();
+  MASTER.forEach(item => {
+    const parts = orderUnitParts(item);
+    const analysis = conversionAnalysis[item.name];
+    if (!parts.same || hasManualUnitCorrection(item.name) || (analysis && analysis.source !== 'same')) names.add(item.name);
+  });
+  (data?.comparison?.matched || []).forEach(row => {
+    const name = canonicalItemName(row.expected_name || '');
+    if (name && knownItemNameSet().has(name)) names.add(name);
+  });
+  return MASTER.filter(item => names.has(item.name)).sort(defaultOutputCompare);
+}
+
+function unitSourceText(item) {
+  const manual = unitCorrectionForItem(item.name);
+  if (hasManualUnitCorrection(item.name)) return '사용자';
+  const analysis = conversionAnalysis[item.name];
+  if (analysis?.source === 'movement') return '재고추정';
+  if (analysis?.source === 'item') return '품목기록';
+  if (analysis?.source === 'unit') return '단위패턴';
+  if (orderUnitParts(item).same) return '동일';
+  return '미확인';
+}
+
+function unitCorrectionRowHtml(item) {
+  const parts = orderUnitParts(item);
+  const correction = unitCorrectionForItem(item.name);
+  const analysis = conversionAnalysis[item.name] || {};
+  const factorPlaceholder = analysis.factor ? fmt(analysis.factor, 2) : (parts.same ? '1' : '');
+  const meta = [
+    `체크 ${parts.checkUnit || '-'}`,
+    `발주 ${parts.orderUnit || '-'}`,
+    analysis.samples ? `분석 ${analysis.samples}건` : '',
+    analysis.spread ? `편차 ${fmt(analysis.spread, 2)}` : ''
+  ].filter(Boolean).join(' · ');
+  return `<div class="sfa-match-row ${hasManualUnitCorrection(item.name) ? 'confirmed' : (parts.same ? 'candidate' : 'unmatched')}">
+    <div class="sfa-match-status">${escapeHtml(unitSourceText(item))}</div>
+    <div>
+      <div class="sfa-match-name">${escapeHtml(item.name)}</div>
+      <div class="sfa-match-meta">${escapeHtml(meta)}</div>
+    </div>
+    <div class="sfa-unit-fields">
+      <label>환산<input class="sfa-edit sfa-unit-input" type="number" inputmode="decimal" step="0.1" data-unit-name="${escapeHtml(item.name)}" data-unit-field="factor" value="${escapeHtml(correction.factor ?? '')}" placeholder="${escapeHtml(factorPlaceholder)}"></label>
+      <label>묶음<input class="sfa-edit sfa-unit-input" type="number" inputmode="decimal" step="0.1" data-unit-name="${escapeHtml(item.name)}" data-unit-field="orderMultiple" value="${escapeHtml(correction.orderMultiple ?? '')}" placeholder="1"></label>
+      <label>최소<input class="sfa-edit sfa-unit-input" type="number" inputmode="decimal" step="0.1" data-unit-name="${escapeHtml(item.name)}" data-unit-field="minOrderQty" value="${escapeHtml(correction.minOrderQty ?? '')}" placeholder=""></label>
+    </div>
+    <input class="sfa-edit sfa-unit-input" type="text" data-unit-name="${escapeHtml(item.name)}" data-unit-field="packUnit" value="${escapeHtml(correction.packUnit || '')}" placeholder="${escapeHtml(parts.orderUnit || '표기')}">
+  </div>`;
+}
+
+function setSfaAnalysisTab(tab) {
+  sfaActiveTab = ['match', 'unit', 'unmatched', 'io'].includes(tab) ? tab : 'match';
+  renderSfaAnalysisTab(lastSfaCompareData);
+}
+
+function updateSfaTabButtons() {
+  document.querySelectorAll('.sfa-tab[data-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === sfaActiveTab);
+  });
+}
+
+function persistOrderCorrections(reason = 'correction') {
+  saveLocal(reason);
+  if (viewMode === 'output') render();
+  renderSfaAnalysisTab(lastSfaCompareData);
+  flushAutoSave(reason);
+}
+
+function setOrderSiteMapping(siteKey, targetName, siteName = '', siteUnit = '') {
+  if (!siteKey) return;
+  const known = knownItemNameSet();
+  const nextTarget = canonicalItemName(targetName || '');
+  if (!nextTarget || !known.has(nextTarget)) {
+    delete orderSiteMappings[siteKey];
+  } else {
+    orderSiteMappings[siteKey] = { targetName: nextTarget, siteName, siteUnit, updatedAt: Date.now() };
+  }
+  orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+  persistOrderCorrections('mapping');
+}
+
+function setOrderUnitCorrection(name, field, value) {
+  const itemName = canonicalItemName(name || '');
+  if (!knownItemNameSet().has(itemName)) return;
+  const row = { ...(orderUnitCorrections[itemName] || {}) };
+  if (field === 'packUnit') {
+    const text = String(value || '').trim();
+    if (text) row.packUnit = text;
+    else delete row.packUnit;
+  } else if (['factor', 'orderMultiple', 'minOrderQty'].includes(field)) {
+    const num = sanitizePositiveNumber(value);
+    if (num) row[field] = num;
+    else delete row[field];
+  } else {
+    return;
+  }
+  row.updatedAt = Date.now();
+  if (Object.keys(row).filter(key => key !== 'updatedAt').length) orderUnitCorrections[itemName] = row;
+  else delete orderUnitCorrections[itemName];
+  orderUnitCorrections = sanitizeOrderUnitCorrections(orderUnitCorrections);
+  persistOrderCorrections('unitCorrection');
+}
+
+function bindSfaCorrectionInputs() {
+  document.querySelectorAll('.sfa-match-select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      setOrderSiteMapping(e.target.dataset.siteKey, e.target.value, e.target.dataset.siteName || '', e.target.dataset.siteUnit || '');
+    });
+  });
+  document.querySelectorAll('.sfa-unit-input').forEach(inp => {
+    inp.addEventListener('change', e => {
+      setOrderUnitCorrection(e.target.dataset.unitName, e.target.dataset.unitField, e.target.value);
+    });
+  });
+}
+
+function manualSfaItemFromSource(row, idx) {
+  if (Array.isArray(row)) {
+    return {
+      name: String(row[0] || '').trim(),
+      qty: Number(row[1]) || 0,
+      unit: String(row[2] || '').trim(),
+      row_index: idx + 1,
+      source_name: String(row[0] || '').trim()
+    };
+  }
+  if (!row || typeof row !== 'object') return null;
+  const name = String(row.name || row.sfa_name || row.siteName || row.source_name || '').trim();
+  if (!name) return null;
+  return {
+    name,
+    qty: Number(row.qty ?? row.sfa_qty ?? row.siteQty ?? row.expected_qty ?? 0) || 0,
+    unit: String(row.unit || row.sfa_unit || row.siteUnit || row.expected_unit || '').trim(),
+    row_index: row.row_index ?? idx + 1,
+    source_name: String(row.source_name || row.sfa_name || row.siteName || name).trim()
+  };
+}
+
+function parseManualSfaItemsText(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  if (/^[\[{]/.test(raw)) {
+    try {
+      const parsed = JSON.parse(raw);
+      const rows = Array.isArray(parsed)
+        ? parsed
+        : (Array.isArray(parsed.items) ? parsed.items : (Array.isArray(parsed.mappings) ? parsed.mappings : []));
+      return rows.map(manualSfaItemFromSource).filter(row => row && row.name);
+    } catch {}
+  }
+  return raw.replace(/\\n/g, '\n').replace(/\\t/g, '\t').split(/\n+/).map((line, idx) => {
+    const parts = line.split(/\t|,/).map(part => part.trim()).filter(Boolean);
+    if (!parts[0]) return null;
+    return {
+      name: parts[0],
+      qty: Number(parts[1]) || 0,
+      unit: parts[2] || '',
+      row_index: idx + 1,
+      source_name: parts[0]
+    };
+  }).filter(Boolean);
+}
+
+function fillSfaManualItemsSample() {
+  const input = document.getElementById('sfaManualItemsInput');
+  if (!input) return;
+  input.value = 'BBQ치즈볼,2,BOX\n신선육(10호),1,박스';
+  input.focus();
+}
+
+function analyzeManualSfaItems() {
+  const input = document.getElementById('sfaManualItemsInput');
+  const items = parseManualSfaItemsText(input?.value || '');
+  localStorage.setItem(SFA_MANUAL_ITEMS_STORAGE_KEY, input?.value || '');
+  const data = {
+    ok: true,
+    savedAt: Date.now(),
+    file: { name: '수동 입력' },
+    items,
+    structure: { confidence: items.length ? 1 : 0, reason: 'manual' },
+    historySummary: {},
+    comparison: { matched: [], missing: [], extra: items },
+    appliedActualOrders: {}
+  };
+  renderSfaComparePanel(data);
+  showSfaComparePanel();
+}
+
+function sfaIoOutput(data) {
+  const matches = buildOrderSiteMatches(data);
+  const unitRows = unitCorrectionRows(data).map(item => ({
+    name: item.name,
+    unit: item.unit,
+    correction: unitCorrectionForItem(item.name),
+    inferred: conversionAnalysis[item.name] || null
+  }));
+  return JSON.stringify({
+    file: data?.file?.name || '',
+    savedAt: data?.savedAt || null,
+    mappings: matches.map(row => ({
+      siteName: row.siteName,
+      siteUnit: row.siteUnit,
+      siteQty: row.siteQty,
+      targetName: row.targetName,
+      status: sfaStatusText(row.status),
+      score: Math.round((row.score || 0) * 100) / 100
+    })),
+    unitCorrections: unitRows
+  }, null, 2);
+}
+
+function renderSfaAnalysisTab(data = lastSfaCompareData) {
+  const body = document.getElementById('sfaCompareBody');
+  if (!body) return;
+  updateSfaTabButtons();
+  if (sfaActiveTab === 'io') {
+    const manualText = localStorage.getItem(SFA_MANUAL_ITEMS_STORAGE_KEY) || '';
+    body.innerHTML = `<div class="sfa-io-grid">
+      <div>
+        <textarea class="sfa-textarea" id="sfaManualItemsInput" placeholder="사이트품목,수량,단위">${escapeHtml(manualText)}</textarea>
+        <div class="sfa-mini-actions">
+          <button type="button" onclick="analyzeManualSfaItems()">분석</button>
+          <button type="button" onclick="fillSfaManualItemsSample()">샘플</button>
+        </div>
+      </div>
+      <pre class="sfa-output">${escapeHtml(data ? sfaIoOutput(data) : '분석 결과 없음')}</pre>
+    </div>`;
+    return;
+  }
+  if (!data) {
+    body.innerHTML = '<div class="sfa-panel-meta">분석 결과 없음</div>';
+    return;
+  }
+  if (!data.ok && sfaActiveTab !== 'io') {
+    const structure = data.structure || {};
+    const sample = structure.sample_rows || [];
+    body.innerHTML = `<div class="sfa-row high">
+      <div class="risk">구조</div>
+      <div class="item">품목명/수량 열 확정 실패</div>
+      <div class="qty">${escapeHtml(structure.confidence || 0)}</div>
+      <div class="reason">${escapeHtml((structure.reason || '') + ' ' + sample.slice(0, 3).map(row => row.join(' / ')).join(' | '))}</div>
+    </div>`;
+    return;
+  }
+  if (sfaActiveTab === 'unit') {
+    const rows = unitCorrectionRows(data);
+    body.innerHTML = rows.length ? rows.map(unitCorrectionRowHtml).join('') : '<div class="sfa-panel-meta">단위 보정 대상 없음</div>';
+    bindSfaCorrectionInputs();
+    return;
+  }
+  const matches = buildOrderSiteMatches(data);
+  if (sfaActiveTab === 'unmatched') {
+    const matchRows = matches.filter(row => row.status !== 'confirmed');
+    const missingRows = expectedMissingRows(data).map(row => `<div class="sfa-match-row unmatched">
+      <div class="sfa-match-status">내부만</div>
+      <div>
+        <div class="sfa-match-name">${escapeHtml(row.name)}</div>
+        <div class="sfa-match-meta">${escapeHtml(`앱 ${row.qty}${row.unit ? ' · ' + row.unit : ''}`)}</div>
+      </div>
+      <div class="sfa-match-meta">${escapeHtml(row.reason)}</div>
+      <div class="sfa-match-meta">사이트 행 없음</div>
+    </div>`);
+    body.innerHTML = matchRows.map(sfaMatchRowHtml).concat(missingRows).join('') || '<div class="sfa-panel-meta">미매칭 없음</div>';
+    bindSfaCorrectionInputs();
+    return;
+  }
+  body.innerHTML = matches.length ? matches.map(sfaMatchRowHtml).join('') : '<div class="sfa-panel-meta">사이트 품목 없음</div>';
+  bindSfaCorrectionInputs();
+}
+
 function sfaReviewRows(comp) {
   const matched = comp?.matched || [];
   const missing = comp?.missing || [];
@@ -1707,7 +2335,7 @@ function renderSfaComparePanel(data) {
     meta.textContent = '분석 결과 없음';
     note.textContent = '엑셀분석 버튼을 누르면 PC 다운로드 폴더의 최신 주문현황을 비교합니다.';
     counts.innerHTML = '';
-    body.innerHTML = '';
+    renderSfaAnalysisTab(null);
     return;
   }
   lastSfaCompareData = data;
@@ -1724,6 +2352,9 @@ function renderSfaComparePanel(data) {
   const extra = comp.extra || [];
   const okCount = matched.filter(row => row.status === 'OK').length;
   const applied = data.appliedActualOrders || {};
+  const matchRows = buildOrderSiteMatches(data);
+  const confirmedCount = matchRows.filter(row => row.status === 'confirmed').length;
+  const openCount = matchRows.filter(row => row.status !== 'confirmed').length + expectedMissingRows(data).length;
   lastSfaCompareSavedAt = Number(data.savedAt || 0);
 
   title.textContent = data.ok ? '엑셀 오차' : '엑셀 구조 확인';
@@ -1737,22 +2368,15 @@ function renderSfaComparePanel(data) {
     sfaCountChip('확인', medium.length, 'medium'),
     sfaCountChip('낮음', low.length, 'low'),
     sfaCountChip('SFA만', extra.length),
+    sfaCountChip('확정', confirmedCount, 'low'),
+    sfaCountChip('미매칭', openCount, openCount ? 'medium' : ''),
   ].join('');
 
   if (!data.ok) {
-    const sample = structure.sample_rows || [];
-    body.innerHTML = `<div class="sfa-row high">
-      <div class="risk">구조</div>
-      <div class="item">품목명/수량 열 확정 실패</div>
-      <div class="qty">${escapeHtml(structure.confidence || 0)}</div>
-      <div class="reason">${escapeHtml((structure.reason || '') + ' ' + sample.slice(0, 3).map(row => row.join(' / ')).join(' | '))}</div>
-    </div>`;
+    renderSfaAnalysisTab(data);
     return;
   }
-
-  const rows = high.concat(medium, low).map(row => sfaGapRowHtml(row, false))
-    .concat(extra.slice(0, 12).map(row => sfaGapRowHtml(row, true)));
-  body.innerHTML = rows.length ? rows.join('') : '<div class="sfa-panel-meta">오차 없음</div>';
+  renderSfaAnalysisTab(data);
 }
 
 async function loadSfaCompareLatest(silent = true, forceShow = false) {
@@ -1849,6 +2473,8 @@ async function requestSfaOrderAnalysis() {
     source: 'OrderHelper',
     mode: 'scan_pc_downloads',
     dirHint: 'C:\\Users\\wk771\\Downloads',
+    orderSiteMappings,
+    orderUnitCorrections,
     requestedAt: now,
     requestedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19)
   };
@@ -1882,12 +2508,16 @@ function renderSaveState(label, tone = 'idle') {
 function saveReasonLabel(reason) {
   if (reason === 'manual') return '수동저장';
   if (reason === 'reset') return '재고 리셋 저장';
+  if (reason === 'mapping') return '매칭보정 저장';
+  if (reason === 'unitCorrection') return '단위보정 저장';
   return '자동저장';
 }
 
 function lastSavedLabel(reason) {
   if (reason === 'manual') return '저장';
   if (reason === 'reset') return '리셋저장';
+  if (reason === 'mapping') return '매칭보정';
+  if (reason === 'unitCorrection') return '단위보정';
   return '자동저장';
 }
 
@@ -2410,6 +3040,8 @@ function saveLocal(reason = 'auto') {
   localStorage.removeItem(OUTPUT_ORDER_STORAGE_KEY);
   localStorage.setItem(ACTUAL_ORDER_STORAGE_KEY, JSON.stringify(actualOrders));
   localStorage.setItem(ACTUAL_ORDER_DATE_STORAGE_KEY, kstDateKey(Date.now()));
+  localStorage.setItem(ORDER_SITE_MAPPING_STORAGE_KEY, JSON.stringify(orderSiteMappings));
+  localStorage.setItem(ORDER_UNIT_CORRECTION_STORAGE_KEY, JSON.stringify(orderUnitCorrections));
   if (baseSales == null) localStorage.removeItem('bbq_baseSales');
   else {
     localStorage.setItem('bbq_baseSales', JSON.stringify(baseSales));
@@ -2529,7 +3161,7 @@ async function saveToFB(reason = 'manual') {
   const salesWeights = dailyWeights(days).map(x => Math.round(x * 1000) / 1000);
   outputOrder = [];
   actualOrders = cleanActualOrders();
-  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
+  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, orderSiteMappings, orderUnitCorrections, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
@@ -2635,6 +3267,8 @@ function applyFBData(data) {
   } else {
     actualOrders = {};
   }
+  if (Object.prototype.hasOwnProperty.call(data, 'orderSiteMappings')) orderSiteMappings = sanitizeOrderSiteMappings(data.orderSiteMappings);
+  if (Object.prototype.hasOwnProperty.call(data, 'orderUnitCorrections')) orderUnitCorrections = sanitizeOrderUnitCorrections(data.orderUnitCorrections);
   if (Object.prototype.hasOwnProperty.call(data, 'dailySales')) dailySales = Array.isArray(data.dailySales) ? data.dailySales : [];
   if (Object.prototype.hasOwnProperty.call(data, 'baseSales')) {
     const n = Number(data.baseSales);
@@ -2754,6 +3388,10 @@ try {
   const ao = localStorage.getItem(ACTUAL_ORDER_STORAGE_KEY);
   const aoDate = localStorage.getItem(ACTUAL_ORDER_DATE_STORAGE_KEY);
   if (ao && aoDate === kstDateKey(Date.now())) actualOrders = cleanActualOrders(JSON.parse(ao));
+  const osm = localStorage.getItem(ORDER_SITE_MAPPING_STORAGE_KEY);
+  if (osm) orderSiteMappings = sanitizeOrderSiteMappings(JSON.parse(osm));
+  const ouc = localStorage.getItem(ORDER_UNIT_CORRECTION_STORAGE_KEY);
+  if (ouc) orderUnitCorrections = sanitizeOrderUnitCorrections(JSON.parse(ouc));
   const ds = localStorage.getItem('bbq_dailySales'); if (ds) dailySales = JSON.parse(ds);
   const bs = localStorage.getItem('bbq_baseSales');
   const bsv = localStorage.getItem('bbq_baseSalesVersion');

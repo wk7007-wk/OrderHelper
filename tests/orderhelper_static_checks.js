@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const indexPath = path.join(__dirname, '..', 'index.html');
 const html = fs.readFileSync(indexPath, 'utf8');
@@ -30,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260626-1';/, 'APP_VERSION must be bumped for the current SFA split fix set');
+mustMatch(/const APP_VERSION = '20260707-1';/, 'APP_VERSION must be bumped for the order-site matching UI');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -80,6 +81,10 @@ mustMatch(/function requestSfaOrderAnalysis\(\)/, 'SFA analysis request button h
 mustMatch(/id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis\(\)"/, 'SFA analysis request button missing');
 mustMatch(/id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel\(\)">오차보기<\/button>/, 'SFA compare result button missing');
 mustMatch(/id="sfaComparePanel"/, 'SFA compare panel missing');
+mustMatch(/data-tab="match" onclick="setSfaAnalysisTab\('match'\)">1:1 매칭<\/button>/, '1:1 matching tab missing');
+mustMatch(/data-tab="unit" onclick="setSfaAnalysisTab\('unit'\)">단위 보정<\/button>/, 'unit correction tab missing');
+mustMatch(/data-tab="unmatched" onclick="setSfaAnalysisTab\('unmatched'\)">미매칭<\/button>/, 'unmatched tab missing');
+mustMatch(/data-tab="io" onclick="setSfaAnalysisTab\('io'\)">입출력<\/button>/, 'analysis IO tab missing');
 mustMatch(/id="sfaStatus">엑셀 대기<\/span>/, 'SFA status chip missing');
 mustMatch(/function loadSfaOrderStatus\(silent = true\)/, 'SFA status polling handler missing');
 mustMatch(/function renderSfaStatus\(data\)/, 'SFA status renderer missing');
@@ -106,6 +111,22 @@ mustMatch(/function movementConversionFactorFromRecords\(prev, curr, item\)/, 'u
 mustMatch(/const observedDelivery = currStock - prevStock \+ expectedUsage;/, 'stock movement inference must compare inventory change with expected usage');
 mustMatch(/result\[item\.name\] = \{ \.\.\.movement, source: 'movement'/, 'movement-derived conversion must override manual unit labels when usable');
 mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order quantity converter missing');
+mustMatch(/let orderSiteMappings = \{\};/, 'order-site mapping correction state missing');
+mustMatch(/let orderUnitCorrections = \{\};/, 'order-unit correction state missing');
+mustMatch(/const ORDER_SITE_MAPPING_STORAGE_KEY = 'bbq_order_site_mappings';/, 'order-site mapping local storage key missing');
+mustMatch(/const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';/, 'order-unit correction local storage key missing');
+mustMatch(/function normalizeSiteItemName\(text\)/, 'site item normalizer missing');
+mustMatch(/function scoreSiteToMaster\(siteName, masterName\)/, 'site/master score helper missing');
+mustMatch(/function buildOrderSiteMatches\(data = lastSfaCompareData\)/, 'order-site matching builder missing');
+mustMatch(/function setOrderSiteMapping\(siteKey, targetName, siteName = '', siteUnit = ''\)/, 'order-site mapping setter missing');
+mustMatch(/function setOrderUnitCorrection\(name, field, value\)/, 'order-unit correction setter missing');
+mustMatch(/function parseManualSfaItemsText\(text\)/, 'manual analysis input parser missing');
+mustMatch(/function fillSfaManualItemsSample\(\)/, 'manual analysis sample filler missing');
+mustMatch(/function renderSfaAnalysisTab\(data = lastSfaCompareData\)/, 'analysis tab renderer missing');
+mustMatch(/Array\.isArray\(parsed\.mappings\)/, 'manual analysis input must accept exported mapping JSON');
+mustMatch(/const manualFactor = manualUnitFactorForItem\(item\);\s*if \(manualFactor\) return manualFactor;/, 'manual unit factor must override inferred conversion');
+mustMatch(/if \(multiple\) out = Math\.ceil\(\(out - 1e-9\) \/ multiple\) \* multiple;/, 'manual order multiple must round up order qty');
+mustMatch(/if \(minOrderQty\) out = Math\.max\(out, minOrderQty\);/, 'manual min order qty must be applied');
 mustMatch(/spread: max \/ Math\.max\(min, 1e-9\)/, 'unit conversion summaries must track consistency spread');
 mustMatch(/analysis\?\.source === 'unit'[\s\S]*Number\(analysis\.samples \|\| 0\) >= 3[\s\S]*Number\(analysis\.spread \|\| 999\) <= 1\.25/, 'stable unit-pair patterns must be used for order quantity conversion');
 mustMatch(/같은 단위 기록 \$\{analysis\.samples\}건 기준/, 'unit-pair conversion analysis must be visible to the user');
@@ -130,7 +151,7 @@ mustMatch(/updateDailyAnalysisForName\(name\);\s*updateOutputOrderForName\(name\
 mustMatch(/setOverrideValue\(name, field, value\);\s*saveLocal\(\);\s*updateOutputOrderForName\(name\);/, 'output buffer/daily edits must refresh order quantity');
 mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l changes must save');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
-mustMatch(/actualOrders, dailySales/, 'Firebase payload must include actual orders');
+mustMatch(/actualOrders, orderSiteMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include actual orders and corrections');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
 mustMatch(/const convertedActual = orderUnitToStockFactor \? actual \* orderUnitToStockFactor : actual;/, 'usage analysis must convert actual SFA order quantity back to stock-check units');
 mustMatch(/function actualOrderForInterval\(prev, curr, name\)/, 'usage analysis must join SFA actual orders by stock interval');
@@ -154,7 +175,7 @@ mustMatch(/function getOutputItems\(days\)/, 'output item sort helper missing');
 mustMatch(/function moveOutputItem\(name, direction\)/, 'output move helper missing');
 mustMatch(/return MASTER\.filter\(item => calcG\(item, days\) > 0\)\.sort\(defaultOutputCompare\);/, 'output view must use the initial default order');
 mustMatch(/localStorage\.removeItem\(OUTPUT_ORDER_STORAGE_KEY\)/, 'stored custom output order must be cleared locally');
-mustMatch(/outputOrder, actualOrders, dailySales/, 'Firebase payload must include output and actual order');
+mustMatch(/outputOrder, actualOrders, orderSiteMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include output, actual order, and corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'outputOrder'\)\) outputOrder = \[\];/, 'Firebase sync must ignore saved custom output order');
 mustNotMatch(/outputOrder = visibleNames\.concat\(remaining\);/, 'output move must not persist custom order');
 mustNotMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(outputOrder\)\)/, 'custom output order must not be stored locally');
@@ -194,6 +215,8 @@ mustMatch(/function setOrderDaysValue\(value\)/, 'orderDays setter must exist fo
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderDays'\)\) setOrderDaysValue\(data\.orderDays\);/, 'Firebase sync must apply orderDays to the selector');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'entries'\)\) entries = migrateEntriesByName\(data\.entries\);/, 'Firebase sync must apply empty entries payloads by ownership check');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'overrides'\)\) overrides = migrateNamedObject\(data\.overrides\);/, 'Firebase sync must apply cleared overrides payloads');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderSiteMappings'\)\) orderSiteMappings = sanitizeOrderSiteMappings\(data\.orderSiteMappings\);/, 'Firebase sync must apply order-site mapping corrections');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderUnitCorrections'\)\) orderUnitCorrections = sanitizeOrderUnitCorrections\(data\.orderUnitCorrections\);/, 'Firebase sync must apply order-unit corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
@@ -218,5 +241,124 @@ mustMatch(/flushAutoSave\('auto'\)/, 'stock logs and sorted state must be saved 
 mustNotMatch(/pushSaveLog\('키 /, 'stock key logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\(`보정 /, 'focus correction logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\('정렬이동 /, 'sort/focus logs must not be visible user logs');
+
+function makeElement(id) {
+  return {
+    id,
+    value: '',
+    textContent: '',
+    className: '',
+    innerHTML: '',
+    dataset: {},
+    style: { setProperty() {} },
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    addEventListener() {},
+    focus() {},
+    select() {},
+    appendChild() {},
+    getBoundingClientRect() { return { height: 52 }; },
+    matches() { return false; },
+  };
+}
+
+const elementMap = new Map();
+const storage = new Map();
+const session = new Map();
+const sandbox = {
+  console,
+  setTimeout,
+  clearTimeout,
+  setInterval() {},
+  Date,
+  Math,
+  Number,
+  String,
+  Array,
+  Object,
+  JSON,
+  RegExp,
+  Map,
+  Set,
+  URLSearchParams,
+  TextEncoder,
+  Uint8Array,
+  location: { search: '', hostname: 'localhost' },
+  localStorage: {
+    getItem(key) { return storage.has(key) ? storage.get(key) : null; },
+    setItem(key, value) { storage.set(key, String(value)); },
+    removeItem(key) { storage.delete(key); },
+  },
+  sessionStorage: {
+    getItem(key) { return session.has(key) ? session.get(key) : null; },
+    setItem(key, value) { session.set(key, String(value)); },
+    removeItem(key) { session.delete(key); },
+  },
+  crypto: {
+    randomUUID() { return 'test-device'; },
+    subtle: { digest: async () => new Uint8Array(32).buffer },
+  },
+  navigator: { geolocation: { getCurrentPosition() {} } },
+  window: { addEventListener() {} },
+  document: {
+    body: makeElement('body'),
+    documentElement: makeElement('html'),
+    activeElement: null,
+    getElementById(id) {
+      if (!elementMap.has(id)) elementMap.set(id, makeElement(id));
+      return elementMap.get(id);
+    },
+    querySelectorAll() { return []; },
+    querySelector() { return null; },
+    createElement(tag) { return makeElement(tag); },
+    addEventListener() {},
+  },
+  fetch: async () => ({ ok: true, json: async () => null }),
+};
+sandbox.window.document = sandbox.document;
+sandbox.window.localStorage = sandbox.localStorage;
+sandbox.window.sessionStorage = sandbox.sessionStorage;
+vm.createContext(sandbox);
+vm.runInContext(`${scripts}
+this.__OrderHelperApi = {
+  MASTER,
+  normalizeSiteItemName,
+  scoreSiteToMaster,
+  buildOrderSiteMatches,
+  parseManualSfaItemsText,
+  siteItemAmount,
+  recommendedOrderQty,
+  conversionFactorForItem,
+  setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
+  setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
+};`, sandbox);
+
+const api = sandbox.__OrderHelperApi;
+const plain = value => JSON.parse(JSON.stringify(value));
+assert.strictEqual(api.normalizeSiteItemName('BBQ치즈볼(크림)'), 'BBQ치즈볼', 'site item normalizer should remove parenthesized spec');
+assert(api.scoreSiteToMaster('BBQ치즈볼', '냉동-치즈볼-BBQ치즈볼(크림)') >= 0.84, 'site/master score should find obvious candidate');
+const siteData = {
+  ok: true,
+  items: [{ name: 'BBQ치즈볼', qty: 2, unit: 'BOX', row_index: 1 }],
+  comparison: { matched: [], missing: [], extra: [] },
+};
+let matches = api.buildOrderSiteMatches(siteData);
+assert.strictEqual(matches[0].targetName, '냉동-치즈볼-BBQ치즈볼(크림)', 'matching builder should choose best local candidate');
+api.setSiteMappingsForCheck({ [matches[0].siteKey]: { targetName: '냉동-치즈볼-BBQ황금알치즈볼', siteName: 'BBQ치즈볼', siteUnit: 'BOX' } });
+matches = api.buildOrderSiteMatches(siteData);
+assert.strictEqual(matches[0].targetName, '냉동-치즈볼-BBQ황금알치즈볼', 'user mapping should override local candidate');
+const freshMeat = api.MASTER.find(item => item.name === '신선육(10호)-뼈한마리');
+api.setUnitCorrectionsForCheck({ [freshMeat.name]: { factor: 10, orderMultiple: 2, minOrderQty: 2 } });
+assert.strictEqual(api.conversionFactorForItem(freshMeat), 10, 'manual factor should override inferred conversion');
+assert.strictEqual(api.recommendedOrderQty(freshMeat, 11), 2, 'manual multiple/minimum should adjust converted order qty');
+assert.deepStrictEqual(plain(api.parseManualSfaItemsText('A,2,BOX\\nB\\t3\\tEA').map(row => [row.name, row.qty, row.unit])), [['A', 2, 'BOX'], ['B', 3, 'EA']], 'manual analysis input parser should support comma and tab rows');
+assert.deepStrictEqual(plain(api.parseManualSfaItemsText(JSON.stringify({ mappings: [{ siteName: 'C', siteQty: 4, siteUnit: 'BOX' }] })).map(row => [row.name, row.qty, row.unit])), [['C', 4, 'BOX']], 'manual analysis input parser should accept exported mapping JSON');
+const compareOnlyData = {
+  ok: true,
+  items: [{ name: 'BBQ치즈볼', unit: 'BOX', row_index: 9 }],
+  comparison: { matched: [{ row_index: 9, sfa_name: 'BBQ치즈볼', sfa_qty: 5, sfa_unit: 'BOX', sfa_amount: '12,000', expected_name: '냉동-치즈볼-BBQ치즈볼(크림)', score: 0.96 }], missing: [], extra: [] },
+};
+matches = api.buildOrderSiteMatches(compareOnlyData);
+assert.strictEqual(matches[0].siteQty, 5, 'matching builder should preserve comparison quantity when source row lacks it');
+assert.strictEqual(matches[0].amount, 12000, 'matching builder should preserve comparison amount when source row lacks it');
 
 console.log('OrderHelper static checks OK');
