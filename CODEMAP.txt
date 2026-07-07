@@ -3,8 +3,8 @@
 
 ## 파일 → 역할
 - APP_INTENT.md: 앱 목적, 사용자 결과, 절대 기준, Web+SiteBot 경계, read-only preflight, 공장 PC browser evidence, live write boundary, 완료 기준
-- index.html: 재고 입력, 수동 하루사용량 기준 발주량 계산, 최초 SFA 순서 출력보기 UI, Firebase 동기화, SFA 실발주 이력+재고변동+날짜별 `필요기준-체크재고` 실사용량 비교 기반 발주단위 환산/하루 실사용량 참고 배지, 사이트 품목↔내부 품목 1:1 매칭, 사용자사이트 별명→실발주항목+환산값 검수/확정, 단위 보정/미매칭/입출력 패널, PIN+CLI 허용 단말/GPS/desktop 승인·grace 프론트 게이트. 환산 방향은 `발주 1단위 = 체크/재고 N단위`이며 체크 10개=발주 1박스이면 N=10.
-- tests/orderhelper_static_checks.js: 정적 검증. 출력 즉시계산, 추천일, Firebase 동기화, 수동 하루사용량 우선, 최초 출력순서, 재고변동/실사용량 비교 환산 기준, 사이트 품목 매칭, 별명→실발주항목+환산 후보/확정, desktop 접근 fallback, 단위 보정, 수동/JSON 입력 파서 보호
+- index.html: 재고 입력, 수동 하루사용량 기준 발주량 계산, 최초 SFA 순서 출력보기 UI, Firebase 동기화, SFA 실발주 이력+재고변동+날짜별 `필요기준-체크재고` 실사용량 비교 기반 발주단위 환산/하루 실사용량 참고 배지, 사이트 품목↔내부 품목 1:1 매칭, 사용자사이트 별명→실발주항목+환산값 검수/확정, 체크 입력 행 inline 별명·환산 보정, 단위 보정/미매칭/입출력 패널, PIN+CLI 허용 단말/GPS/desktop 승인·grace 프론트 게이트. 환산 방향은 `발주 1단위 = 체크/재고 N단위`이며 체크 10개=발주 1박스이면 N=10.
+- tests/orderhelper_static_checks.js: 정적 검증. 출력 즉시계산, 추천일, Firebase 동기화, 수동 하루사용량 우선, 최초 출력순서, 재고변동/실사용량 비교 환산 기준, 사이트 품목 매칭, 별명→실발주항목+환산 후보/확정, 체크 입력 행 inline 보정, desktop 접근 fallback, 단위 보정, 수동/JSON 입력 파서 보호
 - /order/desk_q7m9r3a8: read-only preflight source. records/state 확인용 Firebase 경로.
 - ORDER_LIST_ANALYSIS_HANDOFF.md: 발주 자동화 조사/진단 인계
 - /root/SiteBot/main_auto.pyw: PC 다운로드/SFA 분석 실행자. `/monitor/main_pc/sfa_order_request`를 읽고 `/monitor/main_pc/status.sfa_order` 상태를 올린다.

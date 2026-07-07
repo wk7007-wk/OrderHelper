@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260707-8';/, 'APP_VERSION must be bumped for the temporary 700m GPS radius');
+mustMatch(/const APP_VERSION = '20260707-9';/, 'APP_VERSION must be bumped for inline alias correction controls');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -140,6 +140,18 @@ mustMatch(/const usageRecords = historyRecordsWithCurrent\(usageHistory, current
 mustMatch(/function setOrderSiteMapping\(siteKey, targetName, siteName = '', siteUnit = ''\)/, 'order-site mapping setter missing');
 mustMatch(/function setOrderAliasMapping\(aliasName, actualName\)/, 'order alias mapping setter missing');
 mustMatch(/function setOrderAliasConversion\(aliasName, value, mode = 'candidate'\)/, 'order alias conversion setter missing');
+mustMatch(/function inlineAliasCorrectionHtml\(row\)/, 'input row inline alias correction renderer missing');
+mustMatch(/class="inline-alias-correction \$\{statusClass\}"/, 'input row alias correction must render a compact details block');
+mustMatch(/class="sfa-select inline-alias-select"/, 'input row actual-name alias selector missing');
+mustMatch(/class="sfa-select inline-alias-factor-select"/, 'input row conversion candidate selector missing');
+mustMatch(/class="sfa-edit inline-alias-factor-input"/, 'input row manual conversion input missing');
+mustMatch(/function bindInlineAliasControls\(\)/, 'input row inline alias binding missing');
+mustMatch(/setOrderAliasMapping\(e\.target\.dataset\.aliasName, e\.target\.value\);/, 'inline alias selector must reuse confirmed alias mapping setter');
+mustMatch(/setOrderAliasConversion\(e\.target\.dataset\.aliasName, e\.target\.value, 'candidate'\);/, 'inline conversion candidate selector must save through confirmed conversion setter');
+mustMatch(/setOrderAliasConversion\(e\.target\.dataset\.aliasName, e\.target\.value, 'manual'\);/, 'inline manual conversion input must save through manual conversion setter');
+mustMatch(/const inlineAliasRowsByName = new Map\(buildOrderAliasMatches\(lastSfaCompareData\)\.map\(row => \[row\.aliasName, row\]\)\);/, 'input view must share alias match rows with alias review state');
+mustMatch(/data-item-name="\$\{escapeHtml\(item\.name\)\}"/, 'input row name cell must keep item identity while showing inline correction controls');
+mustMatch(/bindInlineAliasControls\(\);\s*updateStickyOffsets\(\);/, 'input view must bind inline alias controls after rendering rows');
 mustMatch(/const allowedStatuses = new Set\(\['candidate', 'default', 'confirmed', 'manual'\]\);/, 'alias mapping sanitizer must preserve default status');
 mustMatch(/if \(status === 'default'\) return '기본';/, 'alias default status must be visible in UI');
 mustMatch(/function conversionStatusText\(status\)/, 'conversion status label helper missing');

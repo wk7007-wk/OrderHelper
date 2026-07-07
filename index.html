@@ -70,6 +70,22 @@
   .sfa-select, .sfa-edit, .sfa-textarea { width: 100%; background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 7px 8px; font-size: 12px; }
   .sfa-select:focus, .sfa-edit:focus, .sfa-textarea:focus { outline: none; border-color: #e94560; }
   .sfa-alias-fields { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(74px, .65fr) minmax(62px, .45fr); gap: 5px; align-items: center; }
+  .inline-alias-correction { margin-top: 4px; max-width: 270px; color: #9aa7b7; font-size: 10px; line-height: 1.28; }
+  .inline-alias-correction summary { display: flex; align-items: center; gap: 4px; min-height: 20px; cursor: pointer; list-style: none; white-space: normal; }
+  .inline-alias-correction summary::-webkit-details-marker { display: none; }
+  .inline-alias-correction summary::before { content: '보정'; flex: 0 0 auto; color: #cbd5e1; font-weight: 900; }
+  .inline-alias-summary-text { min-width: 0; color: #dbeafe; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inline-alias-badge, .inline-alias-factor-badge { flex: 0 0 auto; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.32); padding: 1px 5px; font-size: 9px; font-weight: 900; }
+  .inline-alias-badge.default, .inline-alias-factor-badge.default { color: #bfdbfe; border-color: rgba(96, 165, 250, 0.4); background: rgba(37, 99, 235, 0.12); }
+  .inline-alias-badge.confirmed, .inline-alias-factor-badge.confirmed { color: #bbf7d0; border-color: rgba(34, 197, 94, 0.38); background: rgba(34, 197, 94, 0.11); }
+  .inline-alias-badge.manual, .inline-alias-factor-badge.manual { color: #99f6e4; border-color: rgba(20, 184, 166, 0.4); background: rgba(20, 184, 166, 0.11); }
+  .inline-alias-badge.unmatched, .inline-alias-factor-badge.unmatched { color: #fed7aa; border-color: rgba(249, 115, 22, 0.42); background: rgba(249, 115, 22, 0.1); }
+  .inline-alias-badge.conflict { color: #fecaca; border-color: rgba(239, 68, 68, 0.45); background: rgba(239, 68, 68, 0.12); }
+  .inline-alias-body { display: grid; gap: 4px; margin-top: 4px; padding: 5px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(8, 14, 24, 0.38); }
+  .inline-alias-fields { display: grid; grid-template-columns: minmax(88px, 1fr) minmax(72px, .8fr) minmax(54px, .48fr); gap: 4px; align-items: end; }
+  .inline-alias-fields label { display: grid; gap: 2px; color: #9aa7b7; font-size: 9px; font-weight: 700; }
+  .inline-alias-fields .sfa-select, .inline-alias-fields .sfa-edit { min-height: 26px; padding: 4px 5px; border-radius: 4px; font-size: 10px; }
+  .inline-alias-meta { color: #93a4bb; font-size: 9px; white-space: normal; }
   .sfa-unit-fields { display: grid; grid-template-columns: repeat(3, minmax(52px, 1fr)); gap: 5px; }
   .sfa-unit-fields label { display: grid; gap: 3px; color: #9aa7b7; font-size: 10px; }
   .sfa-io-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
@@ -193,6 +209,7 @@
     .sfa-match-row .sfa-alias-fields,
     .sfa-match-row .sfa-unit-fields { grid-column: 1 / -1; }
     .sfa-alias-fields { grid-template-columns: 1fr; }
+    .inline-alias-fields { grid-template-columns: 1fr; }
     .sfa-io-grid { grid-template-columns: 1fr; }
     .table-wrap { border-top: 1px solid #0f3460; }
   }
@@ -324,7 +341,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260707-8';
+const APP_VERSION = '20260707-9';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -2863,7 +2880,7 @@ function sfaMatchRowHtml(row) {
   </div>`;
 }
 
-function aliasActualSelectHtml(row) {
+function aliasActualOptionsHtml(row) {
   const optionByName = new Map();
   row.candidates.forEach(candidate => {
     if (!candidate.actualName || optionByName.has(candidate.actualName)) return;
@@ -2883,18 +2900,81 @@ function aliasActualSelectHtml(row) {
     const unitText = candidate.actualUnit ? ` · ${candidate.actualUnit}` : '';
     return `<option value="${escapeHtml(candidate.actualName)}"${selected}>${escapeHtml(candidate.actualName + unitText + scoreText)}</option>`;
   }));
-  return `<select class="sfa-select sfa-alias-select" data-alias-name="${escapeHtml(row.aliasName)}">${options.join('')}</select>`;
+  return options.join('');
 }
 
-function aliasConversionFieldsHtml(row) {
-  const current = normalizeConversionFactor(row.conversionFactor);
+function aliasActualSelectHtml(row) {
+  return `<select class="sfa-select sfa-alias-select" data-alias-name="${escapeHtml(row.aliasName)}">${aliasActualOptionsHtml(row)}</select>`;
+}
+
+function inlineAliasActualSelectHtml(row) {
+  return `<select class="sfa-select inline-alias-select" data-alias-name="${escapeHtml(row.aliasName)}">${aliasActualOptionsHtml(row)}</select>`;
+}
+
+function aliasConversionOptionsHtml(row, current) {
   const options = ['<option value="">환산값: 발주1=체크/재고</option>'].concat(row.conversionCandidates.map(candidate => {
     const selected = current && Math.abs(candidate.factor - current) < 0.0005 ? ' selected' : '';
     const label = `발주1=체크 ${fmt(candidate.factor, 3)} · ${conversionSourceLabel(candidate.source)} ${Math.round((candidate.score || 0) * 100)}%`;
     return `<option value="${escapeHtml(candidate.factor)}"${selected}>${escapeHtml(label)}</option>`;
   }));
-  return `<select class="sfa-select sfa-alias-factor-select" data-alias-name="${escapeHtml(row.aliasName)}">${options.join('')}</select>
+  return options.join('');
+}
+
+function aliasConversionFieldsHtml(row) {
+  const current = normalizeConversionFactor(row.conversionFactor);
+  return `<select class="sfa-select sfa-alias-factor-select" data-alias-name="${escapeHtml(row.aliasName)}">${aliasConversionOptionsHtml(row, current)}</select>
     <input class="sfa-edit sfa-alias-factor-input" type="number" inputmode="decimal" step="0.001" data-alias-name="${escapeHtml(row.aliasName)}" value="${escapeHtml(current ?? '')}" placeholder="예: 10">`;
+}
+
+function inlineAliasConversionFieldsHtml(row) {
+  return `${inlineAliasConversionSelectHtml(row)}
+    ${inlineAliasConversionInputHtml(row)}`;
+}
+
+function inlineAliasConversionSelectHtml(row) {
+  const current = normalizeConversionFactor(row.conversionFactor);
+  return `<select class="sfa-select inline-alias-factor-select" data-alias-name="${escapeHtml(row.aliasName)}">${aliasConversionOptionsHtml(row, current)}</select>`;
+}
+
+function inlineAliasConversionInputHtml(row) {
+  const current = normalizeConversionFactor(row.conversionFactor);
+  return `<input class="sfa-edit inline-alias-factor-input" type="number" inputmode="decimal" step="0.001" data-alias-name="${escapeHtml(row.aliasName)}" value="${escapeHtml(current ?? '')}" placeholder="예: 10">`;
+}
+
+function inlineAliasStatusClass(status) {
+  return ['confirmed', 'manual', 'default', 'candidate', 'conflict', 'unmatched'].includes(status) ? status : 'unmatched';
+}
+
+function inlineAliasCorrectionHtml(row) {
+  if (!row) return '';
+  const actualText = row.effectiveActualName || row.defaultActualName || '실발주 미확정';
+  const statusClass = inlineAliasStatusClass(row.status);
+  const conversionClass = inlineAliasStatusClass(row.effectiveConversionStatus || row.conversionStatus);
+  const factorText = row.effectiveConversionFactor
+    ? `환산 ${fmt(row.effectiveConversionFactor, 3)}`
+    : '환산 미확정';
+  const meta = [
+    row.defaultActualName ? `기본 ${row.defaultActualName}` : '',
+    row.savedActualName ? `확정 ${row.savedActualName}` : '',
+    row.defaultConversionFactor ? `기본환산 ${fmt(row.defaultConversionFactor, 3)}` : '',
+    row.savedConversionFactor ? `저장환산 ${fmt(row.savedConversionFactor, 3)}` : '',
+    row.conversionReason || row.reason || ''
+  ].filter(Boolean).join(' · ');
+  return `<details class="inline-alias-correction ${statusClass}" data-inline-alias-name="${escapeHtml(row.aliasName)}">
+    <summary>
+      <span class="inline-alias-badge ${statusClass}">${escapeHtml(sfaStatusText(row.status))}</span>
+      <span class="inline-alias-summary-text" title="${escapeHtml(actualText)}">${escapeHtml(actualText)}</span>
+      <span class="inline-alias-factor-badge ${conversionClass}">${escapeHtml(`${factorText} ${conversionStatusText(row.effectiveConversionStatus || row.conversionStatus)}`)}</span>
+    </summary>
+    <div class="inline-alias-body">
+      <div class="inline-alias-fields">
+        <label>실발주${inlineAliasActualSelectHtml(row)}</label>
+        <label>후보환산${inlineAliasConversionSelectHtml(row)}</label>
+        <label>직접환산${inlineAliasConversionInputHtml(row)}</label>
+      </div>
+      <div class="inline-alias-meta">${escapeHtml(meta || '기본 후보를 분석 payload에 사용합니다. 선택은 확정, 숫자 입력은 직접값으로 저장됩니다.')}</div>
+    </div>
+  </details>`;
 }
 
 function aliasMatchRowHtml(row) {
@@ -2998,7 +3078,7 @@ function updateSfaTabButtons() {
 
 function persistOrderCorrections(reason = 'correction') {
   saveLocal(reason);
-  if (viewMode === 'output') render();
+  if (viewMode === 'output' || document.querySelector('.inline-alias-correction')) render();
   renderSfaAnalysisTab(lastSfaCompareData);
   flushAutoSave(reason);
 }
@@ -3148,6 +3228,24 @@ function bindSfaCorrectionInputs() {
   document.querySelectorAll('.sfa-unit-input').forEach(inp => {
     inp.addEventListener('change', e => {
       setOrderUnitCorrection(e.target.dataset.unitName, e.target.dataset.unitField, e.target.value);
+    });
+  });
+}
+
+function bindInlineAliasControls() {
+  document.querySelectorAll('.inline-alias-select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      setOrderAliasMapping(e.target.dataset.aliasName, e.target.value);
+    });
+  });
+  document.querySelectorAll('.inline-alias-factor-select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      setOrderAliasConversion(e.target.dataset.aliasName, e.target.value, 'candidate');
+    });
+  });
+  document.querySelectorAll('.inline-alias-factor-input').forEach(inp => {
+    inp.addEventListener('change', e => {
+      setOrderAliasConversion(e.target.dataset.aliasName, e.target.value, 'manual');
     });
   });
 }
@@ -3940,6 +4038,7 @@ function render() {
     if (!item) return null;
     return { entry: ent, item, hidden: isItemHidden(item.name) };
   }).filter(Boolean).sort(compareInputRows);
+  const inlineAliasRowsByName = new Map(buildOrderAliasMatches(lastSfaCompareData).map(row => [row.aliasName, row]));
 
   const shownItems = new Set();
   orderedRows.forEach(({ entry: ent, item, hidden }) => {
@@ -3958,6 +4057,7 @@ function render() {
 
     const safeName = item.name.replace(/"/g, '&quot;');
     const nameDisplay = item.name;
+    const inlineAliasControls = isFirst ? inlineAliasCorrectionHtml(inlineAliasRowsByName.get(item.name)) : '';
     const daysLeft = hidden ? daysUntilReturn(item.name) : 0;
     const orderText = isNeed ? displayOrderQty(item, days) : '';
     const gCell = isFirst
@@ -3977,7 +4077,7 @@ function render() {
 
     tr.innerHTML = `
       <td><input class="cell zone" type="text" tabindex="-1" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
-      <td class="name">${nameDisplay}</td>
+      <td class="name" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}</td>
       <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
       ${KL}
       ${gCell}
@@ -3992,6 +4092,7 @@ function render() {
   });
 
   bindCellInputs();
+  bindInlineAliasControls();
   updateStickyOffsets();
 }
 
@@ -4012,7 +4113,7 @@ function updateGForName(name) {
   document.querySelectorAll('tr').forEach(tr => {
     const cells = tr.querySelectorAll('td.name');
     if (!cells.length) return;
-    const txt = cells[0].textContent.replace(/^↳\s*/, '');
+    const txt = cells[0].dataset.itemName || cells[0].textContent.replace(/^↳\s*/, '');
     if (txt !== name) return;
     const gCell = tr.querySelector('td.order-qty');
     if (gCell && !tr.classList.contains('row-hidden')) {
