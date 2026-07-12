@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0713.0249';/, 'APP_VERSION must match the rollback baseline release');
+mustMatch(/const APP_VERSION = '0713.0235';/, 'APP_VERSION must match the rollback baseline release');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -49,16 +49,11 @@ mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'al
 mustMatch(/function stockEventLabel\(e, phase\)/, 'stock key event label missing');
 mustMatch(/function logStockEvent\(e, phase\)/, 'stock key event logger missing');
 mustMatch(/const stockDrafts = new Map\(\);/, 'unconfirmed stock typing must have a separate draft store');
-mustMatch(/const stockRowRemovalTimers = new Map\(\);/, 'EMPTY row removal must debounce independently per committed row');
 mustMatch(/function setStockDraftFromInput\(target\)/, 'stock typing must update only draft state');
 mustMatch(/function commitStockInput\(target\)/, 'Enter must have an explicit stock commit path');
 mustMatch(/function persistStockInput\(reason = 'stockInput'\)/, 'stock typing must use the lightweight entries-only persistence path');
 mustMatch(/if \(f === 'stock'\) \{\s*setStockDraftFromInput\(e\.target\);/, 'stock input events must remain draft-only');
 mustMatch(/const ent = commitStockInput\(e\.target\);[\s\S]*persistStockInput\('stockEnter'\);[\s\S]*focusStockInputById\(nextId\);/, 'Enter must commit and advance focus without rendering');
-mustMatch(/scheduleCommittedStockRowRemoval\(currentId\);/, 'Enter must schedule only the committed EMPTY row for delayed removal');
-mustMatch(/function removeCommittedStockRowFromEmptyView\(id\)[\s\S]*stockDrafts\.has\(id\)[\s\S]*currentStockFocusId\(\) === id[\s\S]*row\.remove\(\);/, 'EMPTY row removal must preserve active or unconfirmed corrections and remove only its row');
-mustMatch(/function scheduleCommittedStockRowRemoval\(id\)[\s\S]*clearTimeout\(pending\);[\s\S]*5000\);/, 'recommitting the same EMPTY row must reset its five-second timer');
-mustMatch(/\.filter\(row => row && !isStockChecked\(row\.entry\)\)\.sort\(compareInputRows\)/, 'EMPTY render must include only stock-unconfirmed rows');
 mustNotMatch(/const ent = commitStockInput\(e\.target\);[\s\S]{0,240}render\(\);/, 'Enter must not render or sort while the user is entering stock');
 const stockInputBranch = html.match(/if \(f === 'stock'\) \{([\s\S]*?)\} else if \(f === 'zone'\)/)?.[1] || '';
 assert(stockInputBranch.includes('setStockDraftFromInput(e.target);'), 'stock input branch must capture the DOM draft');
@@ -423,9 +418,7 @@ this.__OrderHelperApi = {
   stockInputValue,
   commitStockInput,
   persistStockInput,
-  removeCommittedStockRowFromEmptyView,
   setEntriesForCheck(value) { entries = value; },
-  setViewModeForCheck(value) { viewMode = value; },
   setSuppressAutoSaveForCheck(value) { suppressAutoSave = value; },
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
@@ -444,19 +437,6 @@ assert.strictEqual(api.commitStockInput(stockTarget).stock, 12.5, 'Enter commit 
 api.setSuppressAutoSaveForCheck(true);
 api.persistStockInput();
 assert.strictEqual(JSON.parse(storage.get('bbq_entries'))[0].stock, 12.5, 'lightweight stock persistence must preserve the typed value');
-api.setViewModeForCheck('input');
-let removedCommittedRow = false;
-sandbox.document.activeElement = null;
-const priorQuerySelector = sandbox.document.querySelector;
-sandbox.document.querySelector = selector => selector.includes('stock-check-1')
-  ? { closest() { return { remove() { removedCommittedRow = true; } }; } }
-  : null;
-assert.strictEqual(api.removeCommittedStockRowFromEmptyView('stock-check-1'), true, 'confirmed EMPTY row must be removable without full render');
-assert.strictEqual(removedCommittedRow, true, 'targeted EMPTY removal must remove its row');
-stockTarget.value = '13';
-api.setStockDraftFromInput(stockTarget);
-assert.strictEqual(api.removeCommittedStockRowFromEmptyView('stock-check-1'), false, 'unconfirmed correction draft must keep the EMPTY row visible');
-sandbox.document.querySelector = priorQuerySelector;
 assert.strictEqual(api.normalizeSiteItemName('BBQ치즈볼(크림)'), 'BBQ치즈볼', 'site item normalizer should remove parenthesized spec');
 assert(api.scoreSiteToMaster('BBQ치즈볼', '냉동-치즈볼-BBQ치즈볼(크림)') >= 0.84, 'site/master score should find obvious candidate');
 const siteData = {
