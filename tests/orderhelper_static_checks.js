@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0713.0258';/, 'APP_VERSION must match the rollback baseline release');
+mustMatch(/const APP_VERSION = '0713.0301';/, 'APP_VERSION must match the rollback baseline release');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -53,11 +53,13 @@ mustMatch(/const stockRowMoveTimers = new Map\(\);/, 'checked row movement must 
 mustMatch(/function setStockDraftFromInput\(target\)/, 'stock typing must update only draft state');
 mustMatch(/function commitStockInput\(target\)/, 'Enter must have an explicit stock commit path');
 mustMatch(/function persistStockInput\(reason = 'stockInput'\)/, 'stock typing must use the lightweight entries-only persistence path');
+mustMatch(/function persistStockInput\(reason = 'stockInput'\) \{\s*localStorage\.setItem\('bbq_entries', JSON\.stringify\(entries\)\);/, 'Enter commit must durably write entries to localStorage before deferred autosave');
 mustMatch(/if \(f === 'stock'\) \{\s*setStockDraftFromInput\(e\.target\);/, 'stock input events must remain draft-only');
 mustMatch(/const ent = commitStockInput\(e\.target\);[\s\S]*persistStockInput\('stockEnter'\);[\s\S]*focusStockInputById\(nextId\);/, 'Enter must commit and advance focus without rendering');
 mustMatch(/scheduleCommittedStockRowMove\(currentId\);/, 'Enter must schedule only the committed row for delayed movement');
 mustMatch(/function moveCommittedStockRowToCheckedEnd\(id\)[\s\S]*stockDrafts\.has\(id\)[\s\S]*currentStockFocusId\(\) === id[\s\S]*row\.classList\.add\('row-checked'\);[\s\S]*tbody\.insertBefore\(row, firstHiddenRow \|\| null\);/, 'committed row movement must keep the row in DOM and move it to the checked section');
 mustNotMatch(/function moveCommittedStockRowToCheckedEnd\(id\)[\s\S]{0,700}row\.remove\(\)/, 'checked row movement must never delete or hide the row');
+mustNotMatch(/function moveCommittedStockRowToCheckedEnd\(id\)[\s\S]{0,900}(render|recomputeUsageAnalysis)\(\)/, 'targeted checked-row movement must not run full render or analysis');
 mustMatch(/function scheduleCommittedStockRowMove\(id\)[\s\S]*clearTimeout\(pending\);[\s\S]*5000\);/, 'recommitting the same row must reset its five-second move timer');
 mustMatch(/function getNextUncheckedStockInputId\(currentId\)[\s\S]*tr\.row-pending input\.cell\[data-field="stock"\]/, 'Enter focus must advance only through unchecked stock rows');
 mustMatch(/\.filter\(Boolean\)\.sort\(compareInputRows\)/, 'input view must retain all rows with unchecked rows sorted before checked rows');
@@ -427,7 +429,9 @@ this.__OrderHelperApi = {
   persistStockInput,
   moveCommittedStockRowToCheckedEnd,
   setEntriesForCheck(value) { entries = value; },
+  getEntriesForCheck() { return entries; },
   setViewModeForCheck(value) { viewMode = value; },
+  inputRowPriority,
   setSuppressAutoSaveForCheck(value) { suppressAutoSave = value; },
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
@@ -446,6 +450,11 @@ assert.strictEqual(api.commitStockInput(stockTarget).stock, 12.5, 'Enter commit 
 api.setSuppressAutoSaveForCheck(true);
 api.persistStockInput();
 assert.strictEqual(JSON.parse(storage.get('bbq_entries'))[0].stock, 12.5, 'lightweight stock persistence must preserve the typed value');
+const persistedEntriesAfterEnter = JSON.parse(storage.get('bbq_entries'));
+api.setEntriesForCheck(persistedEntriesAfterEnter);
+assert.strictEqual(api.getEntriesForCheck()[0].stock, 12.5, 'reload restoration must recover the Enter-committed stock value immediately');
+assert(api.inputRowPriority({ stock: null }, false) < api.inputRowPriority({ stock: 12.5 }, false), 'unchecked rows must sort above checked rows');
+assert(api.inputRowPriority({ stock: 12.5 }, false) < api.inputRowPriority({ stock: 12.5 }, true), 'checked rows must remain accessible above hidden rows');
 api.setViewModeForCheck('input');
 let movedCommittedRow = false;
 sandbox.document.activeElement = null;
