@@ -341,7 +341,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260707-10';
+const APP_VERSION = '20260712-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -1371,6 +1371,61 @@ function manualUnitFactorForItem(item) {
   return factor || null;
 }
 
+function aliasConversionForItem(item) {
+  const alias = orderAliasMappings[canonicalItemName(item?.name || '')];
+  if (!alias || typeof alias !== 'object') return null;
+  const factor = normalizeConversionFactor(alias.conversionFactor);
+  if (!factor) return null;
+  const parts = orderUnitParts(item);
+  const actualUnit = String(alias.actualUnit || '').trim();
+  const actualUnitKey = normalizeOrderUnit(actualUnit);
+  return {
+    factor,
+    actualName: String(alias.actualName || '').trim(),
+    actualUnit,
+    status: String(alias.conversionStatus || alias.status || '').trim(),
+    reason: String(alias.conversionReason || alias.reason || '').trim(),
+    updatedAt: Number(alias.updatedAt || 0),
+    orderUnitChanged: Boolean(actualUnitKey && parts.orderUnitKey && actualUnitKey !== parts.orderUnitKey)
+  };
+}
+
+function resolveOrderUnitContract(item) {
+  const parts = orderUnitParts(item);
+  const manual = unitCorrectionForItem(item?.name);
+  const manualFactor = manualUnitFactorForItem(item);
+  if (manualFactor) {
+    return { resolved: true, factor: manualFactor, source: 'manual', reason: 'manual unit override', updatedAt: Number(manual.updatedAt || 0) };
+  }
+  if (parts.same) {
+    return { resolved: true, factor: 1, source: 'same', reason: 'check and order units already match', updatedAt: 0 };
+  }
+  const alias = aliasConversionForItem(item);
+  if (alias?.orderUnitChanged) {
+    return { resolved: false, factor: null, source: 'stale', reason: 'saved SFA unit conflicts with current order unit', updatedAt: alias.updatedAt || 0 };
+  }
+  if (alias?.factor && isUserSelectedAliasStatus(alias.status)) {
+    return { resolved: true, factor: alias.factor, source: 'confirmed', reason: alias.reason || 'confirmed SFA alias conversion', updatedAt: alias.updatedAt || 0, actualName: alias.actualName || '', actualUnit: alias.actualUnit || '' };
+  }
+  const analysis = conversionAnalysis[item.name];
+  if (analysis?.source === 'movement' && Number.isFinite(analysis.factor) && analysis.factor > 0) {
+    return { resolved: true, factor: analysis.factor, source: 'movement', reason: 'stock movement derived conversion', updatedAt: 0, analysis };
+  }
+  if (analysis?.source === 'item' && Number.isFinite(analysis.factor) && analysis.factor > 0) {
+    return { resolved: true, factor: analysis.factor, source: 'item', reason: 'item history derived conversion', updatedAt: 0, analysis };
+  }
+  if (
+    analysis?.source === 'unit' &&
+    Number.isFinite(analysis.factor) &&
+    analysis.factor > 0 &&
+    Number(analysis.samples || 0) >= 3 &&
+    Number(analysis.spread || 999) <= 1.25
+  ) {
+    return { resolved: true, factor: analysis.factor, source: 'unit', reason: 'stable unit-pattern conversion', updatedAt: 0, analysis };
+  }
+  return { resolved: false, factor: null, source: 'pending', reason: 'need a safe order-to-stock unit conversion', updatedAt: alias?.updatedAt || 0, analysis };
+}
+
 function applyOrderUnitCorrectionQty(item, qty) {
   let out = Number(qty);
   if (!Number.isFinite(out) || out <= 0) return 0;
@@ -1383,33 +1438,15 @@ function applyOrderUnitCorrectionQty(item, qty) {
 }
 
 function conversionFactorForItem(item) {
-  const parts = orderUnitParts(item);
-  const manualFactor = manualUnitFactorForItem(item);
-  if (manualFactor) return manualFactor;
-  const analysis = conversionAnalysis[item.name];
-  if (analysis?.source === 'movement' && Number.isFinite(analysis.factor) && analysis.factor > 0) return analysis.factor;
-  if (parts.same) return 1;
-  if (analysis?.source === 'item' && Number.isFinite(analysis.factor) && analysis.factor > 0) return analysis.factor;
-  if (
-    analysis?.source === 'unit' &&
-    Number.isFinite(analysis.factor) &&
-    analysis.factor > 0 &&
-    Number(analysis.samples || 0) >= 3 &&
-    Number(analysis.spread || 999) <= 1.25
-  ) {
-    return analysis.factor;
-  }
-  return null;
+  return resolveOrderUnitContract(item).factor || null;
 }
 
 function recommendedOrderQty(item, stockNeed) {
   const need = Number(stockNeed);
   if (!Number.isFinite(need) || need <= 0) return 0;
-  const factor = conversionFactorForItem(item);
-  if (factor) return applyOrderUnitCorrectionQty(item, roundOrderQty(need / factor));
-  const parts = orderUnitParts(item);
-  if (!parts.same) return applyOrderUnitCorrectionQty(item, 1);
-  return applyOrderUnitCorrectionQty(item, roundOrderQty(need));
+  const contract = resolveOrderUnitContract(item);
+  if (!contract.factor) return 0;
+  return applyOrderUnitCorrectionQty(item, roundOrderQty(need / contract.factor));
 }
 
 function outputOrderQty(item, days) {
@@ -1737,7 +1774,7 @@ function currentAnalysisSnapshot() {
   const calc = {};
   MASTER.forEach(item => {
     const g = calcG(item, days, { baseDaily: true });
-    if (g > 0) calc[item.name] = { qty: recommendedOrderQty(item, g), stockNeed: Math.round(g * 100) / 100, unit: item.unit, stock: totalStock(item.name) };
+    if (g > 0) calc[item.name] = { qty: outputOrderQty(item, days), stockNeed: Math.round(g * 100) / 100, unit: item.unit, stock: totalStock(item.name) };
   });
   return {
     savedAt: Date.now(),
@@ -2016,7 +2053,7 @@ function currentCalcSnapshot(days = currentOrderDaysValue()) {
     const g = calcG(item, days);
     if (g > 0) {
       calc[item.name] = {
-        qty: recommendedOrderQty(item, g),
+        qty: outputOrderQty(item, days),
         stockNeed: Math.round(g * 100) / 100,
         unit: item.unit,
         stock: totalStock(item.name)
@@ -2307,15 +2344,44 @@ function orderSiteItemKey(row) {
 }
 
 function siteRowsFromSfaData(data) {
-  const seen = new Set();
+  const seen = new Map();
   const rows = [];
   const push = row => {
     const name = siteItemName(row);
     if (!name) return;
+    const unit = siteItemUnit(row);
     const key = orderSiteItemKey(row);
-    if (seen.has(key)) return;
-    seen.add(key);
-    rows.push({ ...row, _siteKey: key });
+    const qty = siteItemQty(row);
+    const amount = siteItemAmount(row);
+    const existing = seen.get(key);
+    if (existing) {
+      existing.qty = Math.round((Number(existing.qty || 0) + qty) * 1000) / 1000;
+      existing.sfa_qty = existing.qty;
+      existing._rowCount += 1;
+      if (row.row_index !== undefined && row.row_index !== null) existing._rowIndexes.push(row.row_index);
+      if (amount !== null) {
+        const currentAmount = Number(existing.amount || 0) || 0;
+        existing.amount = Math.round((currentAmount + amount) * 100) / 100;
+        existing.sfa_amount = existing.amount;
+      }
+      if ((existing.row_index === null || existing.row_index === undefined) && row.row_index !== undefined && row.row_index !== null) existing.row_index = row.row_index;
+      return;
+    }
+    const next = {
+      name,
+      unit,
+      qty,
+      sfa_qty: qty,
+      amount,
+      sfa_amount: amount,
+      row_index: row.row_index ?? null,
+      source_name: String(row.source_name || name).trim(),
+      _siteKey: key,
+      _rowCount: 1,
+      _rowIndexes: row.row_index !== undefined && row.row_index !== null ? [row.row_index] : []
+    };
+    seen.set(key, next);
+    rows.push(next);
   };
   (Array.isArray(data?.items) ? data.items : []).forEach(push);
   const comp = data?.comparison || {};
@@ -2391,7 +2457,23 @@ function addActualOrderCandidate(map, row, source, details = {}) {
   map.set(key, current);
 }
 
+let cachedActualCandidateKey = '';
+let cachedActualCandidates = [];
+
+function actualCandidateCacheKey(data = lastSfaCompareData) {
+  return [
+    Number(data?.savedAt || 0),
+    normalizeHistoryDateKey(data?.historySummary?.selectedDate || ''),
+    Number(data?.comparison?.matched?.length || 0),
+    Number(data?.comparison?.extra?.length || 0),
+    Number(Array.isArray(data?.items) ? data.items.length : 0),
+    Object.keys(sfaActualHistory || {}).length
+  ].join('|');
+}
+
 function collectActualOrderCandidates(data = lastSfaCompareData) {
+  const cacheKey = actualCandidateCacheKey(data);
+  if (cachedActualCandidateKey === cacheKey) return cachedActualCandidates;
   const map = new Map();
   const latestSource = data?.file?.name === '수동 입력' ? '수동입력' : '최근SFA';
   siteRowsFromSfaData(data).forEach(row => addActualOrderCandidate(map, row, latestSource, {
@@ -2422,12 +2504,14 @@ function collectActualOrderCandidates(data = lastSfaCompareData) {
       unit: ''
     }, '실발주키', { expectedName: name, dateKey }));
   });
-  return Array.from(map.values()).map(row => ({
+  cachedActualCandidates = Array.from(map.values()).map(row => ({
     ...row,
     sources: Array.from(row.sources),
     expectedNames: Array.from(row.expectedNames),
     dates: Array.from(row.dates).sort()
   })).sort((a, b) => b.evidenceCount - a.evidenceCount || a.actualName.localeCompare(b.actualName, 'ko', { numeric: true }));
+  cachedActualCandidateKey = cacheKey;
+  return cachedActualCandidates;
 }
 
 function aliasCandidateReason(candidate) {
@@ -2742,7 +2826,27 @@ function conversionCandidatePayload(candidate) {
   };
 }
 
+let cachedAliasMatchKey = '';
+let cachedAliasMatches = [];
+
+function aliasMatchCacheKey(data = lastSfaCompareData) {
+  return [
+    Number(data?.savedAt || 0),
+    normalizeHistoryDateKey(data?.historySummary?.selectedDate || ''),
+    Object.keys(usageHistory || {}).length,
+    Object.keys(sfaActualHistory || {}).length,
+    JSON.stringify(entries || []),
+    JSON.stringify(overrides || {}),
+    JSON.stringify(dailySales || []),
+    Number(getBaseSales()),
+    JSON.stringify(orderAliasMappings || {}),
+    JSON.stringify(orderUnitCorrections || {})
+  ].join('|');
+}
+
 function buildOrderAliasMatches(data = lastSfaCompareData) {
+  const cacheKey = aliasMatchCacheKey(data);
+  if (cachedAliasMatchKey === cacheKey) return cachedAliasMatches;
   const actualCandidates = collectActualOrderCandidates(data);
   const usageRecords = historyRecordsWithCurrent(usageHistory, currentAnalysisSnapshot());
   const rows = MASTER.slice().sort(defaultOutputCompare).map(item => {
@@ -2802,10 +2906,12 @@ function buildOrderAliasMatches(data = lastSfaCompareData) {
   rows.forEach(row => {
     if (row.actualName && ['confirmed', 'manual'].includes(row.status) && selectedCounts[row.actualName] > 1) row.status = 'conflict';
   });
-  return rows.sort((a, b) => {
+  cachedAliasMatches = rows.sort((a, b) => {
     const order = { conflict: 0, unmatched: 1, default: 2, candidate: 2, confirmed: 3, manual: 3 };
     return (order[a.status] ?? 9) - (order[b.status] ?? 9) || defaultOutputCompare({ name: a.aliasName }, { name: b.aliasName });
   });
+  cachedAliasMatchKey = cacheKey;
+  return cachedAliasMatches;
 }
 
 function orderAliasMappingDraftsForPayload(data = lastSfaCompareData) {
@@ -2877,9 +2983,9 @@ function buildOrderSiteMatches(data = lastSfaCompareData) {
   const out = rows.map(row => {
     const siteKey = row._siteKey || orderSiteItemKey(row);
     const correction = orderSiteMappings[siteKey];
-    const compareRow = row.row_index !== undefined && row.row_index !== null
-      ? lookup.byIndex.get(String(row.row_index)) || lookup.byKey.get(siteKey)
-      : lookup.byKey.get(siteKey);
+    const compareRow = (Array.isArray(row._rowIndexes) ? row._rowIndexes : [row.row_index])
+      .map(index => (index !== undefined && index !== null) ? lookup.byIndex.get(String(index)) : null)
+      .find(Boolean) || lookup.byKey.get(siteKey);
     const candidates = bestMasterCandidatesForSite(row);
     let targetName = '';
     let score = 0;
@@ -4423,7 +4529,7 @@ async function saveToFB(reason = 'manual') {
   const calc = {};
   MASTER.forEach(item => {
     const g = calcG(item, days);
-    if (g > 0) calc[item.name] = { qty: recommendedOrderQty(item, g), stockNeed: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
+    if (g > 0) calc[item.name] = { qty: outputOrderQty(item, days), stockNeed: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
   const salesWeights = dailyWeights(days).map(x => Math.round(x * 1000) / 1000);
   outputOrder = [];
