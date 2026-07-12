@@ -869,7 +869,6 @@ let pendingSnoozeName = null;
 let usageHistory = {};
 let usageAnalysis = {};
 let sfaActualHistory = {};
-const stockDrafts = new Map();
 
 function canonicalItemName(name) {
   return ITEM_NAME_ALIASES[name] || name;
@@ -4027,35 +4026,6 @@ function outputOrderDisplay(name, value) {
   return `<span class="output-order-value" data-output-name="${escapeHtml(name)}" data-output-field="order">${escapeHtml(value)}</span>`;
 }
 
-function setStockDraftFromInput(target) {
-  const id = target?.dataset?.id;
-  if (!id) return;
-  stockDrafts.set(id, target.value);
-}
-
-function stockInputValue(entry) {
-  if (stockDrafts.has(entry.id)) return stockDrafts.get(entry.id);
-  return entry.stock == null ? '' : entry.stock;
-}
-
-function commitStockInput(target) {
-  const ent = entries.find(entry => entry.id === target?.dataset?.id);
-  if (!ent) return null;
-  const value = target.value;
-  const number = value === '' ? null : parseFloat(value);
-  ent.stock = number === null || Number.isFinite(number) ? number : null;
-  stockDrafts.delete(ent.id);
-  return ent;
-}
-
-function persistStockInput(reason = 'stockInput') {
-  localStorage.setItem('bbq_entries', JSON.stringify(entries));
-  if (suppressAutoSave) return;
-  localDirty = true;
-  renderSaveState('저장 대기', 'dirty');
-  if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
-}
-
 function bindCellInputs() {
   document.querySelectorAll('input.cell').forEach(inp => {
     inp.addEventListener('input', e => {
@@ -4066,7 +4036,12 @@ function bindCellInputs() {
       const ent = entries.find(x => x.id === id);
       if (!ent) return;
       if (f === 'stock') {
-        setStockDraftFromInput(e.target);
+        logStockEvent(e, 'input');
+        ent.stock = v === '' ? null : parseFloat(v);
+        saveLocal();
+        recomputeUsageAnalysis();
+        updateDailyAnalysisForName(ent.name);
+        updateGForName(ent.name);
       } else if (f === 'zone') {
         ent.zone = v;
         saveLocal();
@@ -4091,6 +4066,20 @@ function bindCellInputs() {
       }
       // blur/Enter — pending autosave 즉시 flush
       if (e.target.dataset.field === 'stock') {
+        logStockEvent(e, 'change');
+        const currentId = e.target.dataset.id;
+        if (skipStockRenderOnceId === e.target.dataset.id) {
+          skipStockRenderOnceId = null;
+          return;
+        }
+        setTimeout(() => {
+          if (shouldFallbackAdvanceFromChange(e.target, currentId)) {
+            advanceStockInput(currentId, 'change');
+          } else {
+            sortStockRowsAndKeepFlow(currentId, 'change');
+          }
+          flushAutoSave('auto');
+        }, 0);
         return;
       }
       flushAutoSave();
@@ -4106,16 +4095,13 @@ function bindCellInputs() {
         render();
         return;
       }
+      if (e.target.dataset.field === 'stock') logStockEvent(e, 'keydown');
       if (e.key !== 'Enter') return;
       if (e.target.dataset.field !== 'stock') return;
       e.preventDefault();
-      logStockEvent(e, 'keydown');
-      const currentId = e.target.dataset.id;
-      const nextId = getNextStockInputId(currentId);
-      const ent = commitStockInput(e.target);
-      persistStockInput('stockEnter');
-      if (ent) updateGForName(ent.name);
-      focusStockInputById(nextId);
+      skipStockRenderOnceId = e.target.dataset.id;
+      advanceStockInput(e.target.dataset.id, 'keydown');
+      flushAutoSave('auto');
     });
   });
 }
@@ -4208,7 +4194,7 @@ function render() {
     tr.innerHTML = `
       <td><input class="cell zone" type="text" tabindex="-1" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
       <td class="name" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}</td>
-      <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-field="stock" value="${escapeHtml(stockInputValue(ent))}"></td>
+      <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
       ${KL}
       ${gCell}
       <td>${item.unit||''}</td>
