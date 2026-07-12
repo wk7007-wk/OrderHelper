@@ -341,7 +341,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0713.0318';
+const APP_VERSION = '0713.0347';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -869,6 +869,8 @@ let pendingSnoozeName = null;
 let usageHistory = {};
 let usageAnalysis = {};
 let sfaActualHistory = {};
+const stockDrafts = new Map();
+const stockRowMoveTimers = new Map();
 
 function canonicalItemName(name) {
   return ITEM_NAME_ALIASES[name] || name;
@@ -1017,6 +1019,8 @@ const ACTUAL_ORDER_DATE_STORAGE_KEY = 'bbq_actual_orders_date';
 const ORDER_SITE_MAPPING_STORAGE_KEY = 'bbq_order_site_mappings';
 const ORDER_ALIAS_MAPPING_STORAGE_KEY = 'bbq_order_alias_mappings';
 const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';
+const LOCAL_DIRTY_STORAGE_KEY = 'bbq_local_dirty_at_v1';
+const STOCK_COMMIT_STORAGE_PREFIX = 'bbq_stock_commit_v1:';
 const SFA_MANUAL_ITEMS_STORAGE_KEY = 'bbq_sfa_manual_items';
 const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
 const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';
@@ -1133,12 +1137,13 @@ function setOverrideValue(name, field, value) {
 
 function setOutputStockTotal(name, value) {
   const sameEntries = entries.filter(entry => entry.name === name);
-  if (sameEntries.length === 0) return;
+  if (sameEntries.length === 0) return [];
   const num = value === '' ? null : parseFloat(value);
   sameEntries.forEach((entry, idx) => {
     if (idx === 0) entry.stock = Number.isFinite(num) ? num : null;
     else entry.stock = null;
   });
+  return sameEntries;
 }
 
 function cleanActualOrders(source = actualOrders) {
@@ -1545,16 +1550,18 @@ function renderOrderAmountSpan(item, stockNeed) {
   return `<span class="order-amount" title="${escapeHtml(title)}">예상 ${escapeHtml(formatWon(estimate.expected_order_amount))}</span>`;
 }
 
-function updateOutputOrderForName(name) {
+function updateOutputOrderForName(name, refreshBadge = true) {
   const item = MASTER.find(m => m.name === name);
   if (!item) return;
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const g = calcG(item, days);
   const isNeed = g > 0;
+  let wasNeed = null;
   document.querySelectorAll('.output-order-value[data-output-name]').forEach(output => {
     if (output.dataset.outputName !== name) return;
     output.textContent = isNeed ? displayOrderQty(item, days) : '';
     const qtyCell = output.closest('td.order-qty');
+    if (wasNeed === null && qtyCell) wasNeed = qtyCell.classList.contains('pos');
     if (qtyCell) qtyCell.classList.toggle('pos', isNeed);
     const wrap = output.closest('.order-cell');
     const marker = wrap?.querySelector('.order-analysis');
@@ -1562,7 +1569,15 @@ function updateOutputOrderForName(name) {
     const amount = wrap?.querySelector('.order-amount');
     if (amount) amount.outerHTML = renderOrderAmountSpan(item, g);
   });
-  refreshNeedBadge(days);
+  if (refreshBadge) {
+    refreshNeedBadge(days);
+  } else if (wasNeed !== null && wasNeed !== isNeed) {
+    const badge = document.getElementById('badge');
+    const current = Number(String(badge?.textContent || '').match(/\d+/)?.[0] || 0);
+    const next = Math.max(0, current + (isNeed ? 1 : -1));
+    badge.textContent = '발주 ' + next + '개';
+    badge.classList.toggle('zero', next === 0);
+  }
 }
 
 function handleOutputCellInput(target) {
@@ -1571,15 +1586,13 @@ function handleOutputCellInput(target) {
   if (!name || !field) return false;
   const value = target.value;
   if (field === 'stock') {
-    setOutputStockTotal(name, value);
-    saveLocal();
-    recomputeUsageAnalysis();
-    updateDailyAnalysisForName(name);
-    updateOutputOrderForName(name);
+    const changedEntries = setOutputStockTotal(name, value);
+    changedEntries.forEach(entry => persistStockInput(entry, 'outputStock'));
+    updateOutputOrderForName(name, false);
   } else if (field === 'k' || field === 'l') {
     setOverrideValue(name, field, value);
-    saveLocal();
-    updateOutputOrderForName(name);
+    persistOverrideInput('outputOverride');
+    updateOutputOrderForName(name, false);
   } else {
     return false;
   }
@@ -4026,6 +4039,90 @@ function outputOrderDisplay(name, value) {
   return `<span class="output-order-value" data-output-name="${escapeHtml(name)}" data-output-field="order">${escapeHtml(value)}</span>`;
 }
 
+function setStockDraftFromInput(target) {
+  const id = target?.dataset?.id;
+  if (id) stockDrafts.set(id, target.value);
+}
+
+function stockInputValue(entry) {
+  return stockDrafts.has(entry.id) ? stockDrafts.get(entry.id) : (entry.stock == null ? '' : entry.stock);
+}
+
+function commitStockInput(target) {
+  const entry = entries.find(item => item.id === target?.dataset?.id);
+  if (!entry) return null;
+  const value = target.value;
+  const number = value === '' ? null : parseFloat(value);
+  entry.stock = number === null || Number.isFinite(number) ? number : null;
+  stockDrafts.delete(entry.id);
+  return entry;
+}
+
+function stockCommitStorageKey(id) {
+  return STOCK_COMMIT_STORAGE_PREFIX + String(id || '');
+}
+
+function persistStockInput(entry, reason = 'stockInput') {
+  if (!entry?.id) return;
+  localStorage.setItem(stockCommitStorageKey(entry.id), JSON.stringify({ stock: entry.stock }));
+  if (suppressAutoSave) return;
+  markLocalDirty();
+  renderSaveState('저장 대기', 'dirty');
+  scheduleAutoSave(reason);
+}
+
+function persistOverrideInput(reason = 'overrideInput') {
+  localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
+  if (suppressAutoSave) return;
+  markLocalDirty();
+  renderSaveState('저장 대기', 'dirty');
+  scheduleAutoSave(reason);
+}
+
+function hydrateStockCommits(source = entries) {
+  source.forEach(entry => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(stockCommitStorageKey(entry.id)) || 'null');
+      if (saved && Object.prototype.hasOwnProperty.call(saved, 'stock')) entry.stock = saved.stock;
+    } catch {}
+  });
+  return source;
+}
+
+function clearStockCommitJournal(source = entries) {
+  source.forEach(entry => localStorage.removeItem(stockCommitStorageKey(entry.id)));
+}
+
+function moveCommittedStockRowToCheckedEnd(id) {
+  if (viewMode !== 'input' || stockDrafts.has(id) || currentStockFocusId() === id) return false;
+  const entry = entries.find(item => item.id === id);
+  if (!isStockChecked(entry)) return false;
+  const input = document.querySelector(`input.cell[data-field="stock"][data-id="${id}"]`);
+  const row = input?.closest('tr');
+  const tbody = row?.parentElement;
+  if (!row || !tbody) return false;
+  row.classList.remove('row-pending');
+  row.classList.add('row-checked');
+  tbody.insertBefore(row, tbody.querySelector('tr.row-hidden') || null);
+  return true;
+}
+
+function scheduleCommittedStockRowMove(id) {
+  const pending = stockRowMoveTimers.get(id);
+  if (pending) clearTimeout(pending);
+  if (viewMode !== 'input') return;
+  stockRowMoveTimers.set(id, setTimeout(() => {
+    stockRowMoveTimers.delete(id);
+    moveCommittedStockRowToCheckedEnd(id);
+  }, 5000));
+}
+
+function getNextUncheckedStockInputId(currentId) {
+  const inputs = Array.from(document.querySelectorAll('tr.row-pending input.cell[data-field="stock"]'));
+  const index = inputs.findIndex(input => input.dataset.id === currentId);
+  return index >= 0 ? inputs[index + 1]?.dataset.id || null : inputs[0]?.dataset.id || null;
+}
+
 function bindCellInputs() {
   document.querySelectorAll('input.cell').forEach(inp => {
     inp.addEventListener('input', e => {
@@ -4036,12 +4133,7 @@ function bindCellInputs() {
       const ent = entries.find(x => x.id === id);
       if (!ent) return;
       if (f === 'stock') {
-        logStockEvent(e, 'input');
-        ent.stock = v === '' ? null : parseFloat(v);
-        saveLocal();
-        recomputeUsageAnalysis();
-        updateDailyAnalysisForName(ent.name);
-        updateGForName(ent.name);
+        setStockDraftFromInput(e.target);
       } else if (f === 'zone') {
         ent.zone = v;
         saveLocal();
@@ -4053,33 +4145,17 @@ function bindCellInputs() {
         if (num === null) delete overrides[n][f];
         else overrides[n][f] = num;
         if (Object.keys(overrides[n]).length === 0) delete overrides[n];
-        saveLocal();
-        updateGForName(n);
+        persistOverrideInput(f === 'l' ? 'dailyUsage' : 'buffer');
+        updateGForName(n, false);
       }
     });
     inp.addEventListener('change', e => {
       if (e.target.dataset.outputField) {
         handleOutputCellInput(e.target);
-        flushAutoSave('auto');
-        render();
         return;
       }
       // blur/Enter — pending autosave 즉시 flush
       if (e.target.dataset.field === 'stock') {
-        logStockEvent(e, 'change');
-        const currentId = e.target.dataset.id;
-        if (skipStockRenderOnceId === e.target.dataset.id) {
-          skipStockRenderOnceId = null;
-          return;
-        }
-        setTimeout(() => {
-          if (shouldFallbackAdvanceFromChange(e.target, currentId)) {
-            advanceStockInput(currentId, 'change');
-          } else {
-            sortStockRowsAndKeepFlow(currentId, 'change');
-          }
-          flushAutoSave('auto');
-        }, 0);
         return;
       }
       flushAutoSave();
@@ -4091,17 +4167,19 @@ function bindCellInputs() {
         e.preventDefault();
         handleOutputCellInput(e.target);
         e.target.blur();
-        flushAutoSave('auto');
-        render();
         return;
       }
-      if (e.target.dataset.field === 'stock') logStockEvent(e, 'keydown');
       if (e.key !== 'Enter') return;
       if (e.target.dataset.field !== 'stock') return;
       e.preventDefault();
-      skipStockRenderOnceId = e.target.dataset.id;
-      advanceStockInput(e.target.dataset.id, 'keydown');
-      flushAutoSave('auto');
+      logStockEvent(e, 'keydown');
+      const currentId = e.target.dataset.id;
+      const nextId = getNextUncheckedStockInputId(currentId);
+      const entry = commitStockInput(e.target);
+      persistStockInput(entry, 'stockEnter');
+      if (entry) updateGForName(entry.name, false);
+      focusStockInputById(nextId);
+      scheduleCommittedStockRowMove(currentId);
     });
   });
 }
@@ -4194,7 +4272,7 @@ function render() {
     tr.innerHTML = `
       <td><input class="cell zone" type="text" tabindex="-1" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
       <td class="name" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}</td>
-      <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
+      <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-field="stock" value="${escapeHtml(stockInputValue(ent))}"></td>
       ${KL}
       ${gCell}
       <td>${item.unit||''}</td>
@@ -4219,19 +4297,21 @@ function refreshNeedBadge(days = parseInt(document.getElementById('orderDays')?.
   document.getElementById('badge').classList.toggle('zero', cnt === 0);
 }
 
-function updateGForName(name) {
+function updateGForName(name, refreshBadge = true) {
   const item = MASTER.find(m => m.name === name);
   if (!item) return;
   const days = parseInt(document.getElementById('orderDays').value);
   const g = calcG(item, days);
   const isNeed = g > 0;
   // 같은 품목 모든 행의 G 셀/배경 갱신
+  let wasNeed = null;
   document.querySelectorAll('tr').forEach(tr => {
     const cells = tr.querySelectorAll('td.name');
     if (!cells.length) return;
     const txt = cells[0].dataset.itemName || cells[0].textContent.replace(/^↳\s*/, '');
     if (txt !== name) return;
     const gCell = tr.querySelector('td.order-qty');
+    if (wasNeed === null && gCell && !tr.classList.contains('dup-row')) wasNeed = gCell.classList.contains('pos');
     if (gCell && !tr.classList.contains('row-hidden')) {
       const isDuplicateCell = gCell.classList.contains('dup');
       gCell.textContent = isNeed ? displayOrderQty(item, days) : '';
@@ -4242,7 +4322,15 @@ function updateGForName(name) {
     if (isNeed && !tr.classList.contains('dup-row')) tr.classList.add('need');
     else tr.classList.remove('need');
   });
-  refreshNeedBadge(days);
+  if (refreshBadge) {
+    refreshNeedBadge(days);
+  } else if (wasNeed !== null && wasNeed !== isNeed) {
+    const badge = document.getElementById('badge');
+    const current = Number(String(badge?.textContent || '').match(/\d+/)?.[0] || 0);
+    const next = Math.max(0, current + (isNeed ? 1 : -1));
+    badge.textContent = '발주 ' + next + '개';
+    badge.classList.toggle('zero', next === 0);
+  }
 }
 
 function addRow(fromId) {
@@ -4293,7 +4381,15 @@ function resetStocks() {
 }
 
 let suppressAutoSave = false;
-let localDirty = false;
+let localDirty = Boolean(localStorage.getItem(LOCAL_DIRTY_STORAGE_KEY));
+function markLocalDirty() {
+  localDirty = true;
+  localStorage.setItem(LOCAL_DIRTY_STORAGE_KEY, String(Date.now()));
+}
+function clearLocalDirty() {
+  localDirty = false;
+  localStorage.removeItem(LOCAL_DIRTY_STORAGE_KEY);
+}
 function saveLocal(reason = 'auto') {
   const orderDaysEl = document.getElementById('orderDays');
   if (orderDaysEl) localStorage.setItem('bbq_orderDays', orderDaysEl.value);
@@ -4301,6 +4397,7 @@ function saveLocal(reason = 'auto') {
   outputOrder = [];
   actualOrders = cleanActualOrders();
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
+  clearStockCommitJournal(entries);
   localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
   localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
   localStorage.removeItem(OUTPUT_ORDER_STORAGE_KEY);
@@ -4315,7 +4412,7 @@ function saveLocal(reason = 'auto') {
     localStorage.setItem('bbq_baseSalesVersion', BASE_SALES_STORAGE_VERSION);
   }
   if (!suppressAutoSave) {
-    localDirty = true;
+    markLocalDirty();
     renderSaveState('저장 대기', 'dirty');
     if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
   }
@@ -4444,7 +4541,7 @@ async function saveToFB(reason = 'manual') {
     const delay = SAVE_BACKOFF[saveAttempt++];
     if (saveRetryTimer) clearTimeout(saveRetryTimer);
     pushSaveLog(`${saveReasonLabel(activeReason)} 재시도 ${delay/1000}초`, 'warn');
-    saveRetryTimer = setTimeout(() => { saveRetryTimer = null; saveToFB(activeReason); }, delay);
+    saveRetryTimer = setTimeout(() => { saveRetryTimer = null; queueRemoteSave(activeReason); }, delay);
     console.warn('[saveToFB] retry in', delay, 'ms after', label);
   };
   try {
@@ -4464,7 +4561,11 @@ async function saveToFB(reason = 'manual') {
     if (saveRetryTimer) { clearTimeout(saveRetryTimer); saveRetryTimer = null; }
     localStorage.setItem('bbq_savedAt', String(now));
     // pendingSave=true 면 진행 중 추가 입력 있었음 → localDirty 유지(다음 PUT 가 최신 entries 로 재발사). pendingSave=false 면 PUT payload == 현재 entries → dirty 해제.
-    if (!pendingSave) localDirty = false;
+    if (!pendingSave) {
+      localStorage.setItem('bbq_entries', JSON.stringify(entries));
+      clearStockCommitJournal(entries);
+      clearLocalDirty();
+    }
     console.log('[saveToFB] OK savedAt=', now, 'pendingSave=', pendingSave);
     pushSaveLog(saveReasonLabel(activeReason) + ' 완료', 'success', now);
     renderSaveState('저장됨', 'saved');
@@ -4501,6 +4602,10 @@ document.addEventListener('focusout', e => {
     inputFocused = false;
     setTimeout(() => {
       if (!inputFocused && pendingFBData) {
+        if (localDirty) {
+          pendingFBData = null;
+          return;
+        }
         applyFBData(pendingFBData);
         pendingFBData = null;
       }
@@ -4591,6 +4696,28 @@ async function autoLoadFromFB(silent) {
 // 자동저장 (debounce 1초, blur/change 시 즉시)
 let autoSaveTimer = null;
 let queuedSaveReason = 'auto';
+let remoteSaveIdleHandle = null;
+let remoteSaveIdleUsesRIC = false;
+function cancelQueuedRemoteSave() {
+  if (remoteSaveIdleHandle === null) return;
+  if (remoteSaveIdleUsesRIC && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(remoteSaveIdleHandle);
+  else clearTimeout(remoteSaveIdleHandle);
+  remoteSaveIdleHandle = null;
+}
+function queueRemoteSave(reason) {
+  cancelQueuedRemoteSave();
+  const invoke = () => {
+    remoteSaveIdleHandle = null;
+    saveToFB(reason);
+  };
+  if (typeof window.requestIdleCallback === 'function') {
+    remoteSaveIdleUsesRIC = true;
+    remoteSaveIdleHandle = window.requestIdleCallback(invoke, { timeout: 2000 });
+  } else {
+    remoteSaveIdleUsesRIC = false;
+    remoteSaveIdleHandle = setTimeout(invoke, 0);
+  }
+}
 function scheduleAutoSave(reason = 'auto') {
   queuedSaveReason = reason;
   clearTimeout(autoSaveTimer);
@@ -4598,7 +4725,7 @@ function scheduleAutoSave(reason = 'auto') {
     autoSaveTimer = null;
     const reasonToSave = queuedSaveReason || 'auto';
     queuedSaveReason = 'auto';
-    saveToFB(reasonToSave);
+    queueRemoteSave(reasonToSave);
   }, 1000);
 }
 function flushAutoSave(reason) {
@@ -4611,7 +4738,11 @@ function flushAutoSave(reason) {
     clearTimeout(autoSaveTimer);
     autoSaveTimer = null;
   }
-  saveToFB(reasonToSave);
+  if (reason === 'manual') {
+    cancelQueuedRemoteSave();
+    saveToFB(reasonToSave);
+  }
+  else queueRemoteSave(reasonToSave);
 }
 
 function handleOrderDaysChange() {
@@ -4652,6 +4783,7 @@ try {
       stock: storedStockForName(oldStocks, item.name)
     }));
   }
+  hydrateStockCommits(entries);
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
   localStorage.removeItem(OUTPUT_ORDER_STORAGE_KEY);
   outputOrder = [];
@@ -4708,6 +4840,7 @@ function startOrderHelperApp() {
   bindBaseSalesInput();
   renderSalesInputs();
   render();
+  if (localDirty) scheduleAutoSave('recovery');
   loadUsageHistory(true);
   loadSfaOrderStatus(true);
   window.addEventListener('resize', updateStickyOffsets);
