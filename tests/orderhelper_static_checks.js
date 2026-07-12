@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260707-10';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
+mustMatch(/const APP_VERSION = '20260713-2';/, 'APP_VERSION must match the rollback baseline release');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -48,6 +48,16 @@ mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock so
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
 mustMatch(/function stockEventLabel\(e, phase\)/, 'stock key event label missing');
 mustMatch(/function logStockEvent\(e, phase\)/, 'stock key event logger missing');
+mustMatch(/const stockDrafts = new Map\(\);/, 'unconfirmed stock typing must have a separate draft store');
+mustMatch(/function setStockDraftFromInput\(target\)/, 'stock typing must update only draft state');
+mustMatch(/function commitStockInput\(target\)/, 'Enter must have an explicit stock commit path');
+mustMatch(/function persistStockInput\(reason = 'stockInput'\)/, 'stock typing must use the lightweight entries-only persistence path');
+mustMatch(/if \(f === 'stock'\) \{\s*setStockDraftFromInput\(e\.target\);/, 'stock input events must remain draft-only');
+mustMatch(/const ent = commitStockInput\(e\.target\);[\s\S]*persistStockInput\('stockEnter'\);[\s\S]*focusStockInputById\(nextId\);/, 'Enter must commit and advance focus without rendering');
+mustNotMatch(/const ent = commitStockInput\(e\.target\);[\s\S]{0,240}render\(\);/, 'Enter must not render or sort while the user is entering stock');
+const stockInputBranch = html.match(/if \(f === 'stock'\) \{([\s\S]*?)\} else if \(f === 'zone'\)/)?.[1] || '';
+assert(stockInputBranch.includes('setStockDraftFromInput(e.target);'), 'stock input branch must capture the DOM draft');
+assert(!/(saveLocal|persistStockInput|recomputeUsageAnalysis|updateGForName)\(/.test(stockInputBranch), 'unconfirmed stock typing must not persist or calculate');
 mustMatch(/let usageHistory = \{\};/, 'usage history state missing');
 mustMatch(/let usageAnalysis = \{\};/, 'usage analysis state missing');
 mustMatch(/let sfaActualHistory = \{\};/, 'SFA actual history state missing');
@@ -305,11 +315,10 @@ mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="k"/, 'k
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="l"/, 'l field must be skipped by keyboard next navigation');
 mustMatch(/class="cell zone" type="text" tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');
 mustMatch(/<button class="add" tabindex="-1"/, 'row action buttons must be skipped by keyboard next navigation');
-mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must render sorted rows and restore focus');
-mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
-mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');
-mustMatch(/sortStockRowsAndKeepFlow\(currentId, 'change'\)/, 'change with already-correct focus must still sort rows');
-mustMatch(/flushAutoSave\('auto'\)/, 'stock logs and sorted state must be saved immediately');
+mustMatch(/const nextId = getNextStockInputId\(currentId\);[\s\S]*focusStockInputById\(nextId\);/, 'Enter must move directly to the next stock input without rendering');
+mustNotMatch(/advanceStockInput\([^\n]*'keydown'\)/, 'Enter must not render or sort stock rows immediately');
+mustNotMatch(/advanceStockInput\([^\n]*'change'\)/, 'stock blur/change must not commit or render');
+mustNotMatch(/sortStockRowsAndKeepFlow\([^\n]*'change'\)/, 'stock blur/change must not sort rows');
 mustNotMatch(/pushSaveLog\('키 /, 'stock key logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\(`보정 /, 'focus correction logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\('정렬이동 /, 'sort/focus logs must not be visible user logs');
@@ -405,6 +414,12 @@ this.__OrderHelperApi = {
   siteItemAmount,
   recommendedOrderQty,
   conversionFactorForItem,
+  setStockDraftFromInput,
+  stockInputValue,
+  commitStockInput,
+  persistStockInput,
+  setEntriesForCheck(value) { entries = value; },
+  setSuppressAutoSaveForCheck(value) { suppressAutoSave = value; },
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
   setAliasMappingsForCheck(value) { orderAliasMappings = sanitizeOrderAliasMappings(value); },
@@ -414,6 +429,14 @@ this.__OrderHelperApi = {
 
 const api = sandbox.__OrderHelperApi;
 const plain = value => JSON.parse(JSON.stringify(value));
+api.setEntriesForCheck([{ id: 'stock-check-1', name: api.MASTER[0].name, zone: '', stock: null }]);
+const stockTarget = { dataset: { id: 'stock-check-1' }, value: '12.5' };
+api.setStockDraftFromInput(stockTarget);
+assert.strictEqual(api.stockInputValue({ id: 'stock-check-1', stock: null }), '12.5', 'draft stock value must survive render before Enter');
+assert.strictEqual(api.commitStockInput(stockTarget).stock, 12.5, 'Enter commit must update entry state');
+api.setSuppressAutoSaveForCheck(true);
+api.persistStockInput();
+assert.strictEqual(JSON.parse(storage.get('bbq_entries'))[0].stock, 12.5, 'lightweight stock persistence must preserve the typed value');
 assert.strictEqual(api.normalizeSiteItemName('BBQ치즈볼(크림)'), 'BBQ치즈볼', 'site item normalizer should remove parenthesized spec');
 assert(api.scoreSiteToMaster('BBQ치즈볼', '냉동-치즈볼-BBQ치즈볼(크림)') >= 0.84, 'site/master score should find obvious candidate');
 const siteData = {
