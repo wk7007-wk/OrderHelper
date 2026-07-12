@@ -873,8 +873,6 @@ let currentStateRevision = 0;
 let usageHistoryRevision = 0;
 let sfaActualHistoryRevision = 0;
 let compareDataRevision = 0;
-let inputRowCache = new Map();
-let outputRowCache = new Map();
 
 function touchCurrentStateRevision() {
   currentStateRevision += 1;
@@ -1660,32 +1658,17 @@ function updateOutputOrderForName(name) {
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const g = calcG(item, days);
   const isNeed = g > 0;
-  const row = outputRowCache.get(name);
-  if (row) {
-    const output = row.querySelector('.output-order-value[data-output-name]');
-    if (output && output.dataset.outputName === name) {
-      output.textContent = isNeed ? displayOrderQty(item, days) : '';
-      const qtyCell = output.closest('td.order-qty');
-      if (qtyCell) qtyCell.classList.toggle('pos', isNeed);
-      const wrap = output.closest('.order-cell');
-      const marker = wrap?.querySelector('.order-analysis');
-      if (marker) marker.outerHTML = renderOrderAnalysisSpan(item, g);
-      const amount = wrap?.querySelector('.order-amount');
-      if (amount) amount.outerHTML = renderOrderAmountSpan(item, g);
-    }
-  } else {
-    document.querySelectorAll('.output-order-value[data-output-name]').forEach(output => {
-      if (output.dataset.outputName !== name) return;
-      output.textContent = isNeed ? displayOrderQty(item, days) : '';
-      const qtyCell = output.closest('td.order-qty');
-      if (qtyCell) qtyCell.classList.toggle('pos', isNeed);
-      const wrap = output.closest('.order-cell');
-      const marker = wrap?.querySelector('.order-analysis');
-      if (marker) marker.outerHTML = renderOrderAnalysisSpan(item, g);
-      const amount = wrap?.querySelector('.order-amount');
-      if (amount) amount.outerHTML = renderOrderAmountSpan(item, g);
-    });
-  }
+  document.querySelectorAll('.output-order-value[data-output-name]').forEach(output => {
+    if (output.dataset.outputName !== name) return;
+    output.textContent = isNeed ? displayOrderQty(item, days) : '';
+    const qtyCell = output.closest('td.order-qty');
+    if (qtyCell) qtyCell.classList.toggle('pos', isNeed);
+    const wrap = output.closest('.order-cell');
+    const marker = wrap?.querySelector('.order-analysis');
+    if (marker) marker.outerHTML = renderOrderAnalysisSpan(item, g);
+    const amount = wrap?.querySelector('.order-amount');
+    if (amount) amount.outerHTML = renderOrderAmountSpan(item, g);
+  });
   refreshNeedBadge(days);
 }
 
@@ -4307,8 +4290,6 @@ function render() {
   document.body.classList.toggle('output-mode', viewMode === 'output');
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
-  inputRowCache = new Map();
-  outputRowCache = new Map();
   renderHeader();
   renderSaveLogs();
   const days = parseInt(document.getElementById('orderDays').value);
@@ -4319,9 +4300,8 @@ function render() {
   if (viewMode === 'output') {
     // 품목 단위 1행, G>0만. 기본은 D순, 버튼으로 출력 순서 조정 가능.
     const list = getOutputItems(days);
-    const gByName = new Map(list.map(item => [item.name, calcG(item, days)]));
     list.forEach((item, idx) => {
-      const g = gByName.get(item.name) || 0;
+      const g = calcG(item, days);
       const E = totalStock(item.name);
       const tr = document.createElement('tr');
       tr.classList.add('need');
@@ -4335,7 +4315,6 @@ function render() {
         <td>${item.unit||''}</td>
       `;
       tbody.appendChild(tr);
-      outputRowCache.set(item.name, tr);
     });
     bindCellInputs();
     updateStickyOffsets();
@@ -4349,21 +4328,13 @@ function render() {
     return { entry: ent, item, hidden: isItemHidden(item.name) };
   }).filter(Boolean).sort(compareInputRows);
   const inlineAliasRowsByName = new Map(buildOrderAliasMatches(lastSfaCompareData).map(row => [row.aliasName, row]));
-  const duplicateCounts = new Map();
-  orderedRows.forEach(({ item }) => {
-    duplicateCounts.set(item.name, (duplicateCounts.get(item.name) || 0) + 1);
-  });
-  const calcByName = new Map();
-  MASTER.forEach(item => {
-    calcByName.set(item.name, calcG(item, days));
-  });
 
   const shownItems = new Set();
   orderedRows.forEach(({ entry: ent, item, hidden }) => {
     const isFirst = !shownItems.has(item.name);
     shownItems.add(item.name);
-    const dupCount = duplicateCounts.get(item.name) || 1;
-    const g = calcByName.get(item.name) || 0;
+    const dupCount = entries.filter(e => e.name === item.name).length;
+    const g = calcG(item, days);
     const isNeed = g > 0;
     const isChecked = isStockChecked(ent);
     const tr = document.createElement('tr');
@@ -4407,7 +4378,6 @@ function render() {
       </td>
     `;
     tbody.appendChild(tr);
-    if (isFirst) inputRowCache.set(item.name, tr);
   });
 
   bindCellInputs();
