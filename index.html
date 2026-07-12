@@ -341,7 +341,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0713.0347';
+const APP_VERSION = '0713.0354';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -852,6 +852,7 @@ let debugLogs = [];
 let outputOrder = [];
 let actualOrders = {};
 let orderSiteMappings = {};
+let localNewSourceAliasMappings = {};
 let orderAliasMappings = {};
 let orderUnitCorrections = {};
 let conversionAnalysis = {};
@@ -927,6 +928,17 @@ function sanitizeOrderSiteMappings(source = {}) {
     };
   });
   return out;
+}
+
+function mergeLocalNewSourceAliases(source = orderSiteMappings) {
+  return sanitizeOrderSiteMappings({ ...source, ...localNewSourceAliasMappings });
+}
+
+function persistLocalNewSourceAliases() {
+  localNewSourceAliasMappings = sanitizeOrderSiteMappings(localNewSourceAliasMappings);
+  localStorage.setItem(LOCAL_NEW_SOURCE_ALIAS_STORAGE_KEY, JSON.stringify(localNewSourceAliasMappings));
+  orderSiteMappings = mergeLocalNewSourceAliases(orderSiteMappings);
+  localStorage.setItem(ORDER_SITE_MAPPING_STORAGE_KEY, JSON.stringify(orderSiteMappings));
 }
 
 function sanitizeOrderAliasMappings(source = {}) {
@@ -1017,6 +1029,7 @@ const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';
 const ACTUAL_ORDER_STORAGE_KEY = 'bbq_actual_orders';
 const ACTUAL_ORDER_DATE_STORAGE_KEY = 'bbq_actual_orders_date';
 const ORDER_SITE_MAPPING_STORAGE_KEY = 'bbq_order_site_mappings';
+const LOCAL_NEW_SOURCE_ALIAS_STORAGE_KEY = 'bbq_local_new_source_aliases_v1';
 const ORDER_ALIAS_MAPPING_STORAGE_KEY = 'bbq_order_alias_mappings';
 const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';
 const LOCAL_DIRTY_STORAGE_KEY = 'bbq_local_dirty_at_v1';
@@ -2358,6 +2371,20 @@ function bestMasterCandidatesForSite(row, limit = 3) {
     .slice(0, limit);
 }
 
+function suggestedMasterCandidatesForNewSource(row, limit = 5) {
+  return MASTER.map(item => ({
+    name: item.name,
+    unit: item.unit || '',
+    score: scoreSiteToMaster(siteItemName(row), item.name)
+  }))
+    .filter(item => item.score >= 0.2)
+    .sort((a, b) => b.score - a.score || defaultOutputCompare(
+      { name: a.name, sfaSeq: MASTER.find(item => item.name === a.name)?.sfaSeq },
+      { name: b.name, sfaSeq: MASTER.find(item => item.name === b.name)?.sfaSeq }
+    ))
+    .slice(0, limit);
+}
+
 function actualOrderItemName(row) {
   return String(row?.actualName || row?.sfa_name || row?.siteName || row?.name || row?.source_name || '').trim();
 }
@@ -2894,6 +2921,7 @@ function buildOrderSiteMatches(data = lastSfaCompareData) {
       ? lookup.byIndex.get(String(row.row_index)) || lookup.byKey.get(siteKey)
       : lookup.byKey.get(siteKey);
     const candidates = bestMasterCandidatesForSite(row);
+    const newSourceCandidates = correction ? [] : suggestedMasterCandidatesForNewSource(row);
     let targetName = '';
     let score = 0;
     let source = 'none';
@@ -2905,13 +2933,14 @@ function buildOrderSiteMatches(data = lastSfaCompareData) {
       targetName = canonicalItemName(compareRow.expected_name);
       score = Number(compareRow.score || 0);
       source = 'analysis';
-    } else if (candidates[0]?.score >= 0.84) {
-      targetName = candidates[0].name;
-      score = candidates[0].score;
-      source = 'local';
     }
     let status = 'unmatched';
     if (targetName) status = source === 'user' || score >= 0.82 ? 'confirmed' : 'candidate';
+    else if (newSourceCandidates.length) {
+      status = 'candidate';
+      source = 'suggested';
+      score = newSourceCandidates[0].score;
+    }
     return {
       siteKey,
       siteName: siteItemName(row) || siteItemName(compareRow),
@@ -2923,7 +2952,9 @@ function buildOrderSiteMatches(data = lastSfaCompareData) {
       score,
       source,
       status,
+      isNewSource: !correction,
       candidates,
+      newSourceCandidates,
       compareRow
     };
   });
@@ -2984,6 +3015,85 @@ function sfaMatchRowHtml(row) {
     ${masterSelectHtml(row)}
     <div class="sfa-match-meta">${escapeHtml(row.targetUnit || candidateText)}</div>
   </div>`;
+}
+
+function canonicalNameDatalistHtml() {
+  return `<datalist id="orderCanonicalNames">${MASTER.slice().sort(defaultOutputCompare).map(item =>
+    `<option value="${escapeHtml(item.name)}"></option>`
+  ).join('')}</datalist>`;
+}
+
+function newSourceMasterSelectHtml(row) {
+  const options = ['<option value="">기존 품목 선택</option>'].concat(MASTER.slice().sort(defaultOutputCompare).map(item =>
+    `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`
+  ));
+  return `<select class="sfa-select sfa-new-source-select" data-site-key="${escapeHtml(row.siteKey)}">${options.join('')}</select>`;
+}
+
+function newSourceAliasRowHtml(row) {
+  const suggestions = row.newSourceCandidates.length
+    ? row.newSourceCandidates.map(item => `${item.name} ${Math.round(item.score * 100)}%`).join(' · ')
+    : '유사 후보 없음';
+  return `<div class="sfa-match-row ${row.status}" data-new-source-key="${escapeHtml(row.siteKey)}">
+    <div class="sfa-match-status">신규</div>
+    <div>
+      <div class="sfa-match-name">${escapeHtml(row.siteName)}</div>
+      <div class="sfa-match-meta">${escapeHtml(`${row.siteUnit || '단위 없음'} · ${suggestions} · 자동 확정 안 함`)}</div>
+    </div>
+    <div class="sfa-alias-fields">
+      ${newSourceMasterSelectHtml(row)}
+      <input class="sfa-edit sfa-new-source-target" type="text" list="orderCanonicalNames" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}" placeholder="기존 품목명 직접 입력">
+      <button class="sfa-new-source-save" type="button">저장</button>
+    </div>
+    <div class="sfa-match-meta">선택 또는 직접 입력 후 저장해야 같은 원문이 다음 import부터 자동 매칭됩니다.</div>
+  </div>`;
+}
+
+function confirmNewSourceAliasMapping(siteKey, targetName, siteName = '', siteUnit = '') {
+  const nextTarget = canonicalItemName(String(targetName || '').trim());
+  if (!siteKey || !nextTarget || !knownItemNameSet().has(nextTarget)) return false;
+  return setOrderSiteMapping(siteKey, nextTarget, siteName, siteUnit, 'local');
+}
+
+function saveNewSourceAliasInput(input) {
+  if (!input) return false;
+  const row = input.closest('[data-new-source-key]');
+  const select = row?.querySelector('.sfa-new-source-select');
+  const targetName = input.value.trim() || select?.value || '';
+  const saved = confirmNewSourceAliasMapping(
+    input.dataset.siteKey,
+    targetName,
+    input.dataset.siteName || '',
+    input.dataset.siteUnit || ''
+  );
+  if (!saved) {
+    toast('기존 품목명을 정확히 선택하거나 입력하세요');
+    return false;
+  }
+  toast(`${input.dataset.siteName || '신규 품목'} 별명 저장됨`);
+  renderSfaAnalysisTab(lastSfaCompareData);
+  return true;
+}
+
+function bindNewSourceAliasInputs() {
+  document.querySelectorAll('.sfa-new-source-save').forEach(button => {
+    button.addEventListener('click', () => saveNewSourceAliasInput(button.closest('[data-new-source-key]')?.querySelector('.sfa-new-source-target')));
+  });
+  document.querySelectorAll('.sfa-new-source-target').forEach(input => {
+    input.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      saveNewSourceAliasInput(event.target);
+    });
+  });
+}
+
+function orderCycleMissingWarning(name) {
+  const item = MASTER.find(row => row.name === canonicalItemName(name || ''));
+  if (!item) return '';
+  const dailyUsage = Number(getL(item));
+  if (Number.isFinite(dailyUsage) && dailyUsage > 0) return '';
+  return `발주 미표시 가능: 일사용(overrides.l / MASTER.daily) 미입력 · 입력 보기 일사용 확인 · 발주일수 ${currentOrderDaysValue()}일`;
 }
 
 function aliasActualOptionsHtml(row) {
@@ -3189,7 +3299,7 @@ function persistOrderCorrections(reason = 'correction') {
   flushAutoSave(reason);
 }
 
-function setOrderSiteMapping(siteKey, targetName, siteName = '', siteUnit = '') {
+function setOrderSiteMapping(siteKey, targetName, siteName = '', siteUnit = '', persistence = 'sync') {
   if (!siteKey) return;
   const known = knownItemNameSet();
   const nextTarget = canonicalItemName(targetName || '');
@@ -3199,7 +3309,20 @@ function setOrderSiteMapping(siteKey, targetName, siteName = '', siteUnit = '') 
     orderSiteMappings[siteKey] = { targetName: nextTarget, siteName, siteUnit, updatedAt: Date.now() };
   }
   orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
-  persistOrderCorrections('mapping');
+  if (persistence === 'local') {
+    localNewSourceAliasMappings = sanitizeOrderSiteMappings({
+      ...localNewSourceAliasMappings,
+      [siteKey]: orderSiteMappings[siteKey]
+    });
+    persistLocalNewSourceAliases();
+  } else {
+    if (Object.prototype.hasOwnProperty.call(localNewSourceAliasMappings, siteKey)) {
+      delete localNewSourceAliasMappings[siteKey];
+      localStorage.setItem(LOCAL_NEW_SOURCE_ALIAS_STORAGE_KEY, JSON.stringify(localNewSourceAliasMappings));
+    }
+    persistOrderCorrections('mapping');
+  }
+  return orderSiteMappings[siteKey]?.targetName === nextTarget;
 }
 
 function setOrderAliasMapping(aliasName, actualName) {
@@ -3493,8 +3616,14 @@ function renderSfaAnalysisTab(data = lastSfaCompareData) {
   }
   if (sfaActiveTab === 'alias') {
     const aliasRows = buildOrderAliasMatches(data);
-    body.innerHTML = aliasRows.length ? aliasRows.map(aliasMatchRowHtml).join('') : '<div class="sfa-panel-meta">별명 검수 대상 없음</div>';
+    const newSourceRows = buildOrderSiteMatches(data).filter(row => row.isNewSource);
+    const newSourceHtml = newSourceRows.length
+      ? `<div class="sfa-panel-meta">신규 발주 원문 · 사용자 확정 필요</div>${newSourceRows.map(newSourceAliasRowHtml).join('')}`
+      : '<div class="sfa-panel-meta">신규 발주 원문 없음</div>';
+    const aliasHtml = aliasRows.length ? aliasRows.map(aliasMatchRowHtml).join('') : '<div class="sfa-panel-meta">별명 검수 대상 없음</div>';
+    body.innerHTML = `${canonicalNameDatalistHtml()}${newSourceHtml}<div class="sfa-panel-meta">기존 별명 검수</div>${aliasHtml}`;
     bindSfaCorrectionInputs();
+    bindNewSourceAliasInputs();
     return;
   }
   if (!data) {
@@ -3527,7 +3656,7 @@ function renderSfaAnalysisTab(data = lastSfaCompareData) {
         <div class="sfa-match-name">${escapeHtml(row.name)}</div>
         <div class="sfa-match-meta">${escapeHtml(`앱 ${row.qty}${row.unit ? ' · ' + row.unit : ''}`)}</div>
       </div>
-      <div class="sfa-match-meta">${escapeHtml(row.reason)}</div>
+      <div class="sfa-match-meta">${escapeHtml([row.reason, orderCycleMissingWarning(row.name)].filter(Boolean).join(' · '))}</div>
       <div class="sfa-match-meta">사이트 행 없음</div>
     </div>`);
     body.innerHTML = matchRows.map(sfaMatchRowHtml).concat(missingRows).join('') || '<div class="sfa-panel-meta">미매칭 없음</div>';
@@ -4642,6 +4771,7 @@ function applyFBData(data) {
     actualOrders = {};
   }
   if (Object.prototype.hasOwnProperty.call(data, 'orderSiteMappings')) orderSiteMappings = sanitizeOrderSiteMappings(data.orderSiteMappings);
+  orderSiteMappings = mergeLocalNewSourceAliases(orderSiteMappings);
   if (Object.prototype.hasOwnProperty.call(data, 'orderAliasMappings')) orderAliasMappings = sanitizeOrderAliasMappings(data.orderAliasMappings);
   if (Object.prototype.hasOwnProperty.call(data, 'orderUnitCorrections')) orderUnitCorrections = sanitizeOrderUnitCorrections(data.orderUnitCorrections);
   if (Object.prototype.hasOwnProperty.call(data, 'dailySales')) dailySales = Array.isArray(data.dailySales) ? data.dailySales : [];
@@ -4792,6 +4922,9 @@ try {
   if (ao && aoDate === kstDateKey(Date.now())) actualOrders = cleanActualOrders(JSON.parse(ao));
   const osm = localStorage.getItem(ORDER_SITE_MAPPING_STORAGE_KEY);
   if (osm) orderSiteMappings = sanitizeOrderSiteMappings(JSON.parse(osm));
+  const localNewAliases = localStorage.getItem(LOCAL_NEW_SOURCE_ALIAS_STORAGE_KEY);
+  if (localNewAliases) localNewSourceAliasMappings = sanitizeOrderSiteMappings(JSON.parse(localNewAliases));
+  orderSiteMappings = mergeLocalNewSourceAliases(orderSiteMappings);
   const oam = localStorage.getItem(ORDER_ALIAS_MAPPING_STORAGE_KEY);
   if (oam) orderAliasMappings = sanitizeOrderAliasMappings(JSON.parse(oam));
   const ouc = localStorage.getItem(ORDER_UNIT_CORRECTION_STORAGE_KEY);

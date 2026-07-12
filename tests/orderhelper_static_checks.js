@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0713.0347';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
+mustMatch(/const APP_VERSION = '0713.0354';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -162,7 +162,18 @@ mustMatch(/function orderAliasMappingDraftsForPayload\(data = lastSfaCompareData
 mustMatch(/function effectiveOrderAliasMappingsForPayload\(data = lastSfaCompareData\)/, 'effective alias mapping payload builder missing');
 mustMatch(/function buildOrderAliasMatches\(data = lastSfaCompareData\)/, 'order alias matching builder missing');
 mustMatch(/const usageRecords = historyRecordsWithCurrent\(usageHistory, currentAnalysisSnapshot\(\)\);/, 'alias matching should build usage conversion records once');
-mustMatch(/function setOrderSiteMapping\(siteKey, targetName, siteName = '', siteUnit = ''\)/, 'order-site mapping setter missing');
+mustMatch(/function setOrderSiteMapping\(siteKey, targetName, siteName = '', siteUnit = '', persistence = 'sync'\)/, 'order-site mapping setter missing');
+mustMatch(/function suggestedMasterCandidatesForNewSource\(row, limit = 5\)/, 'new raw source must expose fuzzy suggestions without auto-confirming them');
+mustMatch(/isNewSource: !correction,/, 'order-present mapping-absent rows must be marked as new');
+mustNotMatch(/else if \(candidates\[0\]\?\.score >= 0\.84\)/, 'local fuzzy candidate must not auto-confirm a new raw source');
+mustMatch(/function confirmNewSourceAliasMapping\(siteKey, targetName, siteName = '', siteUnit = ''\)/, 'new raw source must support explicit canonical confirmation');
+mustMatch(/setOrderSiteMapping\(siteKey, nextTarget, siteName, siteUnit, 'local'\)/, 'new alias confirmation must reuse the compatible raw mapping setter in local mode');
+mustMatch(/localStorage\.setItem\(ORDER_SITE_MAPPING_STORAGE_KEY, JSON\.stringify\(orderSiteMappings\)\);/, 'local new alias confirmation must persist the complete existing mapping map');
+mustMatch(/const LOCAL_NEW_SOURCE_ALIAS_STORAGE_KEY = 'bbq_local_new_source_aliases_v1';/, 'new raw aliases must have a local overlay that survives remote current refreshes');
+mustMatch(/function mergeLocalNewSourceAliases\(source = orderSiteMappings\)/, 'local new raw aliases must merge over existing remote mappings without deletion');
+mustMatch(/orderSiteMappings = mergeLocalNewSourceAliases\(orderSiteMappings\);/, 'remote and reload hydrate paths must reapply local new aliases');
+mustMatch(/신규 발주 원문 · 사용자 확정 필요/, 'Alias UI must surface order-present mapping-absent raw rows');
+mustMatch(/function orderCycleMissingWarning\(name\)[\s\S]*overrides\.l \/ MASTER\.daily[\s\S]*currentOrderDaysValue\(\)/, 'order-absent canonical rows may show only a read-only daily/orderDays diagnostic');
 mustMatch(/function setOrderAliasMapping\(aliasName, actualName\)/, 'order alias mapping setter missing');
 mustMatch(/function setOrderAliasConversion\(aliasName, value, mode = 'candidate'\)/, 'order alias conversion setter missing');
 mustMatch(/function inlineAliasCorrectionHtml\(row\)/, 'input row inline alias correction renderer missing');
@@ -449,6 +460,11 @@ this.__OrderHelperApi = {
   },
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
+  getSiteMappingsForCheck() { return orderSiteMappings; },
+  setLocalNewSourceAliasesForCheck(value) { localNewSourceAliasMappings = sanitizeOrderSiteMappings(value); },
+  mergeLocalNewSourceAliases,
+  confirmNewSourceAliasMapping,
+  orderSiteItemKey,
   setAliasMappingsForCheck(value) { orderAliasMappings = sanitizeOrderAliasMappings(value); },
   setUsageHistoryForCheck(value) { usageHistory = value || {}; },
   setSfaActualHistoryForCheck(value) { sfaActualHistory = value || {}; },
@@ -522,10 +538,39 @@ const siteData = {
   comparison: { matched: [], missing: [], extra: [] },
 };
 let matches = api.buildOrderSiteMatches(siteData);
-assert.strictEqual(matches[0].targetName, '냉동-치즈볼-BBQ치즈볼(크림)', 'matching builder should choose best local candidate');
+assert.strictEqual(matches[0].targetName, '', 'mapping-absent raw source must not auto-confirm even an exact local candidate');
+assert.strictEqual(matches[0].isNewSource, true, 'order-present mapping-absent raw source must be marked new');
+assert(matches[0].newSourceCandidates.some(candidate => candidate.name === '냉동-치즈볼-BBQ치즈볼(크림)'), 'exact/normalized canonical suggestion must remain visible for user confirmation');
 api.setSiteMappingsForCheck({ [matches[0].siteKey]: { targetName: '냉동-치즈볼-BBQ황금알치즈볼', siteName: 'BBQ치즈볼', siteUnit: 'BOX' } });
 matches = api.buildOrderSiteMatches(siteData);
 assert.strictEqual(matches[0].targetName, '냉동-치즈볼-BBQ황금알치즈볼', 'user mapping should override local candidate');
+const existingMappingSnapshot = plain(api.getSiteMappingsForCheck());
+const newRawData = {
+  ok: true,
+  items: [{ name: '필크런치소스', qty: 0, unit: 'BOX', row_index: 22 }],
+  comparison: { matched: [], missing: [], extra: [] },
+};
+let newRawRow = api.buildOrderSiteMatches(newRawData)[0];
+assert.strictEqual(newRawRow.siteName, '필크런치소스', 'order source raw name must be preserved exactly');
+assert.strictEqual(newRawRow.siteQty, 0, 'zero order quantity must be preserved for a new raw source');
+assert.strictEqual(newRawRow.isNewSource, true, 'order-present alias-absent raw source must appear as new');
+assert.strictEqual(newRawRow.targetName, '', 'fuzzy suggestions must never auto-confirm the new raw source');
+assert.strictEqual(api.confirmNewSourceAliasMapping(newRawRow.siteKey, '', newRawRow.siteName, newRawRow.siteUnit), false, 'empty canonical target must be rejected');
+assert.strictEqual(api.confirmNewSourceAliasMapping(newRawRow.siteKey, '없는품목', newRawRow.siteName, newRawRow.siteUnit), false, 'unknown canonical target must be rejected');
+assert.deepStrictEqual(plain(api.getSiteMappingsForCheck()), existingMappingSnapshot, 'invalid new alias attempts must leave every existing mapping unchanged');
+const crunchCanonical = '배달소스-순살크래커소스';
+assert.strictEqual(api.confirmNewSourceAliasMapping(newRawRow.siteKey, crunchCanonical, newRawRow.siteName, newRawRow.siteUnit), true, 'manual canonical selection must save the new raw alias');
+const storedSiteMappings = JSON.parse(storage.get('bbq_order_site_mappings'));
+const storedLocalNewAliases = JSON.parse(storage.get('bbq_local_new_source_aliases_v1'));
+assert.strictEqual(storedSiteMappings[newRawRow.siteKey].targetName, crunchCanonical, 'manual new alias must persist locally');
+assert.strictEqual(storedSiteMappings[matches[0].siteKey].targetName, existingMappingSnapshot[matches[0].siteKey].targetName, 'saving a new alias must preserve existing mappings');
+api.setSiteMappingsForCheck(existingMappingSnapshot);
+api.setLocalNewSourceAliasesForCheck(storedLocalNewAliases);
+api.setSiteMappingsForCheck(api.mergeLocalNewSourceAliases(api.getSiteMappingsForCheck()));
+newRawRow = api.buildOrderSiteMatches(newRawData)[0];
+assert.strictEqual(newRawRow.targetName, crunchCanonical, 'same raw name/unit must auto-match the user-confirmed canonical item after reload');
+assert.strictEqual(newRawRow.source, 'user', 'reloaded raw alias must remain explicitly user-confirmed');
+assert.strictEqual(newRawRow.isNewSource, false, 'saved raw alias must no longer appear as new');
 const freshMeat = api.MASTER.find(item => item.name === '신선육(10호)-뼈한마리');
 api.setUnitCorrectionsForCheck({ [freshMeat.name]: { factor: 10, orderMultiple: 2, minOrderQty: 2 } });
 assert.strictEqual(api.conversionFactorForItem(freshMeat), 10, 'manual factor should override inferred conversion');
