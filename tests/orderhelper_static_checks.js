@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0713.0301';/, 'APP_VERSION must match the rollback baseline release');
+mustMatch(/const APP_VERSION = '0713.0310';/, 'APP_VERSION must match the rollback baseline release');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -41,6 +41,12 @@ mustMatch(/const DESKTOP_ACCESS_PATH = `\$\{FB_PATH\}\/desktopAccess`;/, 'deskto
 mustMatch(/const DESKTOP_GRACE_MS = 24 \* 60 \* 60 \* 1000;/, 'desktop grace window must be explicitly 24 hours');
 mustMatch(/radiusM: 700/, 'GPS auth radius must be temporarily 700m');
 mustMatch(/매장 GPS 700m/, 'auth UI must disclose the temporary 700m GPS radius');
+mustMatch(/const AUTH_SESSION_STORAGE_KEY = 'bbq_authenticated_session_v1';/, 'refresh auth must use a dedicated opaque session marker key');
+mustMatch(/const AUTH_SESSION_VERSION = 'orderhelper-auth-20260713-1';/, 'auth session marker must be invalidated by an explicit credential version');
+mustMatch(/function writeAuthSessionMarker\(factor\)[\s\S]*authenticated: true[\s\S]*authenticatedAt: Date\.now\(\)/, 'successful auth must persist only an opaque authenticated marker');
+mustNotMatch(/writeAuthSessionMarker\([^)]*PIN_HASH|AUTH_SESSION_STORAGE_KEY[\s\S]{0,220}PIN_HASH/, 'auth session storage must not persist the PIN hash');
+mustMatch(/function logoutOrderHelper\(\)[\s\S]*clearAuthSessionMarker\(\);[\s\S]*classList\.add\('auth-locked'\)/, 'explicit logout must clear the trusted session marker and relock');
+mustMatch(/const marker = readAuthSessionMarker\(\);[\s\S]*unlockOrderHelper\(\);[\s\S]*return;/, 'valid trusted session marker must bypass the refresh PIN overlay');
 mustMatchPy(/--validate-local-sfa-history/, 'local SFA history mapping validation flag missing');
 mustMatchPy(/local_sfa_backfill_low_confidence_rows/, 'local SFA mapping validation must expose low-confidence row count');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
@@ -54,6 +60,11 @@ mustMatch(/function setStockDraftFromInput\(target\)/, 'stock typing must update
 mustMatch(/function commitStockInput\(target\)/, 'Enter must have an explicit stock commit path');
 mustMatch(/function persistStockInput\(reason = 'stockInput'\)/, 'stock typing must use the lightweight entries-only persistence path');
 mustMatch(/function persistStockInput\(reason = 'stockInput'\) \{\s*localStorage\.setItem\('bbq_entries', JSON\.stringify\(entries\)\);/, 'Enter commit must durably write entries to localStorage before deferred autosave');
+mustMatch(/const LOCAL_DIRTY_STORAGE_KEY = 'bbq_local_dirty_at_v1';/, 'local dirty state must survive reload independently from entries');
+mustMatch(/function markLocalDirty\(\)[\s\S]*localStorage\.setItem\(LOCAL_DIRTY_STORAGE_KEY, String\(Date\.now\(\)\)\);/, 'Enter commit must durably mark local data as newer than remote state');
+mustMatch(/if \(localDirty\) \{\s*pendingFBData = null;\s*return;\s*\}/, 'focusout must discard stale pending remote data after an Enter commit');
+mustMatch(/if \(!pendingSave\) clearLocalDirty\(\);/, 'successful remote persistence must clear the durable dirty marker');
+mustMatch(/if \(localDirty\) scheduleAutoSave\('recovery'\);/, 'reload with durable local changes must reschedule remote persistence');
 mustMatch(/if \(f === 'stock'\) \{\s*setStockDraftFromInput\(e\.target\);/, 'stock input events must remain draft-only');
 mustMatch(/const ent = commitStockInput\(e\.target\);[\s\S]*persistStockInput\('stockEnter'\);[\s\S]*focusStockInputById\(nextId\);/, 'Enter must commit and advance focus without rendering');
 mustMatch(/scheduleCommittedStockRowMove\(currentId\);/, 'Enter must schedule only the committed row for delayed movement');
@@ -427,11 +438,17 @@ this.__OrderHelperApi = {
   stockInputValue,
   commitStockInput,
   persistStockInput,
+  bindCellInputs,
   moveCommittedStockRowToCheckedEnd,
   setEntriesForCheck(value) { entries = value; },
   getEntriesForCheck() { return entries; },
   setViewModeForCheck(value) { viewMode = value; },
   inputRowPriority,
+  clearAuthSessionMarker,
+  readAuthSessionMarker,
+  writeAuthSessionMarker,
+  authSessionStorageKeyForCheck: AUTH_SESSION_STORAGE_KEY,
+  localDirtyStorageKeyForCheck: LOCAL_DIRTY_STORAGE_KEY,
   setSuppressAutoSaveForCheck(value) { suppressAutoSave = value; },
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
@@ -442,6 +459,14 @@ this.__OrderHelperApi = {
 
 const api = sandbox.__OrderHelperApi;
 const plain = value => JSON.parse(JSON.stringify(value));
+api.writeAuthSessionMarker('gps');
+const storedAuthMarker = JSON.parse(storage.get(api.authSessionStorageKeyForCheck));
+assert.strictEqual(storedAuthMarker.authenticated, true, 'successful auth marker must survive refresh');
+assert.strictEqual(storedAuthMarker.version, 'orderhelper-auth-20260713-1', 'auth marker must carry the credential version only');
+assert(!JSON.stringify(storedAuthMarker).includes('38083c7e'), 'auth marker must not contain the PIN hash');
+assert.notStrictEqual(api.authSessionStorageKeyForCheck, 'bbq_entries', 'auth and stock persistence keys must be isolated');
+api.clearAuthSessionMarker();
+assert.strictEqual(storage.has(api.authSessionStorageKeyForCheck), false, 'logout/auth failure must remove the marker');
 api.setEntriesForCheck([{ id: 'stock-check-1', name: api.MASTER[0].name, zone: '', stock: null }]);
 const stockTarget = { dataset: { id: 'stock-check-1' }, value: '12.5' };
 api.setStockDraftFromInput(stockTarget);
@@ -471,6 +496,50 @@ stockTarget.value = '13';
 api.setStockDraftFromInput(stockTarget);
 assert.strictEqual(api.moveCommittedStockRowToCheckedEnd('stock-check-1'), false, 'unconfirmed correction draft must keep the row in place for editing');
 sandbox.document.querySelector = priorQuerySelector;
+const priorQuerySelectorAll = sandbox.document.querySelectorAll;
+const priorSetTimeout = sandbox.setTimeout;
+const eventListeners = {};
+const nextEventListeners = {};
+const eventStock = {
+  dataset: { id: 'stock-event-1', field: 'stock' },
+  value: '',
+  addEventListener(type, listener) { eventListeners[type] = listener; },
+  focus() { sandbox.document.activeElement = this; },
+  select() {},
+};
+const nextStock = {
+  dataset: { id: 'stock-event-2', field: 'stock' },
+  value: '',
+  addEventListener(type, listener) { nextEventListeners[type] = listener; },
+  focus() { sandbox.document.activeElement = this; },
+  select() {},
+};
+api.setEntriesForCheck([
+  { id: 'stock-event-1', name: api.MASTER[0].name, zone: '', stock: null },
+  { id: 'stock-event-2', name: api.MASTER[1].name, zone: '', stock: null },
+]);
+api.setSuppressAutoSaveForCheck(false);
+sandbox.setTimeout = () => 1;
+sandbox.document.querySelectorAll = selector => {
+  if (selector === 'input.cell' || selector.includes('tr.row-pending input.cell')) return [eventStock, nextStock];
+  return [];
+};
+sandbox.document.querySelector = selector => selector.includes('stock-event-2') ? nextStock : null;
+api.bindCellInputs();
+eventStock.value = '21.5';
+eventListeners.input({ target: eventStock, inputType: 'insertText' });
+assert.strictEqual(api.getEntriesForCheck()[0].stock, null, 'typing must remain an uncommitted draft');
+eventListeners.keydown({ target: eventStock, key: 'Enter', code: 'Enter', preventDefault() {} });
+assert.strictEqual(api.getEntriesForCheck()[0].stock, 21.5, 'keydown Enter must commit through the real bound handler');
+assert.strictEqual(JSON.parse(storage.get('bbq_entries'))[0].stock, 21.5, 'keydown Enter must synchronously serialize the committed value');
+assert(storage.has(api.localDirtyStorageKeyForCheck), 'keydown Enter must persist the durable dirty marker before reload');
+const reloadedEntries = JSON.parse(storage.get('bbq_entries'));
+api.setEntriesForCheck(reloadedEntries);
+assert.strictEqual(api.getEntriesForCheck()[0].stock, 21.5, 'real handler persistence must hydrate the same value after reload');
+assert.strictEqual(sandbox.document.activeElement, nextStock, 'Enter must retain focus advance to the next unchecked stock input');
+sandbox.document.querySelector = priorQuerySelector;
+sandbox.document.querySelectorAll = priorQuerySelectorAll;
+sandbox.setTimeout = priorSetTimeout;
 assert.strictEqual(api.normalizeSiteItemName('BBQ치즈볼(크림)'), 'BBQ치즈볼', 'site item normalizer should remove parenthesized spec');
 assert(api.scoreSiteToMaster('BBQ치즈볼', '냉동-치즈볼-BBQ치즈볼(크림)') >= 0.84, 'site/master score should find obvious candidate');
 const siteData = {

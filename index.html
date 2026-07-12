@@ -241,6 +241,7 @@
   <button id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis()">엑셀분석</button>
   <button id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel()">오차보기</button>
   <button id="desktopAccessBtn" type="button" onclick="toggleDesktopAccessPanel()">접근관리</button>
+  <button id="logoutBtn" type="button" onclick="logoutOrderHelper()">로그아웃</button>
   <span class="status-pill idle" id="sfaStatus">엑셀 대기</span>
   <button class="primary" onclick="flushAutoSave('manual')">저장</button>
   <span class="status-pill idle" id="saveState">동기화됨</span>
@@ -341,7 +342,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0713.0301';
+const APP_VERSION = '0713.0310';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -361,6 +362,8 @@ const PIN_HASH = '38083c7ee9121e17401883566a148aa5c2e2d55dc53bc4a94a026517dbff3c
 // 0510 보안 강화 — 5회 시도 후 30초 lock. 단말 token은 CLI allowlist 등록 전에는 factor가 아니며 PIN은 항상 필요.
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30000;
+const AUTH_SESSION_STORAGE_KEY = 'bbq_authenticated_session_v1';
+const AUTH_SESSION_VERSION = 'orderhelper-auth-20260713-1';
 const DESKTOP_GRACE_MS = 24 * 60 * 60 * 1000;
 const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
 const AUTH_GEO = { storeLat: 37.2528352, storeLng: 127.4900516, radiusM: 700, deviceKey: 'bbq_desk_auth_device_v1', allowedDeviceHashes: ['d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08','c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c'],
@@ -379,6 +382,30 @@ function setPinMessage(msg, ok=false) {
   const el = document.getElementById('pinError');
   el.textContent = msg;
   el.classList.toggle('ok', ok);
+}
+function clearAuthSessionMarker() {
+  localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+}
+function readAuthSessionMarker() {
+  try {
+    const marker = JSON.parse(localStorage.getItem(AUTH_SESSION_STORAGE_KEY) || 'null');
+    if (!marker || marker.version !== AUTH_SESSION_VERSION || marker.authenticated !== true) {
+      clearAuthSessionMarker();
+      return null;
+    }
+    return marker;
+  } catch {
+    clearAuthSessionMarker();
+    return null;
+  }
+}
+function writeAuthSessionMarker(factor) {
+  localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify({
+    version: AUTH_SESSION_VERSION,
+    authenticated: true,
+    factor: String(factor || 'trusted'),
+    authenticatedAt: Date.now()
+  }));
 }
 function readAuthDevice() {
   try { return JSON.parse(localStorage.getItem(AUTH_GEO.deviceKey) || 'null'); } catch { return null; }
@@ -685,6 +712,14 @@ function unlockOrderHelper() {
   document.getElementById('pinOverlay').classList.add('authed');
   if (!orderHelperStarted) startOrderHelperApp();
 }
+function logoutOrderHelper() {
+  clearAuthSessionMarker();
+  document.body.classList.add('auth-locked');
+  document.getElementById('pinOverlay').classList.remove('authed');
+  document.getElementById('pinInput').value = '';
+  setPinMessage('로그아웃됨');
+  document.getElementById('pinInput').focus();
+}
 async function checkPin() {
   const inp = document.getElementById('pinInput');
   if (Date.now() < pinLockUntil) {
@@ -695,6 +730,7 @@ async function checkPin() {
   }
   setPinMessage('인증 확인 중...');
   if (!crypto.subtle) {
+    clearAuthSessionMarker();
     setPinMessage('이 브라우저는 PIN 검증을 지원하지 않습니다');
     inp.value = '';
     return;
@@ -706,14 +742,17 @@ async function checkPin() {
       pinAttempts = 0;
       localStorage.removeItem('bbq_desk_auth_until');
       sessionStorage.removeItem('bbq_desk_auth');
+      writeAuthSessionMarker(factor);
       setPinMessage(`인증됨 (${factorLabel(factor)})`, true);
       inp.value = '';
       unlockOrderHelper();
     } catch (e) {
+      clearAuthSessionMarker();
       setPinMessage(e.message || '인증 실패');
       inp.value = '';
     }
   } else {
+    clearAuthSessionMarker();
     pinAttempts++;
     if (pinAttempts >= PIN_MAX_ATTEMPTS) {
       pinLockUntil = Date.now() + PIN_LOCK_MS;
@@ -734,6 +773,12 @@ async function restoreAuthIfPossible() {
   sessionStorage.removeItem('bbq_desk_auth');
   const device = ensureAuthDevice();
   const id = await deviceHashText(device);
+  const marker = readAuthSessionMarker();
+  if (marker && device?.token) {
+    setPinMessage(`인증 유지 (${factorLabel(marker.factor)})`, true);
+    unlockOrderHelper();
+    return;
+  }
   if (AUTH_DEBUG) setPinMessage(`개발 검증 모드: PIN은 필요, GPS만 우회. 단말ID ${id}`, true);
   else setPinMessage(`PIN + 허용 단말/승인 데스크탑/매장 GPS 700m. 단말ID ${id}`);
   document.getElementById('pinInput').focus();
@@ -1019,6 +1064,7 @@ const ACTUAL_ORDER_DATE_STORAGE_KEY = 'bbq_actual_orders_date';
 const ORDER_SITE_MAPPING_STORAGE_KEY = 'bbq_order_site_mappings';
 const ORDER_ALIAS_MAPPING_STORAGE_KEY = 'bbq_order_alias_mappings';
 const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';
+const LOCAL_DIRTY_STORAGE_KEY = 'bbq_local_dirty_at_v1';
 const SFA_MANUAL_ITEMS_STORAGE_KEY = 'bbq_sfa_manual_items';
 const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
 const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';
@@ -4052,7 +4098,7 @@ function commitStockInput(target) {
 function persistStockInput(reason = 'stockInput') {
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
   if (suppressAutoSave) return;
-  localDirty = true;
+  markLocalDirty();
   renderSaveState('저장 대기', 'dirty');
   if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
 }
@@ -4341,7 +4387,15 @@ function resetStocks() {
 }
 
 let suppressAutoSave = false;
-let localDirty = false;
+let localDirty = Boolean(localStorage.getItem(LOCAL_DIRTY_STORAGE_KEY));
+function markLocalDirty() {
+  localDirty = true;
+  localStorage.setItem(LOCAL_DIRTY_STORAGE_KEY, String(Date.now()));
+}
+function clearLocalDirty() {
+  localDirty = false;
+  localStorage.removeItem(LOCAL_DIRTY_STORAGE_KEY);
+}
 function saveLocal(reason = 'auto') {
   const orderDaysEl = document.getElementById('orderDays');
   if (orderDaysEl) localStorage.setItem('bbq_orderDays', orderDaysEl.value);
@@ -4363,7 +4417,7 @@ function saveLocal(reason = 'auto') {
     localStorage.setItem('bbq_baseSalesVersion', BASE_SALES_STORAGE_VERSION);
   }
   if (!suppressAutoSave) {
-    localDirty = true;
+    markLocalDirty();
     renderSaveState('저장 대기', 'dirty');
     if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
   }
@@ -4512,7 +4566,7 @@ async function saveToFB(reason = 'manual') {
     if (saveRetryTimer) { clearTimeout(saveRetryTimer); saveRetryTimer = null; }
     localStorage.setItem('bbq_savedAt', String(now));
     // pendingSave=true 면 진행 중 추가 입력 있었음 → localDirty 유지(다음 PUT 가 최신 entries 로 재발사). pendingSave=false 면 PUT payload == 현재 entries → dirty 해제.
-    if (!pendingSave) localDirty = false;
+    if (!pendingSave) clearLocalDirty();
     console.log('[saveToFB] OK savedAt=', now, 'pendingSave=', pendingSave);
     pushSaveLog(saveReasonLabel(activeReason) + ' 완료', 'success', now);
     renderSaveState('저장됨', 'saved');
@@ -4549,6 +4603,10 @@ document.addEventListener('focusout', e => {
     inputFocused = false;
     setTimeout(() => {
       if (!inputFocused && pendingFBData) {
+        if (localDirty) {
+          pendingFBData = null;
+          return;
+        }
         applyFBData(pendingFBData);
         pendingFBData = null;
       }
@@ -4756,6 +4814,7 @@ function startOrderHelperApp() {
   bindBaseSalesInput();
   renderSalesInputs();
   render();
+  if (localDirty) scheduleAutoSave('recovery');
   loadUsageHistory(true);
   loadSfaOrderStatus(true);
   window.addEventListener('resize', updateStickyOffsets);
