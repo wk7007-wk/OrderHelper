@@ -341,7 +341,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260712-1';
+const APP_VERSION = '20260713-1';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -869,6 +869,36 @@ let pendingSnoozeName = null;
 let usageHistory = {};
 let usageAnalysis = {};
 let sfaActualHistory = {};
+let currentStateRevision = 0;
+let usageHistoryRevision = 0;
+let sfaActualHistoryRevision = 0;
+let compareDataRevision = 0;
+
+function touchCurrentStateRevision() {
+  currentStateRevision += 1;
+  return currentStateRevision;
+}
+
+function touchUsageHistoryRevision() {
+  usageHistoryRevision += 1;
+  return usageHistoryRevision;
+}
+
+function touchSfaActualHistoryRevision() {
+  sfaActualHistoryRevision += 1;
+  return sfaActualHistoryRevision;
+}
+
+function touchCompareDataRevision() {
+  compareDataRevision += 1;
+  return compareDataRevision;
+}
+
+function setLastSfaCompareData(data) {
+  lastSfaCompareData = data || null;
+  touchCompareDataRevision();
+  return lastSfaCompareData;
+}
 
 function canonicalItemName(name) {
   return ITEM_NAME_ALIASES[name] || name;
@@ -995,6 +1025,7 @@ function migrateRuntimeItemNames() {
   orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
   orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
   orderUnitCorrections = sanitizeOrderUnitCorrections(orderUnitCorrections);
+  touchCurrentStateRevision();
 }
 
 function storedStockForName(stocks, name) {
@@ -1129,6 +1160,7 @@ function setOverrideValue(name, field, value) {
   if (num === null || !Number.isFinite(num)) delete overrides[name][field];
   else overrides[name][field] = num;
   if (Object.keys(overrides[name]).length === 0) delete overrides[name];
+  touchCurrentStateRevision();
 }
 
 function setOutputStockTotal(name, value) {
@@ -1139,6 +1171,7 @@ function setOutputStockTotal(name, value) {
     if (idx === 0) entry.stock = Number.isFinite(num) ? num : null;
     else entry.stock = null;
   });
+  touchCurrentStateRevision();
 }
 
 function cleanActualOrders(source = actualOrders) {
@@ -1196,6 +1229,7 @@ function setActualOrderValue(name, value) {
   if (num === null || !Number.isFinite(num) || num < 0) delete actualOrders[name];
   else actualOrders[name] = Math.ceil(num);
   actualOrders = cleanActualOrders();
+  touchCurrentStateRevision();
 }
 
 function normalizeOrderUnit(unit) {
@@ -1220,7 +1254,7 @@ function orderUnitParts(item) {
     orderUnit,
     checkUnitKey,
     orderUnitKey,
-    same: !checkUnitKey || !orderUnitKey || checkUnitKey === orderUnitKey
+    same: Boolean(checkUnitKey && orderUnitKey && checkUnitKey === orderUnitKey)
   };
 }
 
@@ -1291,6 +1325,7 @@ function movementConversionFactorFromRecords(prev, curr, item) {
 function isUsableMovementSummary(item, summary) {
   if (!summary || !Number.isFinite(summary.factor) || summary.factor <= 0) return false;
   const parts = orderUnitParts(item);
+  if (!parts.checkUnitKey || !parts.orderUnitKey) return false;
   if (!parts.same) return summary.samples >= 1;
   return Number(summary.samples || 0) >= 2 && Number(summary.spread || 999) <= 1.35;
 }
@@ -1330,6 +1365,16 @@ function buildConversionAnalysis(history, currentSnapshot) {
   const result = {};
   MASTER.forEach(item => {
     const parts = orderUnitParts(item);
+    if (!parts.checkUnitKey || !parts.orderUnitKey) {
+      result[item.name] = {
+        factor: null,
+        samples: 0,
+        source: 'pending',
+        checkUnit: parts.checkUnit,
+        orderUnit: parts.orderUnit
+      };
+      return;
+    }
     const movement = summarizeFactors(movementBuckets[item.name] || []);
     if (isUsableMovementSummary(item, movement)) {
       result[item.name] = { ...movement, source: 'movement', checkUnit: parts.checkUnit || '재고', orderUnit: parts.orderUnit || '발주' };
@@ -1390,29 +1435,47 @@ function aliasConversionForItem(item) {
   };
 }
 
+function orderUnitResolutionText(item, contract = resolveOrderUnitContract(item)) {
+  const parts = orderUnitParts(item);
+  if (contract.resolved) {
+    if (contract.source === 'same') return '동일 단위';
+    if (contract.source === 'manual') return `수동 보정 ${fmt(contract.factor, 1)}`;
+    if (contract.source === 'confirmed') return `확정 보정 ${fmt(contract.factor, 1)}`;
+    if (contract.source === 'movement') return `재고추정 ${fmt(contract.factor, 1)}`;
+    if (contract.source === 'item' || contract.source === 'unit') return `${parts.checkUnit}/${parts.orderUnit} ${fmt(contract.factor, 1)}`;
+    return `단위 ${fmt(contract.factor, 1)}`;
+  }
+  if (!parts.checkUnitKey && !parts.orderUnitKey) return '체크/발주 단위 정보가 없습니다';
+  if (!parts.checkUnitKey || !parts.orderUnitKey) return '체크/발주 단위가 하나만 있어 발주 수량을 계산할 수 없습니다';
+  return `체크/발주 단위가 아직 확정되지 않았습니다: ${parts.checkUnit || '-'} / ${parts.orderUnit || '-'}`;
+}
+
 function resolveOrderUnitContract(item) {
   const parts = orderUnitParts(item);
   const manual = unitCorrectionForItem(item?.name);
   const manualFactor = manualUnitFactorForItem(item);
   if (manualFactor) {
-    return { resolved: true, factor: manualFactor, source: 'manual', reason: 'manual unit override', updatedAt: Number(manual.updatedAt || 0) };
+    return { resolved: true, factor: manualFactor, source: 'manual', reason: '수동 단위 보정', updatedAt: Number(manual.updatedAt || 0) };
   }
   if (parts.same) {
-    return { resolved: true, factor: 1, source: 'same', reason: 'check and order units already match', updatedAt: 0 };
+    return { resolved: true, factor: 1, source: 'same', reason: '체크/발주 단위가 일치합니다', updatedAt: 0 };
   }
   const alias = aliasConversionForItem(item);
   if (alias?.orderUnitChanged) {
-    return { resolved: false, factor: null, source: 'stale', reason: 'saved SFA unit conflicts with current order unit', updatedAt: alias.updatedAt || 0 };
+    return { resolved: false, factor: null, source: 'stale', reason: '저장된 SFA 단위가 현재 발주 단위와 충돌합니다', updatedAt: alias.updatedAt || 0 };
   }
   if (alias?.factor && isUserSelectedAliasStatus(alias.status)) {
-    return { resolved: true, factor: alias.factor, source: 'confirmed', reason: alias.reason || 'confirmed SFA alias conversion', updatedAt: alias.updatedAt || 0, actualName: alias.actualName || '', actualUnit: alias.actualUnit || '' };
+    return { resolved: true, factor: alias.factor, source: 'confirmed', reason: alias.reason || '확정된 SFA 별명 보정', updatedAt: alias.updatedAt || 0, actualName: alias.actualName || '', actualUnit: alias.actualUnit || '' };
+  }
+  if (!parts.checkUnitKey || !parts.orderUnitKey) {
+    return { resolved: false, factor: null, source: 'pending', reason: '체크/발주 단위 정보가 부족합니다', updatedAt: alias?.updatedAt || 0 };
   }
   const analysis = conversionAnalysis[item.name];
   if (analysis?.source === 'movement' && Number.isFinite(analysis.factor) && analysis.factor > 0) {
-    return { resolved: true, factor: analysis.factor, source: 'movement', reason: 'stock movement derived conversion', updatedAt: 0, analysis };
+    return { resolved: true, factor: analysis.factor, source: 'movement', reason: '재고 이동 기반 보정', updatedAt: 0, analysis };
   }
   if (analysis?.source === 'item' && Number.isFinite(analysis.factor) && analysis.factor > 0) {
-    return { resolved: true, factor: analysis.factor, source: 'item', reason: 'item history derived conversion', updatedAt: 0, analysis };
+    return { resolved: true, factor: analysis.factor, source: 'item', reason: '품목 이력 기반 보정', updatedAt: 0, analysis };
   }
   if (
     analysis?.source === 'unit' &&
@@ -1421,9 +1484,9 @@ function resolveOrderUnitContract(item) {
     Number(analysis.samples || 0) >= 3 &&
     Number(analysis.spread || 999) <= 1.25
   ) {
-    return { resolved: true, factor: analysis.factor, source: 'unit', reason: 'stable unit-pattern conversion', updatedAt: 0, analysis };
+    return { resolved: true, factor: analysis.factor, source: 'unit', reason: '안정적인 단위 패턴 보정', updatedAt: 0, analysis };
   }
-  return { resolved: false, factor: null, source: 'pending', reason: 'need a safe order-to-stock unit conversion', updatedAt: alias?.updatedAt || 0, analysis };
+  return { resolved: false, factor: null, source: 'pending', reason: '안전한 발주-재고 단위 변환이 아직 없습니다', updatedAt: alias?.updatedAt || 0, analysis };
 }
 
 function applyOrderUnitCorrectionQty(item, qty) {
@@ -1518,9 +1581,14 @@ function orderAnalysisText(item, stockNeed) {
   const actual = getActualOrder(item.name);
   if (actual !== null) return '확인';
   const parts = orderUnitParts(item);
+  const contract = resolveOrderUnitContract(item);
+  if (!contract.resolved) return orderUnitResolutionText(item, contract);
   const manualFactor = manualUnitFactorForItem(item);
   if (manualFactor) return `보정 ${fmt(manualFactor, 1)}`;
   const analysis = conversionAnalysis[item.name];
+  if (contract.source === 'same') return '동일단위';
+  if (contract.source === 'manual') return `보정 ${fmt(contract.factor, 1)}`;
+  if (contract.source === 'confirmed') return `확정 ${fmt(contract.factor, 1)}`;
   if (analysis?.source === 'movement' && Number.isFinite(analysis.factor)) {
     return `재고추정 ${fmt(analysis.factor, 1)}`;
   }
@@ -1535,31 +1603,33 @@ function orderAnalysisText(item, stockNeed) {
 function orderAnalysisTitle(item, stockNeed) {
   const actual = getActualOrder(item.name);
   const parts = orderUnitParts(item);
-  if (actual !== null) return `실발주 ${actual}${parts.orderUnit || ''} 확인됨`;
+  const contract = resolveOrderUnitContract(item);
+  if (actual !== null) return `실발주 ${actual}${parts.orderUnit || ''} 확인`;
+  if (!contract.resolved) return `단위 미확정: ${orderUnitResolutionText(item, contract)}. ${contract.reason}`;
   const manual = unitCorrectionForItem(item.name);
   const manualFactor = manualUnitFactorForItem(item);
   if (manualFactor) {
     const details = [
-      `사용자 단위 보정: ${conversionDirectionText(manualFactor, parts.orderUnit || '발주', parts.checkUnit || '체크')}`,
-      manual.orderMultiple ? `묶음 ${fmt(manual.orderMultiple, 1)}${parts.orderUnit || ''}` : '',
+      `수동 단위 보정: ${conversionDirectionText(manualFactor, parts.orderUnit || '발주', parts.checkUnit || '체크')}`,
+      manual.orderMultiple ? `배수 ${fmt(manual.orderMultiple, 1)}${parts.orderUnit || ''}` : '',
       manual.minOrderQty ? `최소 ${fmt(manual.minOrderQty, 1)}${parts.orderUnit || ''}` : '',
-      manual.packUnit ? `표기 ${manual.packUnit}` : ''
+      manual.packUnit ? `포장 ${manual.packUnit}` : ''
     ].filter(Boolean);
     return details.join(' · ');
   }
   const analysis = conversionAnalysis[item.name];
   if (analysis?.source === 'movement' && Number.isFinite(analysis.factor)) {
-    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. ${conversionDirectionText(analysis.factor, parts.orderUnit || '발주단위', parts.checkUnit || '재고단위')} (재고 변동 ${analysis.samples}건). 예: 체크 10개=발주 1박스이면 환산값 10.`;
+    return `단위해석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. ${conversionDirectionText(analysis.factor, parts.orderUnit || '발주', parts.checkUnit || '체크')} (${analysis.samples}건)`;
   }
   if (analysis?.source === 'item' && Number.isFinite(analysis.factor)) {
-    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 품목 기록 ${analysis.samples}건 기준 ${conversionDirectionText(analysis.factor, parts.orderUnit || '발주', parts.checkUnit || '재고')}`;
+    return `단위해석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 품목 이력 ${analysis.samples}건 · ${conversionDirectionText(analysis.factor, parts.orderUnit || '발주', parts.checkUnit || '체크')}`;
   }
   if (analysis?.source === 'unit' && Number.isFinite(analysis.factor)) {
-    const useText = conversionFactorForItem(item) ? '발주량 계산에 적용됨' : '참고만 표시됨';
-    return `단위환산 분석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 같은 단위 기록 ${analysis.samples}건 기준 ${conversionDirectionText(analysis.factor, parts.orderUnit || '발주', parts.checkUnit || '재고')} (${useText})`;
+    const useText = conversionFactorForItem(item) ? '발주계산에 적용' : '리뷰만 표시';
+    return `단위해석: orderUnitToStockFactor ${fmt(analysis.factor, 2)}. 같은 단위 기록 ${analysis.samples}건 · ${conversionDirectionText(analysis.factor, parts.orderUnit || '발주', parts.checkUnit || '체크')} (${useText})`;
   }
-  if (!parts.same) return `단위 분석 대기: 환산값은 발주 1${parts.orderUnit || '단위'}가 체크/재고 몇 ${parts.checkUnit || '단위'}인지입니다. 예: 체크 10개=발주 1박스이면 환산값 10. 실제 넣은 발주칸을 한 번 확인하면 이후 패턴에 반영됩니다.`;
-  return '실제 SFA 입력 여부 미확인';
+  if (!parts.same) return `단위 해석 대기: ${parts.orderUnit || '발주'}가 체크/${parts.checkUnit || '체크'}와 다르거나 비어 있습니다. 안전한 값이 없으면 0으로 둡니다.`;
+  return 'SFA 입력이 아직 미확인입니다.';
 }
 
 function renderOrderAnalysisSpan(item, stockNeed) {
@@ -2032,6 +2102,8 @@ async function loadUsageHistory(silent = true) {
     }
     usageHistory = await historyRes.json() || {};
     sfaActualHistory = sfaRes.ok ? (await sfaRes.json() || {}) : {};
+    touchUsageHistoryRevision();
+    touchSfaActualHistoryRevision();
     recomputeUsageAnalysis();
     updateAllDailyAnalysisCells();
     if (sfaCompareVisible && sfaActiveTab === 'alias') renderSfaAnalysisTab(lastSfaCompareData);
@@ -2087,7 +2159,7 @@ function buildSfaAnalysisPayloadState(data = lastSfaCompareData) {
 }
 
 function refreshSfaResultViewsWithCurrentState(data = lastSfaCompareData, reason = 'sfaResult') {
-  lastSfaCompareData = data || null;
+  setLastSfaCompareData(data || null);
   if (!data) {
     renderSfaComparePanel(null);
     return buildSfaAnalysisPayloadState(null);
@@ -2462,12 +2534,8 @@ let cachedActualCandidates = [];
 
 function actualCandidateCacheKey(data = lastSfaCompareData) {
   return [
-    Number(data?.savedAt || 0),
-    normalizeHistoryDateKey(data?.historySummary?.selectedDate || ''),
-    Number(data?.comparison?.matched?.length || 0),
-    Number(data?.comparison?.extra?.length || 0),
-    Number(Array.isArray(data?.items) ? data.items.length : 0),
-    Object.keys(sfaActualHistory || {}).length
+    compareDataRevision,
+    sfaActualHistoryRevision
   ].join('|');
 }
 
@@ -2831,16 +2899,10 @@ let cachedAliasMatches = [];
 
 function aliasMatchCacheKey(data = lastSfaCompareData) {
   return [
-    Number(data?.savedAt || 0),
-    normalizeHistoryDateKey(data?.historySummary?.selectedDate || ''),
-    Object.keys(usageHistory || {}).length,
-    Object.keys(sfaActualHistory || {}).length,
-    JSON.stringify(entries || []),
-    JSON.stringify(overrides || {}),
-    JSON.stringify(dailySales || []),
-    Number(getBaseSales()),
-    JSON.stringify(orderAliasMappings || {}),
-    JSON.stringify(orderUnitCorrections || {})
+    compareDataRevision,
+    currentStateRevision,
+    usageHistoryRevision,
+    sfaActualHistoryRevision
   ].join('|');
 }
 
@@ -3292,6 +3354,7 @@ function setOrderSiteMapping(siteKey, targetName, siteName = '', siteUnit = '') 
     orderSiteMappings[siteKey] = { targetName: nextTarget, siteName, siteUnit, updatedAt: Date.now() };
   }
   orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+  touchCurrentStateRevision();
   persistOrderCorrections('mapping');
 }
 
@@ -3328,6 +3391,7 @@ function setOrderAliasMapping(aliasName, actualName) {
     };
   }
   orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
+  touchCurrentStateRevision();
   persistOrderCorrections('aliasMapping');
 }
 
@@ -3352,6 +3416,7 @@ function setOrderAliasConversion(aliasName, value, mode = 'candidate') {
       delete orderAliasMappings[itemName];
     }
     orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
+    touchCurrentStateRevision();
     persistOrderCorrections('aliasMapping');
     return;
   }
@@ -3378,6 +3443,7 @@ function setOrderAliasConversion(aliasName, value, mode = 'candidate') {
     updatedAt: Date.now()
   };
   orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
+  touchCurrentStateRevision();
   persistOrderCorrections('aliasMapping');
 }
 
@@ -3400,6 +3466,7 @@ function setOrderUnitCorrection(name, field, value) {
   if (Object.keys(row).filter(key => key !== 'updatedAt').length) orderUnitCorrections[itemName] = row;
   else delete orderUnitCorrections[itemName];
   orderUnitCorrections = sanitizeOrderUnitCorrections(orderUnitCorrections);
+  touchCurrentStateRevision();
   persistOrderCorrections('unitCorrection');
 }
 
@@ -3664,7 +3731,7 @@ function renderSfaComparePanel(data) {
   if (!panel || !title || !meta || !note || !counts || !body) return;
 
   if (!data) {
-    lastSfaCompareData = null;
+    setLastSfaCompareData(null);
     title.textContent = '엑셀 오차';
     meta.textContent = '분석 결과 없음';
     note.textContent = '엑셀분석 버튼을 누르면 PC 다운로드 폴더의 최신 주문현황을 비교합니다.';
@@ -3672,7 +3739,7 @@ function renderSfaComparePanel(data) {
     renderSfaAnalysisTab(null);
     return;
   }
-  lastSfaCompareData = data;
+  setLastSfaCompareData(data);
 
   const fileName = data.file?.name || '';
   const structure = data.structure || {};
@@ -3726,7 +3793,7 @@ async function loadSfaCompareLatest(silent = true, forceShow = false) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     if (data) {
-      lastSfaCompareData = data;
+      setLastSfaCompareData(data);
       await autoLoadFromFB(true);
       await loadUsageHistory(true);
       refreshSfaResultViewsWithCurrentState(data, 'latestCompare');
@@ -4425,6 +4492,7 @@ function saveLocal(reason = 'auto') {
     renderSaveState('저장 대기', 'dirty');
     if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
   }
+  touchCurrentStateRevision();
 }
 
 function setBaseSalesInputValue() {
@@ -4627,6 +4695,7 @@ function setOrderDaysValue(value) {
   sel.value = days;
   localStorage.setItem('bbq_orderDays', days);
   localStorage.setItem(ORDER_DAYS_RULE_STORAGE_KEY, ORDER_DAYS_RULE_VERSION);
+  touchCurrentStateRevision();
   return true;
 }
 
@@ -4634,18 +4703,34 @@ function applyFBData(data) {
   if (!data || !data.savedAt) return;
   // FB가 source of truth: 그대로 교체. 로컬 변경 보호는 autoLoadFromFB의 localDirty 체크가 담당
   if (Object.prototype.hasOwnProperty.call(data, 'orderDays')) setOrderDaysValue(data.orderDays);
-  if (Object.prototype.hasOwnProperty.call(data, 'entries')) entries = migrateEntriesByName(data.entries);
-  if (Object.prototype.hasOwnProperty.call(data, 'overrides')) overrides = migrateNamedObject(data.overrides);
+  if (Object.prototype.hasOwnProperty.call(data, 'entries')) {
+    entries = migrateEntriesByName(data.entries);
+    touchCurrentStateRevision();
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'overrides')) {
+    overrides = migrateNamedObject(data.overrides);
+    touchCurrentStateRevision();
+  }
   if (Object.prototype.hasOwnProperty.call(data, 'outputOrder')) outputOrder = [];
   if (Object.prototype.hasOwnProperty.call(data, 'actualOrders') && normalizeHistoryDateKey(data.dateKey) === kstDateKey(Date.now())) {
     actualOrders = cleanActualOrders(data.actualOrders);
   } else {
     actualOrders = {};
   }
+  touchCurrentStateRevision();
   if (Object.prototype.hasOwnProperty.call(data, 'orderSiteMappings')) orderSiteMappings = sanitizeOrderSiteMappings(data.orderSiteMappings);
-  if (Object.prototype.hasOwnProperty.call(data, 'orderAliasMappings')) orderAliasMappings = sanitizeOrderAliasMappings(data.orderAliasMappings);
-  if (Object.prototype.hasOwnProperty.call(data, 'orderUnitCorrections')) orderUnitCorrections = sanitizeOrderUnitCorrections(data.orderUnitCorrections);
-  if (Object.prototype.hasOwnProperty.call(data, 'dailySales')) dailySales = Array.isArray(data.dailySales) ? data.dailySales : [];
+  if (Object.prototype.hasOwnProperty.call(data, 'orderAliasMappings')) {
+    orderAliasMappings = sanitizeOrderAliasMappings(data.orderAliasMappings);
+    touchCurrentStateRevision();
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'orderUnitCorrections')) {
+    orderUnitCorrections = sanitizeOrderUnitCorrections(data.orderUnitCorrections);
+    touchCurrentStateRevision();
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'dailySales')) {
+    dailySales = Array.isArray(data.dailySales) ? data.dailySales : [];
+    touchCurrentStateRevision();
+  }
   if (Object.prototype.hasOwnProperty.call(data, 'baseSales')) {
     const n = Number(data.baseSales);
     baseSales = Number.isFinite(n) && n > 0 ? n : DEFAULT_BASE_SALES;
@@ -4743,6 +4828,7 @@ try {
   const eRaw = localStorage.getItem('bbq_entries');
   if (eRaw) {
     entries = JSON.parse(eRaw);
+    touchCurrentStateRevision();
     // nextId 재계산
     let maxN = 0;
     entries.forEach(e => { const m = /^e(\d+)$/.exec(e.id||''); if (m) maxN = Math.max(maxN, +m[1]); });
@@ -4757,20 +4843,21 @@ try {
       zone: '',
       stock: storedStockForName(oldStocks, item.name)
     }));
+    touchCurrentStateRevision();
   }
-  const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
+  const o = localStorage.getItem('bbq_overrides'); if (o) { overrides = JSON.parse(o); touchCurrentStateRevision(); }
   localStorage.removeItem(OUTPUT_ORDER_STORAGE_KEY);
   outputOrder = [];
   const ao = localStorage.getItem(ACTUAL_ORDER_STORAGE_KEY);
   const aoDate = localStorage.getItem(ACTUAL_ORDER_DATE_STORAGE_KEY);
-  if (ao && aoDate === kstDateKey(Date.now())) actualOrders = cleanActualOrders(JSON.parse(ao));
+  if (ao && aoDate === kstDateKey(Date.now())) { actualOrders = cleanActualOrders(JSON.parse(ao)); touchCurrentStateRevision(); }
   const osm = localStorage.getItem(ORDER_SITE_MAPPING_STORAGE_KEY);
-  if (osm) orderSiteMappings = sanitizeOrderSiteMappings(JSON.parse(osm));
+  if (osm) { orderSiteMappings = sanitizeOrderSiteMappings(JSON.parse(osm)); touchCurrentStateRevision(); }
   const oam = localStorage.getItem(ORDER_ALIAS_MAPPING_STORAGE_KEY);
-  if (oam) orderAliasMappings = sanitizeOrderAliasMappings(JSON.parse(oam));
+  if (oam) { orderAliasMappings = sanitizeOrderAliasMappings(JSON.parse(oam)); touchCurrentStateRevision(); }
   const ouc = localStorage.getItem(ORDER_UNIT_CORRECTION_STORAGE_KEY);
-  if (ouc) orderUnitCorrections = sanitizeOrderUnitCorrections(JSON.parse(ouc));
-  const ds = localStorage.getItem('bbq_dailySales'); if (ds) dailySales = JSON.parse(ds);
+  if (ouc) { orderUnitCorrections = sanitizeOrderUnitCorrections(JSON.parse(ouc)); touchCurrentStateRevision(); }
+  const ds = localStorage.getItem('bbq_dailySales'); if (ds) { dailySales = JSON.parse(ds); touchCurrentStateRevision(); }
   const bs = localStorage.getItem('bbq_baseSales');
   const bsv = localStorage.getItem('bbq_baseSalesVersion');
   if (bs && bsv === BASE_SALES_STORAGE_VERSION) baseSales = JSON.parse(bs);

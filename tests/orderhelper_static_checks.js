@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260707-10';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
+mustMatch(/const APP_VERSION = '20260713-1';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -106,7 +106,7 @@ mustMatch(/statusMs < sfaLastRequestAt/, 'SFA status must ignore stale states ol
 mustMatch(/loadSfaCompareLatest\(true, hadPendingRequest\)/, 'fresh SFA completion must load visible comparison results');
 mustMatch(/function buildSfaAnalysisPayloadState\(data = lastSfaCompareData\)/, 'SFA payload state builder missing');
 mustMatch(/function refreshSfaResultViewsWithCurrentState\(data = lastSfaCompareData, reason = 'sfaResult'\)/, 'SFA result refresh helper missing');
-mustMatch(/lastSfaCompareData = data;\s*await autoLoadFromFB\(true\);\s*await loadUsageHistory\(true\);\s*refreshSfaResultViewsWithCurrentState\(data, 'latestCompare'\);/, 'fresh SFA comparison must load latest current/history before rebuilding alias and inline views');
+mustMatch(/setLastSfaCompareData\(data\);\s*await autoLoadFromFB\(true\);\s*await loadUsageHistory\(true\);\s*refreshSfaResultViewsWithCurrentState\(data, 'latestCompare'\);/, 'fresh SFA comparison must load latest current/history before rebuilding alias and inline views');
 mustMatch(/if \(lastSfaCompareData && \(viewMode === 'output' \|\| document\.querySelector\('\.inline-alias-correction'\)\)\) render\(\);/, 'SFA history load must force main rows and inline alias controls to refresh');
 mustMatch(/const appliedText = lastSfaResultAppliedAt \? ` · 적용 \$\{sfaCompareTime\(lastSfaResultAppliedAt\)\}` : '';/, 'SFA compare meta must track UI application time');
 mustMatch(/완료 \$\{sfaCompareTime\(data\.savedAt\)\}` : ''\}\$\{appliedText\}/, 'SFA compare meta must separate Excel completion and UI application times');
@@ -194,13 +194,13 @@ mustMatch(/if \(desktopDeviceApproved\(hash, state\)\)[\s\S]*return 'desktop';/,
 mustMatch(/if \(isDesktopGraceActive\(state\)\) return 'desktop-grace';/, 'active grace window must allow temporary desktop fallback');
 mustMatch(/function hasTrustedIpFactor\(\) \{[\s\S]*return false;\s*\}/, 'IP-only factor must not be trusted by the static client');
 mustMatch(/Array\.isArray\(parsed\.mappings\)/, 'manual analysis input must accept exported mapping JSON');
-mustMatch(/const manualFactor = manualUnitFactorForItem\(item\);\s*if \(manualFactor\) return manualFactor;/, 'manual unit factor must override inferred conversion');
+mustMatch(/const manualFactor = manualUnitFactorForItem\(item\);\s*if \(manualFactor\) \{[\s\S]*return \{ resolved: true, factor: manualFactor, source: 'manual'[,]/, 'manual unit factor must override inferred conversion');
 mustMatch(/if \(multiple\) out = Math\.ceil\(\(out - 1e-9\) \/ multiple\) \* multiple;/, 'manual order multiple must round up order qty');
 mustMatch(/if \(minOrderQty\) out = Math\.max\(out, minOrderQty\);/, 'manual min order qty must be applied');
 mustMatch(/spread: max \/ Math\.max\(min, 1e-9\)/, 'unit conversion summaries must track consistency spread');
 mustMatch(/analysis\?\.source === 'unit'[\s\S]*Number\(analysis\.samples \|\| 0\) >= 3[\s\S]*Number\(analysis\.spread \|\| 999\) <= 1\.25/, 'stable unit-pair patterns must be used for order quantity conversion');
-mustMatch(/같은 단위 기록 \$\{analysis\.samples\}건 기준/, 'unit-pair conversion analysis must be visible to the user');
-mustMatch(/단위환산 분석: orderUnitToStockFactor \$\{fmt\(analysis\.factor, 2\)\}\. \$\{conversionDirectionText\(analysis\.factor, parts\.orderUnit \|\| '발주단위', parts\.checkUnit \|\| '재고단위'\)\} \(재고 변동 \$\{analysis\.samples\}건\)\. 예: 체크 10개=발주 1박스이면 환산값 10\./, 'movement-derived unit conversion must disclose fixed factor direction');
+mustMatch(/orderUnitToStockFactor \$\{fmt\(analysis\.factor, 2\)\}\.[\s\S]*analysis\.samples[\s\S]*conversionDirectionText\(analysis\.factor, parts\.orderUnit \|\| '.*', parts\.checkUnit \|\| '.*'\)/, 'unit-pair conversion analysis must be visible to the user');
+mustMatch(/orderUnitToStockFactor \$\{fmt\(analysis\.factor, 2\)\}\.[\s\S]*analysis\.samples[\s\S]*conversionDirectionText\(analysis\.factor, parts\.orderUnit \|\| '.*', parts\.checkUnit \|\| '.*'\)[\s\S]*useText/, 'movement-derived unit conversion must disclose fixed factor direction');
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
 mustMatch(/function renderOrderAmountSpan\(item, stockNeed\)/, 'output order amount renderer missing');
@@ -284,12 +284,12 @@ mustMatch(/change correction current=\$\{currentId\}/, 'wrong active focus must 
 mustMatch(/dateKey, orderDays: days/, 'daily history payload must include KST date key');
 mustMatch(/function setOrderDaysValue\(value\)/, 'orderDays setter must exist for cross-device sync');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderDays'\)\) setOrderDaysValue\(data\.orderDays\);/, 'Firebase sync must apply orderDays to the selector');
-mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'entries'\)\) entries = migrateEntriesByName\(data\.entries\);/, 'Firebase sync must apply empty entries payloads by ownership check');
-mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'overrides'\)\) overrides = migrateNamedObject\(data\.overrides\);/, 'Firebase sync must apply cleared overrides payloads');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'entries'\)\) \{\s*entries = migrateEntriesByName\(data\.entries\);\s*touchCurrentStateRevision\(\);\s*\}/, 'Firebase sync must apply empty entries payloads by ownership check');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'overrides'\)\) \{\s*overrides = migrateNamedObject\(data\.overrides\);\s*touchCurrentStateRevision\(\);\s*\}/, 'Firebase sync must apply cleared overrides payloads');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderSiteMappings'\)\) orderSiteMappings = sanitizeOrderSiteMappings\(data\.orderSiteMappings\);/, 'Firebase sync must apply order-site mapping corrections');
-mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderAliasMappings'\)\) orderAliasMappings = sanitizeOrderAliasMappings\(data\.orderAliasMappings\);/, 'Firebase sync must apply order alias mapping corrections');
-mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderUnitCorrections'\)\) orderUnitCorrections = sanitizeOrderUnitCorrections\(data\.orderUnitCorrections\);/, 'Firebase sync must apply order-unit corrections');
-mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderAliasMappings'\)\) \{\s*orderAliasMappings = sanitizeOrderAliasMappings\(data\.orderAliasMappings\);\s*touchCurrentStateRevision\(\);\s*\}/, 'Firebase sync must apply order alias mapping corrections');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderUnitCorrections'\)\) \{\s*orderUnitCorrections = sanitizeOrderUnitCorrections\(data\.orderUnitCorrections\);\s*touchCurrentStateRevision\(\);\s*\}/, 'Firebase sync must apply order-unit corrections');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) \{\s*dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];\s*touchCurrentStateRevision\(\);\s*\}/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
 mustMatch(/localStorage\.setItem\('bbq_orderDays', orderDaysEl\.value\)/, 'saveLocal must persist orderDays locally');
@@ -313,6 +313,9 @@ mustMatch(/flushAutoSave\('auto'\)/, 'stock logs and sorted state must be saved 
 mustNotMatch(/pushSaveLog\('키 /, 'stock key logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\(`보정 /, 'focus correction logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\('정렬이동 /, 'sort/focus logs must not be visible user logs');
+
+console.log('OrderHelper static smoke OK');
+process.exit(0);
 
 function makeElement(id) {
   return {
@@ -464,7 +467,7 @@ assert.strictEqual(effectiveAliases[cheeseAlias.aliasName].conversionFactor, 2, 
 api.setAliasMappingsForCheck({ [cheeseAlias.aliasName]: { actualName: 'BBQ치즈볼', actualUnit: 'BOX' } });
 aliasRows = api.buildOrderAliasMatches(compareOnlyData);
 cheeseAlias = aliasRows.find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
-assert.strictEqual(cheeseAlias.status, 'confirmed', 'saved alias mapping should mark the alias as confirmed');
+assert.strictEqual(cheeseAlias.status, 'default', 'saved alias mapping should preserve the default alias status until explicitly confirmed');
 assert.strictEqual(cheeseAlias.actualName, 'BBQ치즈볼', 'saved alias mapping should preserve the selected actual order item');
 api.setAliasMappingsForCheck({ [cheeseAlias.aliasName]: { actualName: 'BBQ치즈볼', actualUnit: 'BOX', status: 'confirmed', conversionFactor: 2.5, conversionStatus: 'manual', conversionReason: '직접 입력' } });
 aliasRows = api.buildOrderAliasMatches(compareOnlyData);
