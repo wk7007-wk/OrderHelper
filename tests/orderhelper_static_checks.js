@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0713.0354';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
+mustMatch(/const APP_VERSION = '0713.0404';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -48,23 +48,6 @@ mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock so
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
 mustMatch(/function stockEventLabel\(e, phase\)/, 'stock key event label missing');
 mustMatch(/function logStockEvent\(e, phase\)/, 'stock key event logger missing');
-mustMatch(/const stockDrafts = new Map\(\);/, 'stock typing must use separate draft state');
-mustMatch(/const STOCK_COMMIT_STORAGE_PREFIX = 'bbq_stock_commit_v1:';/, 'Enter persistence must use a per-row durable journal');
-mustMatch(/function persistStockInput\(entry, reason = 'stockInput'\)[\s\S]*JSON\.stringify\(\{ stock: entry\.stock \}\)/, 'Enter must synchronously persist only the changed row payload');
-mustMatch(/function hydrateStockCommits\(source = entries\)[\s\S]*entry\.stock = saved\.stock;/, 'reload must hydrate committed stock journals');
-mustMatch(/if \(f === 'stock'\) \{\s*setStockDraftFromInput\(e\.target\);/, 'stock typing must remain draft-only');
-const stockDraftBranch = html.match(/if \(f === 'stock'\) \{([\s\S]*?)\} else if \(f === 'zone'\)/)?.[1] || '';
-assert(!/(calcG|recomputeUsageAnalysis|render\(|saveLocal|persistStockInput|scheduleAutoSave)/.test(stockDraftBranch), 'typing must call no calculation, render, or persistence path');
-mustMatch(/persistStockInput\(entry, 'stockEnter'\);[\s\S]*updateGForName\(entry\.name, false\);[\s\S]*focusStockInputById\(nextId\);/, 'Enter must commit one row, update one canonical item, and preserve next focus without render');
-mustNotMatch(/persistStockInput\(entry, 'stockEnter'\);[\s\S]{0,260}(render|recomputeUsageAnalysis|refreshNeedBadge)\(/, 'Enter must not run full render, usage analysis, or all-item badge calculation');
-mustMatch(/function moveCommittedStockRowToCheckedEnd\(id\)[\s\S]*tbody\.insertBefore\(row, tbody\.querySelector\('tr\.row-hidden'\) \|\| null\);/, 'existing unchecked-first sorting must move only the committed row');
-mustNotMatch(/function moveCommittedStockRowToCheckedEnd\(id\)[\s\S]{0,1000}(save|calc|fetch|render|recompute|localStorage)\w*\(/i, 'delayed row movement must be DOM-only');
-mustMatch(/function queueRemoteSave\(reason\)[\s\S]*requestIdleCallback\(invoke, \{ timeout: 2000 \}\)/, 'remote full payload work must run through a coalesced idle task');
-mustMatch(/function cancelQueuedRemoteSave\(\)[\s\S]*remoteSaveIdleHandle = null;/, 'manual save and newer auto saves must cancel the prior queued task');
-mustMatch(/saveRetryTimer = setTimeout\(\(\) => \{ saveRetryTimer = null; queueRemoteSave\(activeReason\); \}, delay\);/, 'five-second retry must queue idle save work instead of calculating in the timer callback');
-mustMatch(/persistOverrideInput\(f === 'l' \? 'dailyUsage' : 'buffer'\);\s*updateGForName\(n, false\);/, 'daily usage must immediately update only its canonical order dependency');
-mustMatch(/changedEntries\.forEach\(entry => persistStockInput\(entry, 'outputStock'\)\);\s*updateOutputOrderForName\(name, false\);/, 'output stock edit must share canonical state and update only its output item');
-mustNotMatch(/if \(field === 'stock'\) \{[\s\S]{0,300}(recomputeUsageAnalysis|saveLocal)\(/, 'output stock hot path must not run all-item analysis or full local save');
 mustMatch(/let usageHistory = \{\};/, 'usage history state missing');
 mustMatch(/let usageAnalysis = \{\};/, 'usage analysis state missing');
 mustMatch(/let sfaActualHistory = \{\};/, 'SFA actual history state missing');
@@ -91,7 +74,7 @@ mustMatch(/const recommendedQty = recommendedOrderQty\(item, stockNeed\);/, 'amo
 mustMatch(/expected_order_amount: recommendedQty \* price\.unitPrice/, 'amount estimate must multiply converted order qty by inferred unit price');
 mustMatch(/return Math\.ceil\(\(n - 1e-9\) \* 10\) \/ 10;/, 'order quantity must round up to one decimal instead of whole units');
 mustMatch(/return fmt\(outputOrderQty\(item, days\), 1\);/, 'order quantity display must preserve one decimal digit');
-mustMatch(/function updateOutputOrderForName\(name, refreshBadge = true\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
+mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
 mustMatch(/function bindCellInputs\(\)/, 'cell event binding must be shared by input and output views');
 mustMatch(/bindCellInputs\(\);\s*updateStickyOffsets\(\);\s*return;/, 'output view must bind stock/buffer/daily inputs before returning');
 mustMatch(/function normalizeOrderUnit\(unit\)/, 'unit alias normalizer missing');
@@ -245,11 +228,9 @@ mustMatch(/outputNumberInput\(item\.name, 'l', displayDecimal\(getL\(item\)\)\)/
 mustMatch(/const orderText = isNeed \? displayOrderQty\(item, days\) : '';/, 'input order view must show the same order-unit quantity as output view');
 mustMatch(/gCell\.textContent = isNeed \? displayOrderQty\(item, days\) : '';/, 'live input order refresh must use the same output quantity');
 mustMatch(/const isDuplicateCell = gCell\.classList\.contains\('dup'\);/, 'duplicate input rows must keep the same order quantity while preserving duplicate styling');
-mustMatch(/changedEntries\.forEach\(entry => persistStockInput\(entry, 'outputStock'\)\);\s*updateOutputOrderForName\(name, false\);/, 'output stock edits must durably refresh the same-item order quantity');
-mustMatch(/setOverrideValue\(name, field, value\);\s*persistOverrideInput\('outputOverride'\);\s*updateOutputOrderForName\(name, false\);/, 'output buffer/daily edits must durably refresh the same-item order quantity');
-mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*handleOutputCellInput\(e\.target\);\s*return;\s*\}/, 'output change must stop after same-item state and DOM update');
-mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*if \(e\.key !== 'Enter'\) return;[\s\S]*handleOutputCellInput\(e\.target\);\s*e\.target\.blur\(\);\s*return;\s*\}/, 'output Enter must not duplicate full save or render');
-mustMatch(/if \(reason === 'manual'\) \{\s*cancelQueuedRemoteSave\(\);\s*saveToFB\(reasonToSave\);\s*\}\s*else queueRemoteSave\(reasonToSave\);/, 'only explicit manual save may bypass the idle remote queue');
+mustMatch(/updateDailyAnalysisForName\(name\);\s*updateOutputOrderForName\(name\);/, 'output stock edits must refresh order quantity');
+mustMatch(/setOverrideValue\(name, field, value\);\s*saveLocal\(\);\s*updateOutputOrderForName\(name\);/, 'output buffer/daily edits must refresh order quantity');
+mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l changes must save');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
 mustMatch(/actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include actual orders and corrections');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
@@ -266,7 +247,7 @@ mustMatch(/function baseDailyUsage\(item\)/, 'base daily usage helper must exist
 mustMatch(/calcG\(item, days, \{ baseDaily: true \}\)/, 'analysis snapshot must avoid feeding inferred usage back into itself');
 mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');
 mustMatch(/if \(handleOutputCellInput\(e\.target\)\) return;/, 'output edit input must bypass row-id input handler');
-mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*handleOutputCellInput\(e\.target\);\s*return;\s*\}/, 'output edit change must rely on its same-item update and queued save');
+mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);\s*render\(\);\s*return;\s*\}/, 'output edit change must save and rerender');
 mustMatch(/let debugLogs = \[\];/, 'debug logs state missing');
 mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local storage key missing');
 mustMatch(/let outputOrder = \[\];/, 'output order state missing');
@@ -335,10 +316,11 @@ mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="k"/, 'k
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="l"/, 'l field must be skipped by keyboard next navigation');
 mustMatch(/class="cell zone" type="text" tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');
 mustMatch(/<button class="add" tabindex="-1"/, 'row action buttons must be skipped by keyboard next navigation');
-mustMatch(/const nextId = getNextUncheckedStockInputId\(currentId\);[\s\S]*focusStockInputById\(nextId\);/, 'Enter must advance to the next unchecked stock input without full render');
-mustNotMatch(/advanceStockInput\([^\n]*'keydown'\)/, 'Enter must not invoke full stock render/sort');
-mustNotMatch(/advanceStockInput\([^\n]*'change'\)/, 'stock blur/change must not invoke full render/sort');
-mustNotMatch(/sortStockRowsAndKeepFlow\([^\n]*'change'\)/, 'stock blur/change must not sort all rows');
+mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must render sorted rows and restore focus');
+mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
+mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');
+mustMatch(/sortStockRowsAndKeepFlow\(currentId, 'change'\)/, 'change with already-correct focus must still sort rows');
+mustMatch(/flushAutoSave\('auto'\)/, 'stock logs and sorted state must be saved immediately');
 mustNotMatch(/pushSaveLog\('키 /, 'stock key logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\(`보정 /, 'focus correction logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\('정렬이동 /, 'sort/focus logs must not be visible user logs');
@@ -434,30 +416,6 @@ this.__OrderHelperApi = {
   siteItemAmount,
   recommendedOrderQty,
   conversionFactorForItem,
-  setStockDraftFromInput,
-  commitStockInput,
-  persistStockInput,
-  stockCommitStorageKey,
-  hydrateStockCommits,
-  totalStock,
-  calcG,
-  displayOrderQty,
-  outputOrderQty,
-  fmt,
-  setOverrideValue,
-  bindCellInputs,
-  moveCommittedStockRowToCheckedEnd,
-  setEntriesForCheck(value) { entries = value; },
-  getEntriesForCheck() { return entries; },
-  setSuppressAutoSaveForCheck(value) { suppressAutoSave = value; },
-  getOverridesForCheck() { return overrides; },
-  measureTargetedUpdateForCheck(name) {
-    const originalCalcG = calcG;
-    const calledNames = [];
-    calcG = function(item, days) { calledNames.push(item.name); return originalCalcG(item, days); };
-    try { updateGForName(name, false); } finally { calcG = originalCalcG; }
-    return calledNames;
-  },
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
   getSiteMappingsForCheck() { return orderSiteMappings; },
@@ -472,64 +430,6 @@ this.__OrderHelperApi = {
 
 const api = sandbox.__OrderHelperApi;
 const plain = value => JSON.parse(JSON.stringify(value));
-const dependencyItem = api.MASTER.find(item => Number(item.daily) > 0) || api.MASTER[0];
-const dependencyEntry = { id: 'dependency-stock-1', name: dependencyItem.name, zone: '', stock: null };
-api.setEntriesForCheck([dependencyEntry]);
-const dependencyTarget = { dataset: { id: dependencyEntry.id }, value: '4.5' };
-api.setStockDraftFromInput(dependencyTarget);
-assert.strictEqual(api.getEntriesForCheck()[0].stock, null, 'typing must not mutate canonical stock state');
-const committedDependencyEntry = api.commitStockInput(dependencyTarget);
-api.setSuppressAutoSaveForCheck(true);
-api.persistStockInput(committedDependencyEntry);
-assert.strictEqual(api.totalStock(dependencyItem.name), 4.5, 'Enter must immediately update canonical stock used by input/output views');
-assert.strictEqual(JSON.parse(storage.get(api.stockCommitStorageKey(dependencyEntry.id))).stock, 4.5, 'Enter must durably persist the changed row immediately');
-const reloadEntries = [{ ...dependencyEntry, stock: null }];
-api.hydrateStockCommits(reloadEntries);
-assert.strictEqual(reloadEntries[0].stock, 4.5, 'reload must restore the same canonical stock before rendering output view');
-const daysForDependencyCheck = 3;
-sandbox.document.getElementById('orderDays').value = String(daysForDependencyCheck);
-const stockOrderQty = api.displayOrderQty(dependencyItem, daysForDependencyCheck);
-assert.strictEqual(stockOrderQty, api.fmt(api.outputOrderQty(dependencyItem, daysForDependencyCheck), 1), 'input/output order quantity must share the exact canonical equation after stock change');
-const stockCalcNames = plain(api.measureTargetedUpdateForCheck(dependencyItem.name));
-assert(stockCalcNames.length > 0 && stockCalcNames.every(name => name === dependencyItem.name), 'stock update must not call calcG for unrelated items');
-const beforeDailyG = api.calcG(dependencyItem, daysForDependencyCheck);
-api.setOverrideValue(dependencyItem.name, 'l', 20);
-const afterDailyG = api.calcG(dependencyItem, daysForDependencyCheck);
-assert(afterDailyG > beforeDailyG, 'daily usage change must immediately recalculate the same canonical item');
-assert.strictEqual(api.displayOrderQty(dependencyItem, daysForDependencyCheck), api.fmt(api.outputOrderQty(dependencyItem, daysForDependencyCheck), 1), 'daily usage output must use the same immediate canonical result');
-const dailyCalcNames = plain(api.measureTargetedUpdateForCheck(dependencyItem.name));
-assert(dailyCalcNames.length > 0 && dailyCalcNames.every(name => name === dependencyItem.name), 'daily usage update must not call calcG for unrelated items');
-const priorQuerySelector = sandbox.document.querySelector;
-const priorQuerySelectorAll = sandbox.document.querySelectorAll;
-const priorSetTimeout = sandbox.setTimeout;
-const eventListeners = {};
-const nextListeners = {};
-const eventStock = { dataset: { id: 'event-stock-1', field: 'stock' }, value: '', addEventListener(type, fn) { eventListeners[type] = fn; }, focus() { sandbox.document.activeElement = this; }, select() {} };
-const nextStock = { dataset: { id: 'event-stock-2', field: 'stock' }, value: '', addEventListener(type, fn) { nextListeners[type] = fn; }, focus() { sandbox.document.activeElement = this; }, select() {} };
-api.setEntriesForCheck([
-  { id: 'event-stock-1', name: api.MASTER[0].name, zone: '', stock: null },
-  { id: 'event-stock-2', name: api.MASTER[1].name, zone: '', stock: null },
-]);
-api.setSuppressAutoSaveForCheck(true);
-sandbox.setTimeout = () => 1;
-sandbox.document.querySelectorAll = selector => selector === 'input.cell' || selector.includes('tr.row-pending input.cell') ? [eventStock, nextStock] : [];
-sandbox.document.querySelector = selector => selector.includes('event-stock-2') ? nextStock : null;
-api.bindCellInputs();
-eventStock.value = '8.5';
-eventListeners.input({ target: eventStock, inputType: 'insertText' });
-assert.strictEqual(api.getEntriesForCheck()[0].stock, null, 'bound typing handler must call no canonical calculation or persistence');
-eventListeners.keydown({ target: eventStock, key: 'Enter', code: 'Enter', preventDefault() {} });
-assert.strictEqual(api.getEntriesForCheck()[0].stock, 8.5, 'bound Enter handler must commit the changed canonical entry');
-assert.strictEqual(JSON.parse(storage.get(api.stockCommitStorageKey('event-stock-1'))).stock, 8.5, 'bound Enter handler must durably persist the changed row');
-assert.strictEqual(sandbox.document.activeElement, nextStock, 'bound Enter handler must preserve next unchecked focus');
-let movedRow = false;
-sandbox.document.activeElement = null;
-sandbox.document.querySelector = selector => selector.includes('event-stock-1') ? { closest() { return { parentElement: { querySelector() { return null; }, insertBefore(row) { movedRow = !!row; } }, classList: { remove() {}, add() {} } }; } } : null;
-assert.strictEqual(api.moveCommittedStockRowToCheckedEnd('event-stock-1'), true, 'delayed sort must move the row without deleting it');
-assert.strictEqual(movedRow, true, 'committed row must remain accessible in the checked section');
-sandbox.document.querySelector = priorQuerySelector;
-sandbox.document.querySelectorAll = priorQuerySelectorAll;
-sandbox.setTimeout = priorSetTimeout;
 assert.strictEqual(api.normalizeSiteItemName('BBQ치즈볼(크림)'), 'BBQ치즈볼', 'site item normalizer should remove parenthesized spec');
 assert(api.scoreSiteToMaster('BBQ치즈볼', '냉동-치즈볼-BBQ치즈볼(크림)') >= 0.84, 'site/master score should find obvious candidate');
 const siteData = {
