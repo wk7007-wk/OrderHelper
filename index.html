@@ -341,7 +341,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0713.0258';
+const APP_VERSION = '0713.0249';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -870,7 +870,7 @@ let usageHistory = {};
 let usageAnalysis = {};
 let sfaActualHistory = {};
 const stockDrafts = new Map();
-const stockRowMoveTimers = new Map();
+const stockRowRemovalTimers = new Map();
 
 function canonicalItemName(name) {
   return ITEM_NAME_ALIASES[name] || name;
@@ -4057,36 +4057,25 @@ function persistStockInput(reason = 'stockInput') {
   if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
 }
 
-function moveCommittedStockRowToCheckedEnd(id) {
+function removeCommittedStockRowFromEmptyView(id) {
   if (viewMode !== 'input' || stockDrafts.has(id) || currentStockFocusId() === id) return false;
   const entry = entries.find(item => item.id === id);
   if (!isStockChecked(entry)) return false;
   const input = document.querySelector(`input.cell[data-field="stock"][data-id="${id}"]`);
   const row = input?.closest('tr');
   if (!row) return false;
-  const tbody = row.parentElement;
-  if (!tbody) return false;
-  row.classList.remove('row-pending');
-  row.classList.add('row-checked');
-  const firstHiddenRow = tbody.querySelector('tr.row-hidden');
-  tbody.insertBefore(row, firstHiddenRow || null);
+  row.remove();
   return true;
 }
 
-function scheduleCommittedStockRowMove(id) {
-  const pending = stockRowMoveTimers.get(id);
+function scheduleCommittedStockRowRemoval(id) {
+  const pending = stockRowRemovalTimers.get(id);
   if (pending) clearTimeout(pending);
   if (viewMode !== 'input') return;
-  stockRowMoveTimers.set(id, setTimeout(() => {
-    stockRowMoveTimers.delete(id);
-    moveCommittedStockRowToCheckedEnd(id);
+  stockRowRemovalTimers.set(id, setTimeout(() => {
+    stockRowRemovalTimers.delete(id);
+    removeCommittedStockRowFromEmptyView(id);
   }, 5000));
-}
-
-function getNextUncheckedStockInputId(currentId) {
-  const inputs = Array.from(document.querySelectorAll('tr.row-pending input.cell[data-field="stock"]'));
-  const index = inputs.findIndex(input => input.dataset.id === currentId);
-  return index >= 0 ? inputs[index + 1]?.dataset.id || null : inputs[0]?.dataset.id || null;
 }
 
 function bindCellInputs() {
@@ -4144,12 +4133,12 @@ function bindCellInputs() {
       e.preventDefault();
       logStockEvent(e, 'keydown');
       const currentId = e.target.dataset.id;
-      const nextId = getNextUncheckedStockInputId(currentId);
+      const nextId = getNextStockInputId(currentId);
       const ent = commitStockInput(e.target);
       persistStockInput('stockEnter');
       if (ent) updateGForName(ent.name);
       focusStockInputById(nextId);
-      scheduleCommittedStockRowMove(currentId);
+      scheduleCommittedStockRowRemoval(currentId);
     });
   });
 }
@@ -4201,7 +4190,7 @@ function render() {
     const item = MASTER.find(m => m.name === ent.name);
     if (!item) return null;
     return { entry: ent, item, hidden: isItemHidden(item.name) };
-  }).filter(Boolean).sort(compareInputRows);
+  }).filter(row => row && !isStockChecked(row.entry)).sort(compareInputRows);
   const inlineAliasRowsByName = new Map(buildOrderAliasMatches(lastSfaCompareData).map(row => [row.aliasName, row]));
 
   const shownItems = new Set();
