@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0713.0404';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
+mustMatch(/const APP_VERSION = '0713.0424';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -426,6 +426,17 @@ this.__OrderHelperApi = {
   setAliasMappingsForCheck(value) { orderAliasMappings = sanitizeOrderAliasMappings(value); },
   setUsageHistoryForCheck(value) { usageHistory = value || {}; },
   setSfaActualHistoryForCheck(value) { sfaActualHistory = value || {}; },
+  setEntriesForCheck(value) { entries = value; },
+  getEntriesForCheck() { return entries; },
+  totalStock,
+  displayDecimal,
+  markLocalDirtyRevision,
+  clearLocalDirtyRevision,
+  storedLocalDirtyRevision,
+  shouldApplyFBData,
+  isPendingFBDataCurrent,
+  getLocalMutationRevisionForCheck() { return localMutationRevision; },
+  applyFBData,
 };`, sandbox);
 
 const api = sandbox.__OrderHelperApi;
@@ -577,5 +588,31 @@ const confirmedAlias = sfaPayloadState.effectiveOrderAliasMappings[cheeseAlias.a
 assert.strictEqual(confirmedAlias.actualName, 'BBQ치즈볼', 'SFA payload state should preserve confirmed alias actual name during refresh');
 assert.strictEqual(confirmedAlias.conversionFactor, 3, 'SFA payload state should not overwrite manual conversion with a rebuilt default');
 assert.strictEqual(confirmedAlias.conversionStatus, 'manual', 'SFA payload state should preserve manual conversion status');
+
+const goldenCheeseBall = '냉동-치즈볼-BBQ황금알치즈볼';
+const localStockFixture = [{ id: 'e-stock-race', name: goldenCheeseBall, zone: '', stock: 7.5 }];
+api.setEntriesForCheck(localStockFixture);
+storage.set('bbq_entries', JSON.stringify(localStockFixture));
+storage.set('bbq_savedAt', '900');
+const pendingRevisionBeforeLocalSave = api.getLocalMutationRevisionForCheck();
+api.markLocalDirtyRevision(1000);
+assert.strictEqual(api.storedLocalDirtyRevision(), 1000, 'local stock save must persist a durable dirty revision');
+assert.strictEqual(api.totalStock(goldenCheeseBall), 7.5, 'input/canonical stock must preserve the exact decimal value');
+assert.strictEqual(String(api.getEntriesForCheck()[0].stock), '7.5', 'input stock DOM source value must remain exactly 7.5');
+assert.strictEqual(String(api.displayDecimal(api.totalStock(goldenCheeseBall))), '7.5', 'output stock display must render the same exact 7.5 value');
+assert.strictEqual(api.applyFBData({ savedAt: 950, entries: [{ id: 'remote-old', name: goldenCheeseBall, zone: '', stock: 2 }] }), false, 'stale pending remote data must be rejected while local stock is dirty');
+assert.strictEqual(api.totalStock(goldenCheeseBall), 7.5, 'stale pending apply must not change output stock semantics');
+api.setEntriesForCheck(JSON.parse(storage.get('bbq_entries')));
+assert.strictEqual(api.storedLocalDirtyRevision(), 1000, 'reload must retain the durable dirty marker');
+assert.strictEqual(api.totalStock(goldenCheeseBall), 7.5, 'reload must restore the exact local decimal stock while dirty');
+assert.strictEqual(api.applyFBData({ savedAt: 999, entries: [{ id: 'remote-reload-old', name: goldenCheeseBall, zone: '', stock: 3 }] }), false, 'reload must continue rejecting stale remote stock until sync succeeds');
+assert.strictEqual(api.totalStock(goldenCheeseBall), 7.5, 'output stock must remain exactly equal to the locally stored input after reload');
+assert.strictEqual(api.isPendingFBDataCurrent(pendingRevisionBeforeLocalSave), false, 'a remote snapshot observed before the local stock save must remain stale even after focusout delay');
+storage.set('bbq_savedAt', '1100');
+api.clearLocalDirtyRevision();
+assert.strictEqual(api.storedLocalDirtyRevision(), 0, 'confirmed save may clear the durable dirty marker');
+assert.strictEqual(api.isPendingFBDataCurrent(pendingRevisionBeforeLocalSave), false, 'clearing dirty after sync must not make an older pending snapshot current again');
+assert.strictEqual(api.applyFBData({ savedAt: 950, entries: [{ id: 'remote-after-sync-old', name: goldenCheeseBall, zone: '', stock: 4 }] }), false, 'a pending snapshot older than the confirmed local save must still be rejected after dirty clears');
+assert.strictEqual(api.totalStock(goldenCheeseBall), 7.5, 'confirmed sync must retain exact input/output stock equality');
 
 console.log('OrderHelper static checks OK');
