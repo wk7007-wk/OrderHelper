@@ -31,7 +31,16 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0713.0424';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
+mustMatch(/const APP_VERSION = '0715.0209';/, 'APP_VERSION must match the KST autosave hotfix build time');
+mustMatch(/const SAVE_REQUEST_TIMEOUT_MS = 20000;/, 'Firebase autosave must have a bounded request timeout');
+mustMatch(/async function putConfirmedSaveTargets\(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS\)/, 'confirmed current/history writes need a shared abortable timeout');
+mustMatch(/controller\.abort\(\);/, 'a failed save target must abort its sibling before releasing single-flight');
+mustMatch(/const CONFIRMED_SAVE_QUEUE_STORAGE_KEY = 'bbq_confirmed_save_queue_v1';/, 'confirmed remote queue key missing');
+mustMatch(/function retryConfirmedRemotePending\(reason = 'recovery'\)/, 'confirmed pending recovery helper missing');
+mustMatch(/window\.addEventListener\('online', \(\) => retryConfirmedRemotePending\('online'\)\);/, 'online recovery must retry only confirmed pending state');
+mustMatch(/return \{ v: 1, active: null, queued: null \};/, 'confirmed queue must have active and latest queued slots');
+mustMatch(/body: JSON\.stringify\(payload\)/, 'Enter must capture an immutable serialized payload');
+mustMatch(/if \(!nextQueue\.active && commit\.revision === localMutationRevision\) clearLocalDirtyRevision\(\);/, 'only the latest confirmed revision may clear local dirty state');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -229,8 +238,8 @@ mustMatch(/const orderText = isNeed \? displayOrderQty\(item, days\) : '';/, 'in
 mustMatch(/gCell\.textContent = isNeed \? displayOrderQty\(item, days\) : '';/, 'live input order refresh must use the same output quantity');
 mustMatch(/const isDuplicateCell = gCell\.classList\.contains\('dup'\);/, 'duplicate input rows must keep the same order quantity while preserving duplicate styling');
 mustMatch(/updateDailyAnalysisForName\(name\);\s*updateOutputOrderForName\(name\);/, 'output stock edits must refresh order quantity');
-mustMatch(/setOverrideValue\(name, field, value\);\s*saveLocal\(\);\s*updateOutputOrderForName\(name\);/, 'output buffer/daily edits must refresh order quantity');
-mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l changes must save');
+mustMatch(/setOverrideValue\(name, field, value\);\s*saveLocalDraft\(\);\s*updateOutputOrderForName\(name\);/, 'output buffer/daily edits must persist only a local draft while typing');
+mustNotMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output typing/change must not auto-commit remotely');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
 mustMatch(/actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include actual orders and corrections');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
@@ -247,7 +256,7 @@ mustMatch(/function baseDailyUsage\(item\)/, 'base daily usage helper must exist
 mustMatch(/calcG\(item, days, \{ baseDaily: true \}\)/, 'analysis snapshot must avoid feeding inferred usage back into itself');
 mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');
 mustMatch(/if \(handleOutputCellInput\(e\.target\)\) return;/, 'output edit input must bypass row-id input handler');
-mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);\s*render\(\);\s*return;\s*\}/, 'output edit change must save and rerender');
+mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*handleOutputCellInput\(e\.target\);\s*render\(\);\s*return;\s*\}/, 'output change must remain local-only and rerender');
 mustMatch(/let debugLogs = \[\];/, 'debug logs state missing');
 mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local storage key missing');
 mustMatch(/let outputOrder = \[\];/, 'output order state missing');
@@ -305,7 +314,7 @@ mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must s
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
 mustMatch(/localStorage\.setItem\('bbq_orderDays', orderDaysEl\.value\)/, 'saveLocal must persist orderDays locally');
 mustMatch(/localStorage\.setItem\(ORDER_DAYS_RULE_STORAGE_KEY, ORDER_DAYS_RULE_VERSION\)/, 'orderDays local persistence must mark the current recommendation rule');
-mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'daily history path must be saved');
+mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{commit\.dateKey\}\.json`/, 'confirmed snapshot date must select the immutable history path');
 mustNotMatch(/<th>순서<\/th>/, 'output order controls header must be removed');
 mustNotMatch(/onclick="moveOutputItem/, 'output row must not include move buttons');
 mustMatch(/data-field="k" value="\$\{displayDecimal\(getK\(item\)\)\}"/, 'k field must still render with one decimal');
@@ -320,7 +329,9 @@ mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock adv
 mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
 mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');
 mustMatch(/sortStockRowsAndKeepFlow\(currentId, 'change'\)/, 'change with already-correct focus must still sort rows');
-mustMatch(/flushAutoSave\('auto'\)/, 'stock logs and sorted state must be saved immediately');
+mustMatch(/flushAutoSave\('enter'\)/, 'Enter must explicitly confirm the current local draft');
+mustNotMatch(/flushAutoSave\('auto'\)/, 'input/change handlers must not auto-commit remotely');
+mustMatch(/if \(e\.isComposing \|\| e\.keyCode === 229\) return;/, 'IME composing Enter must not confirm a remote save');
 mustNotMatch(/pushSaveLog\('키 /, 'stock key logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\(`보정 /, 'focus correction logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\('정렬이동 /, 'sort/focus logs must not be visible user logs');
@@ -365,6 +376,7 @@ const sandbox = {
   URLSearchParams,
   TextEncoder,
   Uint8Array,
+  AbortController,
   location: { search: '', hostname: 'localhost' },
   localStorage: {
     getItem(key) { return storage.has(key) ? storage.get(key) : null; },
@@ -437,6 +449,31 @@ this.__OrderHelperApi = {
   isPendingFBDataCurrent,
   getLocalMutationRevisionForCheck() { return localMutationRevision; },
   applyFBData,
+  saveLocalDraft,
+  flushAutoSave,
+  buildConfirmedSaveCommit,
+  confirmCurrentSave,
+  sendActiveConfirmedSave,
+  putConfirmedSaveTargets,
+  readConfirmedSaveQueue,
+  writeConfirmedSaveQueue,
+  emptyConfirmedSaveQueue,
+  retryConfirmedRemotePending,
+  saveMachineForCheck() {
+    return { saveInFlight, pendingSave, activeSaveCommitId, confirmedSaveQueueBlocked, localDirty, localMutationRevision };
+  },
+  resetConfirmedSaveMachineForCheck() {
+    if (saveRetryTimer) clearTimeout(saveRetryTimer);
+    saveRetryTimer = null;
+    saveAttempt = 0;
+    saveAttemptCommitId = '';
+    saveInFlight = false;
+    pendingSave = false;
+    pendingSaveReason = 'enter';
+    activeSaveCommitId = '';
+    confirmedSaveQueueBlocked = false;
+    localStorage.removeItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY);
+  },
 };`, sandbox);
 
 const api = sandbox.__OrderHelperApi;
@@ -615,4 +652,5 @@ assert.strictEqual(api.isPendingFBDataCurrent(pendingRevisionBeforeLocalSave), f
 assert.strictEqual(api.applyFBData({ savedAt: 950, entries: [{ id: 'remote-after-sync-old', name: goldenCheeseBall, zone: '', stock: 4 }] }), false, 'a pending snapshot older than the confirmed local save must still be rejected after dirty clears');
 assert.strictEqual(api.totalStock(goldenCheeseBall), 7.5, 'confirmed sync must retain exact input/output stock equality');
 
+module.exports = { api, storage, sandbox, plain };
 console.log('OrderHelper static checks OK');

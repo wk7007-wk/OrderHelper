@@ -300,7 +300,7 @@
 <div class="input-tools" id="inputTools">
   <button type="button" onclick="resetStocks()">재고 리셋</button>
   <div class="save-log-wrap">
-    <span class="save-log-title">자동저장 기록</span>
+    <span class="save-log-title">저장 기록</span>
     <div class="save-log" id="saveLog"></div>
   </div>
 </div>
@@ -341,7 +341,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0713.0424';
+const APP_VERSION = '0715.0209';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -355,6 +355,7 @@ const DEFAULT_BASE_SALES = 280;
 const BASE_SALES_STORAGE_VERSION = 'formula-280';
 const DEFAULT_SNOOZE_DAYS = 5;
 const MAX_SNOOZE_DAYS = 365;
+const SAVE_REQUEST_TIMEOUT_MS = 20000;
 
 // PIN 잠금. PIN 변경 시 새 PIN의 SHA-256 해시로 교체.
 const PIN_HASH = '38083c7ee9121e17401883566a148aa5c2e2d55dc53bc4a94a026517dbff3c6b';
@@ -1031,6 +1032,7 @@ const LOCAL_NEW_SOURCE_ALIAS_STORAGE_KEY = 'bbq_local_new_source_aliases_v1';
 const ORDER_ALIAS_MAPPING_STORAGE_KEY = 'bbq_order_alias_mappings';
 const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';
 const LOCAL_DIRTY_REVISION_STORAGE_KEY = 'bbq_local_dirty_revision_v1';
+const CONFIRMED_SAVE_QUEUE_STORAGE_KEY = 'bbq_confirmed_save_queue_v1';
 const SFA_MANUAL_ITEMS_STORAGE_KEY = 'bbq_sfa_manual_items';
 const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
 const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';
@@ -1104,6 +1106,7 @@ function applySnoozeItem(name, days) {
   if (!overrides[name]) overrides[name] = {};
   overrides[name].hideUntil = ret.toISOString().slice(0, 10);
   saveLocal();
+  flushAutoSave('snooze');
   render();
 }
 
@@ -1133,6 +1136,7 @@ function unsnoozeItem(name) {
     if (Object.keys(overrides[name]).length === 0) delete overrides[name];
   }
   saveLocal();
+  flushAutoSave('snooze');
   render();
 }
 
@@ -1586,13 +1590,13 @@ function handleOutputCellInput(target) {
   const value = target.value;
   if (field === 'stock') {
     setOutputStockTotal(name, value);
-    saveLocal();
+    saveLocalDraft();
     recomputeUsageAnalysis();
     updateDailyAnalysisForName(name);
     updateOutputOrderForName(name);
   } else if (field === 'k' || field === 'l') {
     setOverrideValue(name, field, value);
-    saveLocal();
+    saveLocalDraft();
     updateOutputOrderForName(name);
   } else {
     return false;
@@ -2077,12 +2081,13 @@ function refreshSfaResultViewsWithCurrentState(data = lastSfaCompareData, reason
   return state;
 }
 
-function waitForSaveIdle(timeoutMs = 10000) {
+function waitForSaveIdle(timeoutMs = SAVE_REQUEST_TIMEOUT_MS + 5000) {
   const started = Date.now();
   return new Promise(resolve => {
     const check = () => {
-      if (!saveInFlight && !autoSaveTimer) {
-        resolve(!localDirty);
+      const queue = readConfirmedSaveQueue();
+      if (!saveInFlight && !queue?.active) {
+        resolve(!localDirty && !confirmedSaveQueueBlocked);
         return;
       }
       if (Date.now() - started >= timeoutMs) {
@@ -2096,18 +2101,8 @@ function waitForSaveIdle(timeoutMs = 10000) {
 }
 
 async function flushCurrentBeforeSfaAnalysisRequest() {
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer);
-    autoSaveTimer = null;
-  }
-  if (saveInFlight) {
-    pendingSave = true;
-    pendingSaveReason = 'sfaAnalysis';
-    return waitForSaveIdle();
-  }
-  if (!localDirty) return true;
-  await saveToFB('sfaAnalysis');
-  return !localDirty;
+  if (!confirmCurrentSave('sfaAnalysis')) return false;
+  return waitForSaveIdle();
 }
 
 function recommendedDays() {
@@ -3895,7 +3890,11 @@ function renderSaveState(label, tone = 'idle') {
 }
 
 function saveReasonLabel(reason) {
+  if (reason === 'enter') return 'Enter 저장';
   if (reason === 'manual') return '수동저장';
+  if (reason === 'rowAction') return '행 변경 저장';
+  if (reason === 'snooze') return '숨김 변경 저장';
+  if (reason === 'orderDays') return '발주일 변경 저장';
   if (reason === 'reset') return '재고 리셋 저장';
   if (reason === 'mapping') return '매칭보정 저장';
   if (reason === 'aliasMapping') return '별명매칭 저장';
@@ -3905,7 +3904,11 @@ function saveReasonLabel(reason) {
 }
 
 function lastSavedLabel(reason) {
+  if (reason === 'enter') return 'Enter 저장';
   if (reason === 'manual') return '저장';
+  if (reason === 'rowAction') return '행 변경';
+  if (reason === 'snooze') return '숨김 변경';
+  if (reason === 'orderDays') return '발주일 변경';
   if (reason === 'reset') return '리셋저장';
   if (reason === 'mapping') return '매칭보정';
   if (reason === 'aliasMapping') return '별명매칭';
@@ -4168,13 +4171,13 @@ function bindCellInputs() {
       if (f === 'stock') {
         logStockEvent(e, 'input');
         ent.stock = v === '' ? null : parseFloat(v);
-        saveLocal();
+        saveLocalDraft();
         recomputeUsageAnalysis();
         updateDailyAnalysisForName(ent.name);
         updateGForName(ent.name);
       } else if (f === 'zone') {
         ent.zone = v;
-        saveLocal();
+        saveLocalDraft();
       } else {
         // k or l (overrides per name)
         const n = ent.name;
@@ -4183,18 +4186,17 @@ function bindCellInputs() {
         if (num === null) delete overrides[n][f];
         else overrides[n][f] = num;
         if (Object.keys(overrides[n]).length === 0) delete overrides[n];
-        saveLocal();
+        saveLocalDraft();
         updateGForName(n);
       }
     });
     inp.addEventListener('change', e => {
       if (e.target.dataset.outputField) {
         handleOutputCellInput(e.target);
-        flushAutoSave('auto');
         render();
         return;
       }
-      // blur/Enter — pending autosave 즉시 flush
+      // blur/change는 로컬 행 흐름만 정리한다. 원격 확정은 Enter에서만 수행한다.
       if (e.target.dataset.field === 'stock') {
         logStockEvent(e, 'change');
         const currentId = e.target.dataset.id;
@@ -4208,30 +4210,34 @@ function bindCellInputs() {
           } else {
             sortStockRowsAndKeepFlow(currentId, 'change');
           }
-          flushAutoSave('auto');
         }, 0);
         return;
       }
-      flushAutoSave();
       if (e.target.dataset.field === 'zone') render();
     });
     inp.addEventListener('keydown', e => {
       if (e.target.dataset.outputField) {
+        if (e.isComposing || e.keyCode === 229) return;
         if (e.key !== 'Enter') return;
         e.preventDefault();
         handleOutputCellInput(e.target);
         e.target.blur();
-        flushAutoSave('auto');
+        flushAutoSave('enter');
         render();
         return;
       }
       if (e.target.dataset.field === 'stock') logStockEvent(e, 'keydown');
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key !== 'Enter') return;
-      if (e.target.dataset.field !== 'stock') return;
+      if (!['stock', 'zone', 'k', 'l'].includes(e.target.dataset.field)) return;
       e.preventDefault();
-      skipStockRenderOnceId = e.target.dataset.id;
-      advanceStockInput(e.target.dataset.id, 'keydown');
-      flushAutoSave('auto');
+      if (e.target.dataset.field === 'stock') {
+        skipStockRenderOnceId = e.target.dataset.id;
+        advanceStockInput(e.target.dataset.id, 'keydown');
+      } else {
+        e.target.blur();
+      }
+      flushAutoSave('enter');
     });
   });
 }
@@ -4383,6 +4389,7 @@ function addRow(fromId) {
   const idx = entries.map(e => e.name).lastIndexOf(src.name);
   entries.splice(idx + 1, 0, newEntry);
   saveLocal();
+  flushAutoSave('rowAction');
   render();
 }
 
@@ -4393,6 +4400,7 @@ function deleteRow(id) {
   if (sameNameCount <= 1) { toast('마지막 행은 삭제 불가'); return; }
   entries.splice(idx, 1);
   saveLocal();
+  flushAutoSave('rowAction');
   render();
 }
 
@@ -4444,7 +4452,7 @@ function clearLocalDirtyRevision() {
   localStorage.removeItem(LOCAL_DIRTY_REVISION_STORAGE_KEY);
 }
 function shouldApplyFBData(data) {
-  if (!data || !data.savedAt || localDirty) return false;
+  if (!data || !data.savedAt || localDirty || hasConfirmedSaveQueue()) return false;
   const localSavedAt = Number(localStorage.getItem('bbq_savedAt') || 0);
   return Number(data.savedAt) > localSavedAt;
 }
@@ -4473,9 +4481,12 @@ function saveLocal(reason = 'auto') {
   }
   if (!suppressAutoSave) {
     markLocalDirtyRevision();
-    renderSaveState('저장 대기', 'dirty');
-    if (typeof scheduleAutoSave === 'function') scheduleAutoSave(reason);
+    renderSaveState('로컬 입력됨 · Enter 저장', 'dirty');
   }
+}
+
+function saveLocalDraft() {
+  saveLocal('draft');
 }
 
 function setBaseSalesInputValue() {
@@ -4497,6 +4508,11 @@ function bindBaseSalesInput() {
     MASTER.forEach(it => updateGForName(it.name));
   });
   inp.addEventListener('change', () => flushAutoSave());
+  inp.addEventListener('keydown', e => {
+    if (e.isComposing || e.keyCode === 229 || e.key !== 'Enter') return;
+    e.preventDefault();
+    flushAutoSave('enter');
+  });
 }
 
 function renderSalesInputs() {
@@ -4531,6 +4547,11 @@ function renderSalesInputs() {
       MASTER.forEach(it => updateGForName(it.name));
     });
     inp.addEventListener('change', () => flushAutoSave());
+    inp.addEventListener('keydown', e => {
+      if (e.isComposing || e.keyCode === 229 || e.key !== 'Enter') return;
+      e.preventDefault();
+      flushAutoSave('enter');
+    });
     block.appendChild(lbl);
     block.appendChild(inp);
     wrap.appendChild(block);
@@ -4557,25 +4578,95 @@ function updateSalesAvg() {
   el.textContent = `기준 ${base.toFixed(0)}만 → 오늘 ${weights[0].toFixed(2)}배 / 총 ${total.toFixed(2)}일분`;
 }
 
-// single-flight + pending bit + 지수 backoff (5/10/20s, 3회). 진행 중 새 호출은 pending 만 set, 끝난 직후 최신 entries 로 한 번만 재발사 → 구버전 덮어쓰기 방지.
+// Enter/명시 저장으로 확정된 immutable body만 원격 전송한다.
+// local draft와 remote confirmed queue는 서로 다른 durable state다.
 let saveInFlight = false;
 let pendingSave = false;
-let pendingSaveReason = 'auto';
+let pendingSaveReason = 'enter';
+let activeSaveCommitId = '';
 let saveRetryTimer = null;
 let saveAttempt = 0;
+let saveAttemptCommitId = '';
+let confirmedSaveSequence = 0;
+let confirmedSaveQueueBlocked = false;
 const SAVE_BACKOFF = [5000, 10000, 20000];
-async function saveToFB(reason = 'manual') {
-  if (saveInFlight) {
-    pendingSave = true;
-    pendingSaveReason = reason;
-    return;
+
+function emptyConfirmedSaveQueue() {
+  return { v: 1, active: null, queued: null };
+}
+
+function sanitizeConfirmedCommit(source) {
+  if (!source || typeof source !== 'object') return null;
+  const commitId = String(source.commitId || '');
+  const body = typeof source.body === 'string' ? source.body : '';
+  const revision = Number(source.revision || 0);
+  const dateKey = normalizeHistoryDateKey(source.dateKey);
+  if (!commitId || !body || !revision || !dateKey) return null;
+  try {
+    const payload = JSON.parse(body);
+    if (!payload || typeof payload !== 'object' || Number(payload.savedAt || 0) <= 0) return null;
+  } catch {
+    return null;
   }
-  saveInFlight = true;
-  renderSaveState(saveReasonLabel(reason) + ' 중', 'saving');
-  const activeReason = reason;
+  return {
+    commitId: commitId.slice(0, 180),
+    revision,
+    dateKey,
+    reason: String(source.reason || 'enter').slice(0, 40),
+    createdAt: Number(source.createdAt || 0),
+    body
+  };
+}
+
+function parseConfirmedSaveQueue(raw) {
+  if (!raw) return emptyConfirmedSaveQueue();
+  const parsed = JSON.parse(raw);
+  if (!parsed || parsed.v !== 1 || typeof parsed !== 'object') throw new Error('confirmed queue schema');
+  const active = parsed.active == null ? null : sanitizeConfirmedCommit(parsed.active);
+  const queued = parsed.queued == null ? null : sanitizeConfirmedCommit(parsed.queued);
+  if ((parsed.active != null && !active) || (parsed.queued != null && !queued)) throw new Error('confirmed commit schema');
+  if (!active && queued) return { v: 1, active: queued, queued: null };
+  return { v: 1, active, queued };
+}
+
+function readConfirmedSaveQueue() {
+  try {
+    const queue = parseConfirmedSaveQueue(localStorage.getItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY));
+    confirmedSaveQueueBlocked = false;
+    return queue;
+  } catch (error) {
+    confirmedSaveQueueBlocked = true;
+    console.error('[confirmed-save] queue read blocked', error);
+    return null;
+  }
+}
+
+function writeConfirmedSaveQueue(queue) {
+  if (confirmedSaveQueueBlocked) return false;
+  try {
+    const normalized = parseConfirmedSaveQueue(JSON.stringify(queue));
+    const serialized = JSON.stringify(normalized);
+    localStorage.setItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY, serialized);
+    if (localStorage.getItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY) !== serialized) throw new Error('confirmed queue verify failed');
+    return true;
+  } catch (error) {
+    confirmedSaveQueueBlocked = true;
+    console.error('[confirmed-save] queue write blocked', error);
+    renderSaveState('확정 저장 보관 실패', 'error');
+    toast('저장 보관 공간 오류 — 원격 전송하지 않음');
+    return false;
+  }
+}
+
+function hasConfirmedSaveQueue() {
+  const queue = readConfirmedSaveQueue();
+  return confirmedSaveQueueBlocked || Boolean(queue?.active);
+}
+
+function buildConfirmedSaveCommit(reason = 'enter') {
   migrateRuntimeItemNames();
   const now = Date.now();
-  const payloadDirtyRevision = localDirtyRevision;
+  const revision = Number(localMutationRevision || localDirtyRevision || now);
   const dateKey = kstDateKey(now);
   const days = parseInt(document.getElementById('orderDays').value);
   const calc = {};
@@ -4589,63 +4680,123 @@ async function saveToFB(reason = 'manual') {
   const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(lastSfaCompareData);
   const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(lastSfaCompareData);
   const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
-  console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
-  const scheduleRetry = (label) => {
-    if (saveAttempt >= SAVE_BACKOFF.length) {
-      saveAttempt = 0;
-      pushSaveLog(saveReasonLabel(activeReason) + ' 실패', 'error');
-      renderSaveState('저장 실패', 'error');
-      toast('저장 반복 실패 — 다시 입력하시면 재시도됩니다');
-      console.error('[saveToFB] retries exhausted after', label);
-      return;
-    }
-    const delay = SAVE_BACKOFF[saveAttempt++];
-    if (saveRetryTimer) clearTimeout(saveRetryTimer);
-    pushSaveLog(`${saveReasonLabel(activeReason)} 재시도 ${delay/1000}초`, 'warn');
-    saveRetryTimer = setTimeout(() => { saveRetryTimer = null; saveToFB(activeReason); }, delay);
-    console.warn('[saveToFB] retry in', delay, 'ms after', label);
-  };
+  const commitId = `${now}-${revision}-${++confirmedSaveSequence}`;
+  return { commitId, revision, dateKey, reason, createdAt: now, body: JSON.stringify(payload) };
+}
+
+async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const [r1, r2] = await Promise.all([
-      fetch(`${FB_URL}${FB_PATH}/current.json`, { method: 'PUT', body: JSON.stringify(payload) }),
-      fetch(`${FB_URL}${FB_PATH}/history/${dateKey}.json`, { method: 'PUT', body: JSON.stringify(payload) })
+    return await Promise.all([
+      fetch(`${FB_URL}${FB_PATH}/current.json`, { method: 'PUT', body: commit.body, signal: controller.signal }),
+      fetch(`${FB_URL}${FB_PATH}/history/${commit.dateKey}.json`, { method: 'PUT', body: commit.body, signal: controller.signal })
     ]);
-    if (!r1.ok || !r2.ok) {
-      const t1 = await r1.text().catch(()=>''); const t2 = await r2.text().catch(()=>'');
-      console.error('[saveToFB] FAIL', { current: r1.status, history: r2.status, body1: t1, body2: t2 });
-      const nextDelay = SAVE_BACKOFF[Math.min(saveAttempt, SAVE_BACKOFF.length - 1)] / 1000;
-      toast('저장 실패: HTTP ' + r1.status + '/' + r2.status + ' — ' + nextDelay + '초 후 재시도');
-      scheduleRetry('HTTP ' + r1.status + '/' + r2.status);
-      return;
-    }
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+  }
+}
+
+function scheduleConfirmedSaveRetry(commit, label) {
+  if (!commit || confirmedSaveQueueBlocked) return;
+  if (saveAttemptCommitId !== commit.commitId) {
+    saveAttemptCommitId = commit.commitId;
     saveAttempt = 0;
+  }
+  if (saveAttempt >= SAVE_BACKOFF.length) {
+    saveAttempt = 0;
+    pushSaveLog(saveReasonLabel(commit.reason) + ' 실패', 'error');
+    renderSaveState('확정 저장 대기 · 연결 시 재시도', 'error');
+    console.error('[confirmed-save] retries exhausted', commit.commitId, label);
+    return;
+  }
+  const delay = SAVE_BACKOFF[saveAttempt++];
+  if (saveRetryTimer) clearTimeout(saveRetryTimer);
+  const guardedCommitId = commit.commitId;
+  saveRetryTimer = setTimeout(() => {
+    saveRetryTimer = null;
+    const queue = readConfirmedSaveQueue();
+    if (queue?.active?.commitId !== guardedCommitId) return;
+    sendActiveConfirmedSave('retry');
+  }, delay);
+  renderSaveState(`확정 저장 재시도 ${delay / 1000}초`, 'dirty');
+}
+
+function confirmCurrentSave(reason = 'enter') {
+  if (confirmedSaveQueueBlocked) {
+    renderSaveState('확정 저장 보관 실패', 'error');
+    return false;
+  }
+  const commit = buildConfirmedSaveCommit(reason);
+  const queue = readConfirmedSaveQueue();
+  if (!queue) return false;
+  if (queue.active) queue.queued = commit;
+  else queue.active = commit;
+  if (!writeConfirmedSaveQueue(queue)) return false;
+  pendingSave = Boolean(queue.queued);
+  pendingSaveReason = reason;
+  renderSaveState(queue.queued ? '다음 Enter 저장 대기' : '확정 저장 대기', 'dirty');
+  if (!saveInFlight && !saveRetryTimer) sendActiveConfirmedSave('confirmed');
+  return true;
+}
+
+async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_REQUEST_TIMEOUT_MS) {
+  if (saveInFlight || confirmedSaveQueueBlocked) return false;
+  const queue = readConfirmedSaveQueue();
+  const commit = queue?.active;
+  if (!commit) return false;
+  saveInFlight = true;
+  activeSaveCommitId = commit.commitId;
+  renderSaveState(saveReasonLabel(commit.reason) + ' 중', 'saving');
+  let succeeded = false;
+  try {
+    const [currentResponse, historyResponse] = await putConfirmedSaveTargets(commit, timeoutMs);
+    if (!currentResponse.ok || !historyResponse.ok) {
+      const currentText = await currentResponse.text().catch(() => '');
+      const historyText = await historyResponse.text().catch(() => '');
+      console.error('[confirmed-save] HTTP FAIL', currentResponse.status, historyResponse.status, currentText, historyText);
+      scheduleConfirmedSaveRetry(commit, `HTTP ${currentResponse.status}/${historyResponse.status}`);
+      return false;
+    }
+    const freshQueue = readConfirmedSaveQueue();
+    if (!freshQueue || freshQueue.active?.commitId !== commit.commitId) return false;
+    const nextQueue = freshQueue.queued
+      ? { v: 1, active: freshQueue.queued, queued: null }
+      : emptyConfirmedSaveQueue();
+    if (!writeConfirmedSaveQueue(nextQueue)) return false;
+    const payload = JSON.parse(commit.body);
+    localStorage.setItem('bbq_savedAt', String(payload.savedAt));
+    if (!nextQueue.active && commit.revision === localMutationRevision) clearLocalDirtyRevision();
+    saveAttempt = 0;
+    saveAttemptCommitId = '';
     if (saveRetryTimer) { clearTimeout(saveRetryTimer); saveRetryTimer = null; }
-    localStorage.setItem('bbq_savedAt', String(now));
-    // pendingSave=true 면 진행 중 추가 입력 있었음 → localDirty 유지(다음 PUT 가 최신 entries 로 재발사). pendingSave=false 면 PUT payload == 현재 entries → dirty 해제.
-    if (!pendingSave && localDirtyRevision === payloadDirtyRevision) clearLocalDirtyRevision();
-    console.log('[saveToFB] OK savedAt=', now, 'pendingSave=', pendingSave);
-    pushSaveLog(saveReasonLabel(activeReason) + ' 완료', 'success', now);
-    renderSaveState('저장됨', 'saved');
-    toast(saveReasonLabel(activeReason) + ' 완료 (' + new Date(now).toLocaleTimeString('ko-KR') + ')');
-    document.getElementById('lastSaved').textContent = lastSavedLabel(activeReason) + ' ' + new Date(now).toLocaleTimeString('ko-KR');
+    pendingSave = Boolean(nextQueue.active);
+    pendingSaveReason = nextQueue.active?.reason || 'enter';
+    succeeded = true;
+    pushSaveLog(saveReasonLabel(commit.reason) + ' 완료', 'success', payload.savedAt);
+    if (nextQueue.active) renderSaveState('다음 확정 저장 대기', 'dirty');
+    else if (localDirty) renderSaveState('로컬 입력됨 · Enter 저장', 'dirty');
+    else renderSaveState('저장됨', 'saved');
+    document.getElementById('lastSaved').textContent = lastSavedLabel(commit.reason) + ' ' + new Date(payload.savedAt).toLocaleTimeString('ko-KR');
     loadUsageHistory(true);
-  } catch (e) {
-    console.error('[saveToFB] EXCEPTION', e);
-    pushSaveLog(saveReasonLabel(activeReason) + ' 실패', 'error');
-    renderSaveState('저장 실패', 'error');
-    const nextDelay = SAVE_BACKOFF[Math.min(saveAttempt, SAVE_BACKOFF.length - 1)] / 1000;
-    toast('저장 실패: ' + e.message + ' — ' + nextDelay + '초 후 재시도');
-    scheduleRetry('EXCEPTION');
+    return true;
+  } catch (error) {
+    console.error('[confirmed-save] EXCEPTION', error);
+    scheduleConfirmedSaveRetry(commit, error.name || 'EXCEPTION');
+    return false;
   } finally {
     saveInFlight = false;
-    if (pendingSave) {
-      const nextReason = pendingSaveReason || 'auto';
-      pendingSave = false;
-      pendingSaveReason = 'auto';
-      // 단일 이벤트 루프 — setTimeout 0 콜백과 사용자 이벤트 핸들러가 동일 틱에 겹치지 않으므로 재진입 race 없음.
-      setTimeout(() => saveToFB(nextReason), 0);
+    activeSaveCommitId = '';
+    if (succeeded) {
+      const latestQueue = readConfirmedSaveQueue();
+      if (latestQueue?.active) setTimeout(() => sendActiveConfirmedSave('queued'), 0);
     }
   }
+}
+
+function saveToFB(reason = 'manual') {
+  return confirmCurrentSave(reason);
 }
 
 // 입력 포커스 추적 (실시간 동기화 시 덮어쓰기 방지)
@@ -4750,31 +4901,42 @@ async function autoLoadFromFB(silent) {
   }
 }
 
-// 자동저장 (debounce 1초, blur/change 시 즉시)
+// 타이핑은 local draft만 저장한다. remote commit은 Enter/명시 액션만 수행한다.
 let autoSaveTimer = null;
-let queuedSaveReason = 'auto';
-function scheduleAutoSave(reason = 'auto') {
-  queuedSaveReason = reason;
-  clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => {
-    autoSaveTimer = null;
-    const reasonToSave = queuedSaveReason || 'auto';
-    queuedSaveReason = 'auto';
-    saveToFB(reasonToSave);
-  }, 1000);
+function scheduleAutoSave() {
+  return false;
 }
 function flushAutoSave(reason) {
-  const hasPendingTimer = !!autoSaveTimer;
-  const explicitRequest = reason != null;
-  if (!hasPendingTimer && !explicitRequest) return;
-  const reasonToSave = reason || queuedSaveReason || 'auto';
-  queuedSaveReason = 'auto';
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer);
-    autoSaveTimer = null;
-  }
-  saveToFB(reasonToSave);
+  if (!reason || reason === 'auto') return false;
+  return saveToFB(reason);
 }
+
+function retryConfirmedRemotePending(reason = 'recovery') {
+  const queue = readConfirmedSaveQueue();
+  if (confirmedSaveQueueBlocked) {
+    renderSaveState('확정 저장 기록 손상 · 전송 중지', 'error');
+    return false;
+  }
+  if (!queue?.active) return false;
+  if (saveRetryTimer) {
+    clearTimeout(saveRetryTimer);
+    saveRetryTimer = null;
+  }
+  saveAttempt = 0;
+  saveAttemptCommitId = queue.active.commitId;
+  if (!saveInFlight) sendActiveConfirmedSave(reason);
+  return true;
+}
+
+document.addEventListener('visibilitychange', () => {
+  retryConfirmedRemotePending(document.visibilityState === 'hidden' ? 'visibility' : 'visible');
+});
+window.addEventListener('online', () => retryConfirmedRemotePending('online'));
+window.addEventListener('storage', event => {
+  if (event.key !== CONFIRMED_SAVE_QUEUE_STORAGE_KEY) return;
+  confirmedSaveQueueBlocked = false;
+  retryConfirmedRemotePending('storage');
+});
 
 function handleOrderDaysChange() {
   setOrderDaysValue(document.getElementById('orderDays')?.value);
@@ -4877,7 +5039,7 @@ function startOrderHelperApp() {
   loadSfaOrderStatus(true);
   window.addEventListener('resize', updateStickyOffsets);
   // 디바이스 간 동기화: 페이지 열 때마다 + 5초 간격 폴링
-  if (localDirty) scheduleAutoSave('auto');
+  retryConfirmedRemotePending('startup');
   autoLoadFromFB(true);
   setInterval(() => autoLoadFromFB(true), 5000);
   setInterval(() => loadUsageHistory(true), 300000);
