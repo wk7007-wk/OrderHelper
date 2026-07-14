@@ -4,6 +4,43 @@ const { api, plain, sandbox } = require('./orderhelper_static_checks.js');
 
 assert.strictEqual(fixture.version, 1, 'unified row fixture version must be explicit');
 assert.strictEqual(new Set(fixture.statusEnum).size, fixture.statusEnum.length, 'status enum must be mutually exclusive');
+fixture.equationCases.forEach(testCase => {
+  const solved = plain(api.solveOrderLineEquation(testCase.inputs, {
+    sourceRunId: `fixture-${testCase.id}`,
+    asOf: Date.UTC(2026, 6, 14),
+    provenance: 'FIXTURE'
+  }));
+  ['actualOrderQty', 'amount', 'actualUnitPrice'].forEach(field => {
+    if (!Object.prototype.hasOwnProperty.call(testCase.expected, field)) return;
+    assert.strictEqual(solved[field]?.value ?? null, testCase.expected[field], `${testCase.id}: ${field}`);
+    if (testCase.expected.formula && solved[field]) {
+      assert.strictEqual(solved[field].formula, testCase.expected.formula, `${testCase.id}: formula`);
+      assert.strictEqual(solved[field].sourceRunId, `fixture-${testCase.id}`, `${testCase.id}: provenance run`);
+      assert.strictEqual(solved[field].provenance, 'FIXTURE', `${testCase.id}: provenance source`);
+      assert(solved[field].inputRefs.length === 2, `${testCase.id}: derived input refs`);
+    }
+  });
+  const issueCodes = solved.issues.map(issue => issue.code);
+  assert.deepStrictEqual(issueCodes, testCase.expected.issues || [], `${testCase.id}: issues`);
+});
+
+fixture.movementCases.forEach(testCase => {
+  const samples = testCase.samples.map(sample => plain(api.movementFactorEvidence(sample.inputs, sample.context)));
+  const summary = plain(api.summarizeMovementFactorEvidence(samples, Date.UTC(2026, 6, 14, 12)));
+  assert.strictEqual(summary.factor, testCase.expected.factor, `${testCase.id}: factor`);
+  assert.strictEqual(summary.samples, testCase.expected.samples, `${testCase.id}: accepted sample count`);
+  assert.strictEqual(summary.conflict, testCase.expected.conflict, `${testCase.id}: conflict`);
+  if (testCase.expected.confidenceLabel) assert.strictEqual(summary.confidenceLabel, testCase.expected.confidenceLabel, `${testCase.id}: confidence`);
+  if (testCase.expected.commonPack) assert.strictEqual(summary.commonPack, testCase.expected.commonPack, `${testCase.id}: common pack`);
+  if (testCase.expected.excluded) assert.deepStrictEqual(summary.excluded, testCase.expected.excluded, `${testCase.id}: exclusion reason`);
+  if (testCase.expected.formula) {
+    assert.strictEqual(samples[0].formula, testCase.expected.formula, `${testCase.id}: exact formula`);
+    assert.strictEqual(samples[0].sourceRunId, testCase.samples[0].context.sourceRunId, `${testCase.id}: source run provenance`);
+  }
+  if (Object.prototype.hasOwnProperty.call(testCase.expected, 'preservedActualOrderQty')) {
+    assert.strictEqual(samples[0].inputs.actualOrderQty, testCase.expected.preservedActualOrderQty, `${testCase.id}: explicit zero preserved`);
+  }
+});
 
 const item = api.MASTER.find(row => row.name === '신선육(10호)-뼈한마리');
 assert(item, 'factor-10 unified-row fixture item missing');
@@ -30,6 +67,8 @@ function setBaseState() {
   sandbox.document.getElementById('orderDays').value = '2';
   api.setEntriesForCheck([{ id: 'unified-target', entryKey: 'unified-target', name: item.name, zone: '주방', stock: 0 }]);
   api.setOverridesForCheck({ [item.name]: { l: 25, k: 0 } });
+  api.setSalesForCheck([], 280);
+  api.setUnitCorrectionsForCheck({});
   api.setSiteMappingsForCheck({});
   api.setAliasMappingsForCheck({
     [item.name]: {
@@ -49,6 +88,14 @@ function targetRow() {
   const matches = rows.filter(row => row.itemKey === api.itemKeyForName(item.name));
   assert.strictEqual(matches.length, 1, 'one itemKey must resolve to exactly one row');
   return { row: matches[0], rows };
+}
+
+function rowFor(name) {
+  const rows = plain(api.resolveUnifiedOrderRows(null, null, 2, now));
+  const itemKey = api.itemKeyForName(name);
+  const matches = rows.filter(row => row.itemKey === itemKey);
+  assert.strictEqual(matches.length, 1, `${name}: resolver occurrence`);
+  return matches[0];
 }
 
 setBaseState();
@@ -72,9 +119,40 @@ assert.strictEqual(result.row.matchStatus, 'MATCHED', 'confirmed alias and facto
 assert.strictEqual(result.row.orderQty, 3, 'stock need 25 at factor 10 must resolve three order units');
 assert.strictEqual(result.row.unitPrice, 2400, 'Excel amount 12,000 / order qty 5 must resolve unit price 2,400');
 assert.strictEqual(result.row.expectedAmount, 7200, 'recommended order 3 * unit price 2,400 must resolve 7,200');
+assert.strictEqual(result.row.unitPriceEvidence.formula, 'amount / actualOrderQty', 'unit-price evidence must disclose the exact Excel equation');
+assert.strictEqual(result.row.orderQtyEvidence.formula, 'ceilDiscrete(stockNeed / factor)', 'factor must be applied once in the stock-to-order equation');
+assert.strictEqual(result.row.expectedAmountEvidence.formula, 'orderQty * actualUnitPrice', 'today amount must not multiply the factor a second time');
+assert.strictEqual(result.row.expectedAmountEvidence.sourceRunId, 'run-new', 'today amount provenance must point at the actual-price source run');
 assert.deepStrictEqual(result.row.issues, [], 'valid matched price row must have no issues');
 assert.strictEqual(result.rows.filter(row => row.matchStatus === 'ITEM_UNMATCHED' && row.itemKey === result.row.itemKey).length, 0, 'matched item must never also appear unmatched');
 assert.strictEqual(result.rows.reduce((sum, row) => sum + (Number.isFinite(row.expectedAmount) ? row.expectedAmount : 0), 0), 7200, 'today expected total must sum each resolver row once');
+
+setBaseState();
+api.setSfaAnalysisHistoryForCheck(ledger([{
+  runId: 'run-explicit-zero-price', dateKey: '20260714', eventAt: now, originalName: actualName,
+  mappedName: item.name, actualOrderQty: 5, quantity: 5, amount: 0, unit: 'BOX', rowIndex: 1, rawIdentity: 'zero-price-present',
+}]));
+result = targetRow();
+assert.strictEqual(result.row.unitPrice, 0, 'an explicit zero amount with positive quantity must remain valid zero-price evidence');
+assert.strictEqual(result.row.expectedAmount, 0, 'an explicit zero unit price must produce a present zero expected amount');
+assert(!result.row.issues.some(issue => issue.code === 'PRICE_JOIN_BUG'), 'valid zero-price evidence must not be treated as a missing join');
+
+const liveShapeName = '(컵소스)BBQ양념치킨소스(배달용)';
+api.setEntriesForCheck([{ id: 'live-shape', entryKey: 'live-shape', name: liveShapeName, zone: '주방', stock: 0 }]);
+api.setOverridesForCheck({ [liveShapeName]: { l: 1.5, k: 0 } });
+api.setUnitCorrectionsForCheck({});
+api.setSiteMappingsForCheck({});
+api.setAliasMappingsForCheck({
+  [liveShapeName]: { aliasName: liveShapeName, actualName: liveShapeName, actualUnit: '봉', status: 'confirmed', source: 'user' },
+});
+api.setSfaAnalysisHistoryForCheck(ledger([{
+  runId: 'live-shape-run', dateKey: '20260714', eventAt: now, originalName: liveShapeName,
+  mappedName: liveShapeName, actualOrderQty: 5, quantity: 5, amount: 12000, unit: '봉', rowIndex: 1, rawIdentity: 'live-shape-price',
+}]));
+const liveShapeRow = rowFor(liveShapeName);
+assert.strictEqual(liveShapeRow.matchStatus, 'MATCHED', 'live parenthesized alias shape must resolve matched');
+assert.strictEqual(liveShapeRow.unitPrice, 2400, 'live parenthesized alias must join its priced lossless row');
+assert(!liveShapeRow.issues.some(issue => ['PRICE_JOIN_BUG', 'ITEM_UNMATCHED'].includes(issue.code)), 'fixed live shape must have zero legacy join issues');
 
 setBaseState();
 api.setSfaAnalysisHistoryForCheck(ledger([
@@ -88,7 +166,7 @@ api.setSfaAnalysisHistoryForCheck(ledger([
   },
 ]));
 result = targetRow();
-assert.strictEqual(result.row.priceEvidence.runId, 'run-old', 'zero-quantity newest row must fall back to latest older positive price evidence');
+assert.strictEqual(result.row.priceEvidence.sourceRunId, 'run-old', 'zero-quantity newest row must fall back to latest older positive price evidence');
 assert.strictEqual(result.row.priceEvidence.fallbackFromNewerZeroQty, true, 'older-price fallback must remain explicit evidence');
 assert.strictEqual(result.row.unitPrice, 2000);
 assert.strictEqual(result.row.expectedAmount, 6000);

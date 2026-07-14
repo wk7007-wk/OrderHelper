@@ -194,7 +194,7 @@ function verifyBoundedPayloadPerformance() {
   assert.strictEqual(state.sfaOrderLedger.eventCount, 2000, 'performance fixture must keep all 2000 canonical events');
   assert.strictEqual(state.sfaAnalysisHistory.records, undefined, 'legacy analysisHistory must be a compact canonical pointer');
   assert.strictEqual(state.sfaActualHistory.ledger, undefined, 'legacy actualHistory must not duplicate the canonical ledger');
-  assert(state.aiUsageEvidence.ledger.recentSamples.length <= 100, 'AI evidence must include only bounded recent samples');
+  assert(state.aiUsageEvidence.ledger.events.length <= 100, 'AI evidence must include only the bounded exact events contract');
   assert(state.aiUsageEvidence.ledger.totals[target.name].eventIds.length <= 20, 'AI aggregate event-id evidence must stay bounded');
   assert(elapsedMs < 3000, `2000-event payload build is too slow: ${elapsedMs.toFixed(1)}ms`);
   assert(payloadBytes < 1800000, `2000-event payload is too large: ${payloadBytes} bytes`);

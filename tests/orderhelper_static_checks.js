@@ -58,12 +58,12 @@ mustMatch(/function sfaLedgerEventId\(runId, item = \{\}, fallbackIndex = 0\)/, 
 mustMatch(/function mergeSfaAnalysisHistories\(\.\.\.sources\)/, 'same-run retries and remote ledgers need idempotent item-level merge');
 mustMatch(/function sfaActualHistoryLedgerForPayload\(source = sfaActualHistory\)/, 'legacy SFA actual-history rows must also feed the lossless ledger');
 mustMatch(/version: 2,[\s\S]*eventCount:/, 'order ledger payload must publish its lossless event contract version');
-mustMatch(/actualOrderQty: Number\.isFinite\(actualOrderQty\) \? actualOrderQty : 0/, 'ledger must preserve actual order quantity including zero');
+mustMatch(/actualOrderQty: hasActualOrderQty \? actualOrderQty : null,[\s\S]*hasActualOrderQty,[\s\S]*hasAmount/, 'ledger must distinguish explicit zero quantity\/amount from missing price evidence');
 mustMatch(/rawIdentity,[\s\S]*eventId = sfaLedgerEventId/, 'ledger events must preserve raw identity and a stable event id');
 mustMatch(/const eventAt = timestampMs\(/, 'ledger rows must retain a stable event timestamp for retry ordering');
 mustMatch(/const sourceRunIds = Array\.from\(new Set\(\[/, 'mirrored physical rows must retain all source run ids');
 mustMatch(/function buildAiUsageEvidence\(windowDays = AI_USAGE_EVIDENCE_MAX_DAYS, now = Date\.now\(\), ledgerSource = null\)/, 'AI usage evidence builder missing');
-mustMatch(/neverOverwrite: \['overrides\/\*\/l', 'orderUnitCorrections', 'actualOrders'\]/, 'AI usage contract must protect every manual value');
+mustMatch(/neverOverwrite: \['overrides\/\*\/l', 'orderUnitCorrections', 'orderAliasMappings', 'aiUsageAccepted', 'actualOrders'\]/, 'AI usage contract must protect every manual or accepted value');
 mustMatch(/browserModelCall: false,[\s\S]*browserApiKey: false/, 'browser must not call a model or carry an API key');
 mustMatch(/responseField: 'aiUsageAdvisory'/, 'server worker advisory response pointer missing');
 mustMatch(/function renderAiUsageAdvisorySpan\(name\)/, 'AI suggested usage must render as an advisory chip');
@@ -106,9 +106,10 @@ mustMatch(/function parseMoney\(value\)/, 'money parser missing');
 mustMatch(/function formatWon\(value\)/, 'won formatter missing');
 mustMatch(/function sfaUnitPriceFromRow\(row\)/, 'SFA unit price resolver missing');
 mustMatch(/function expectedOrderAmountForItem\(item, stockNeed\)/, 'expected order amount helper missing');
-mustMatch(/const matched = lastSfaCompareData\?\.comparison\?\.matched \|\| \[\];/, 'amount estimate must read latest matched SFA comparison rows');
-mustMatch(/const recommendedQty = recommendedOrderQty\(item, stockNeed\);/, 'amount estimate must use the same recommended order quantity conversion');
-mustMatch(/expected_order_amount: recommendedQty \* price\.unitPrice/, 'amount estimate must multiply converted order qty by inferred unit price');
+mustMatch(/function resolveUnifiedOrderRows\(data = lastSfaCompareData, ledgerSource = null, days = currentOrderDaysValue\(\), now = Date\.now\(\)\)/, 'single canonical order-row resolver missing');
+mustMatch(/numericEvidenceNode\(amount \/ qty, 'actualUnitPrice', context, 'amount \/ actualOrderQty'/, 'actual unit price must be Excel line amount divided by actual SFA order quantity');
+mustMatch(/numericEvidenceNode\(orderQty \* priceEvidence\.unitPrice, 'expectedAmount',[\s\S]*'orderQty \* actualUnitPrice', \['orderQty', 'actualUnitPrice'\]/, 'today expected amount must multiply recommended order-unit quantity by actual order-unit price exactly once');
+mustMatch(/if \(aliasState\.aliases\.length && !hasResolvedPrice && !issues\.some\(issue => issue\.code === 'DATA_CONFLICT'\)\) issues\.push\(unifiedOrderIssue\('PRICE_JOIN_BUG'\)\);/, 'an explicitly matched alias without joined ledger price must fail as PRICE_JOIN_BUG');
 mustMatch(/return Math\.ceil\(\(n - 1e-9\) \* 10\) \/ 10;/, 'order quantity must round up to one decimal instead of whole units');
 mustMatch(/return fmt\(outputOrderQty\(item, days\), 1\);/, 'order quantity display must preserve one decimal digit');
 mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
@@ -167,8 +168,12 @@ mustMatch(/sfaReviewRows\(comp\)/, 'SFA comparison must include matched differen
 mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
 mustMatch(/function buildConversionAnalysis\(history, currentSnapshot\)/, 'unit conversion analysis builder missing');
 mustMatch(/function movementConversionFactorFromRecords\(prev, curr, item\)/, 'unit conversion must infer from stock movement versus actual SFA order quantity');
-mustMatch(/const observedDelivery = currStock - prevStock \+ expectedUsage;/, 'stock movement inference must compare inventory change with expected usage');
+mustMatch(/function movementFactorEvidenceFromRecords\(prev, curr, item\)/, 'movement inference must retain formula inputs and provenance');
+mustMatch(/function movementFactorEvidence\(inputs = \{\}, context = \{\}\)/, 'movement evidence equation engine missing');
+mustMatch(/const deliveredStockUnits = nextStock - prevStock \+ estimatedUsage;/, 'stock movement inference must compare inventory change with expected usage');
+mustMatch(/const movement = summarizeMovementFactorEvidence\(movementBuckets\[item\.name\] \|\| \[\]\);/, 'movement conversion must use robust evidence summary');
 mustMatch(/result\[item\.name\] = \{ \.\.\.movement, source: 'movement'/, 'movement-derived conversion must override manual unit labels when usable');
+mustNotMatch(/analysis\?\.source === 'movement'[\s\S]{0,120}return analysis\.factor;/, 'movement inference must remain evidence-only until explicit user acceptance');
 mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order quantity converter missing');
 mustMatch(/function orderUnitsForStockNeed\(stockNeed, orderUnitToStockFactor\)/, 'stock need to order-unit direction helper missing');
 mustMatch(/return Math\.ceil\(\(need - 1e-9\) \/ factor\);/, 'converted stock need must round up to a whole order unit');
@@ -323,7 +328,7 @@ mustMatch(/async function flushCurrentBeforeSfaAnalysisRequest\(\) \{\s*flushDef
 mustMatch(/if \(!confirmCurrentSave\('sfaAnalysis'\)\) return false;\s*return waitForSaveIdle\(\);/, 'SFA request must wait for an Enter-equivalent confirmed save');
 mustNotMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l change must remain a local draft');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
-mustMatch(/orderManualItems: orderManualItemsForPayload\(\), sfaAnalysisHistory: sfaLedgerPointer\(ledger\), sfaOrderLedger: ledger, sfaActualHistory: sfaActualHistoryPointer\(ledger\), aiUsageEvidence: buildAiUsageEvidence\(AI_USAGE_EVIDENCE_MAX_DAYS, now, ledger\), aiUsageAdvisory: sanitizeAiUsageAdvisory\(\), dailySales/, 'Firebase current/history payload must include one canonical ledger plus compact legacy pointers and bounded advisory evidence');
+mustMatch(/orderManualItems: orderManualItemsForPayload\(\), sfaAnalysisHistory: sfaLedgerPointer\(ledger\), sfaOrderLedger: ledger, sfaActualHistory: sfaActualHistoryPointer\(ledger\), aiUsageEvidence: buildAiUsageEvidenceSummary\(now, ledger\), aiUsageAdvisory: sanitizeAiUsageAdvisory\(\), aiUsageAccepted: sanitizeAiUsageAccepted\(\), sfaAnalysisReadModel: buildSfaAnalysisReadModel\(lastSfaCompareData\), dailySales/, 'Firebase current/history payload must keep one canonical ledger plus compact evidence summary and accepted/composite read-model state');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
 mustMatch(/const convertedActual = orderUnitToStockFactor \? stockUnitsForOrderQty\(actual, orderUnitToStockFactor\) : actual;/, 'usage analysis must convert actual SFA order quantity back to stock-check units');
 mustMatch(/orderUnitToStockFactor direction: 1 order unit contains N stock\/usage units\./, 'orderUnitToStockFactor direction comment missing');
@@ -551,6 +556,11 @@ this.__OrderHelperApi = {
   resolveUnifiedOrderRows,
   unifiedOrderRowForItem,
   priceEvidenceForActualAliases,
+  solveOrderLineEquation,
+  orderLineEvidenceCandidate,
+  movementFactorEvidence,
+  movementFactorEvidenceFromRecords,
+  summarizeMovementFactorEvidence,
   expectedOrderAmountForItem,
   firebasePayloadIsNewer,
   compareGridRows,
@@ -638,6 +648,10 @@ this.__OrderHelperApi = {
     markSfaLedgerChanged();
   },
   setOverridesForCheck(value) { overrides = value || {}; },
+  setSalesForCheck(value, base = DEFAULT_BASE_SALES) {
+    dailySales = Array.isArray(value) ? value : [];
+    baseSales = Number(base) || DEFAULT_BASE_SALES;
+  },
   getOverridesForCheck() { return overrides; },
   setAiUsageAdvisoryForCheck(value) {
     aiUsageAdvisory = sanitizeAiUsageAdvisory(value);

@@ -1130,10 +1130,13 @@ function sanitizeSfaAnalysisHistoryItem(item = {}, fallbackDateKey = '', fallbac
   const quantity = Number(item.quantity ?? item.qty ?? item.sfa_qty ?? item.siteQty ?? item.actualQty ?? 0);
   const actualOrderQtyRaw = item.actualOrderQty ?? item.actual_order_qty ?? item.actualQty ?? item.quantity ?? item.qty ?? item.sfa_qty;
   const amountRaw = item.amount ?? item.sfa_amount ?? item.siteAmount;
+  const unitPriceRaw = item.actualUnitPrice ?? item.unitPrice ?? item.unit_price ?? item.sfa_unit_price ?? item.price;
   const actualOrderQty = Number(actualOrderQtyRaw);
   const amount = parseMoney(amountRaw);
+  const unitPrice = parseMoney(unitPriceRaw);
   const hasActualOrderQty = actualOrderQtyRaw !== null && actualOrderQtyRaw !== undefined && actualOrderQtyRaw !== '' && Number.isFinite(actualOrderQty);
   const hasAmount = amountRaw !== null && amountRaw !== undefined && amountRaw !== '' && amount !== null;
+  const hasUnitPrice = unitPriceRaw !== null && unitPriceRaw !== undefined && unitPriceRaw !== '' && unitPrice !== null;
   const score = Number(item.score ?? 0);
   const runId = String(item.runId || item.run_id || fallbackRunId || '').slice(0, 360);
   const rowIndex = item.rowIndex ?? item.row_index ?? fallbackIndex;
@@ -1154,8 +1157,10 @@ function sanitizeSfaAnalysisHistoryItem(item = {}, fallbackDateKey = '', fallbac
     actualOrderQty: hasActualOrderQty ? actualOrderQty : null,
     unit: String(item.unit || item.siteUnit || item.sfa_unit || '').trim().slice(0, 40),
     amount: hasAmount ? amount : null,
+    actualUnitPrice: hasUnitPrice ? unitPrice : null,
     hasActualOrderQty,
     hasAmount,
+    hasUnitPrice,
     rowIndex,
     rawIdentity,
     eventAt,
@@ -2370,29 +2375,43 @@ function conversionFactorFromRecord(record, item) {
   return factor;
 }
 
-function movementConversionFactorFromRecords(prev, curr, item) {
+function movementFactorEvidenceFromRecords(prev, curr, item) {
   const intervalActual = actualOrderForInterval(prev, curr, item.name);
-  const actual = Number(intervalActual?.qty || 0);
-  if (!Number.isFinite(actual) || actual <= 0) return null;
-  if (!prev?.stockMap?.has(item.name) || !curr?.stockMap?.has(item.name)) return null;
+  const actual = intervalActual ? Number(intervalActual.qty) : null;
   const gapDays = (curr.dayMs - prev.dayMs) / 86400000;
-  if (!Number.isFinite(gapDays) || gapDays <= 0 || gapDays > 10) return null;
-  const prevStock = Number(prev.stockMap.get(item.name));
-  const currStock = Number(curr.stockMap.get(item.name));
-  if (!Number.isFinite(prevStock) || !Number.isFinite(currStock)) return null;
-  const expectedUsage = Math.max(0, baseDailyUsage(item) * gapDays);
-  const observedDelivery = currStock - prevStock + expectedUsage;
-  if (!Number.isFinite(observedDelivery) || observedDelivery <= 0) return null;
-  const factor = observedDelivery / actual;
-  if (!Number.isFinite(factor) || factor < 1.2 || factor > 200) return null;
-  return factor;
+  const timingKnown = Number.isFinite(gapDays) && gapDays > 0 && gapDays <= 10 &&
+    (!intervalActual || Boolean(intervalActual.dates?.length));
+  const hasPrevStock = Boolean(prev?.stockMap?.has(item.name));
+  const hasNextStock = Boolean(curr?.stockMap?.has(item.name));
+  const expectedUsage = timingKnown ? Math.max(0, baseDailyUsage(item) * gapDays) : null;
+  const evidence = movementFactorEvidence({
+    prevStock: hasPrevStock ? prev.stockMap.get(item.name) : null,
+    nextStock: hasNextStock ? curr.stockMap.get(item.name) : null,
+    estimatedUsage: expectedUsage,
+    actualOrderQty: actual
+  }, {
+    timingKnown,
+    sourceRunId: `movement:${prev?.dateKey || ''}:${curr?.dateKey || ''}`,
+    asOf: Number(curr?.savedAt || curr?.dayMs || 0),
+    completeness: [hasPrevStock, hasNextStock, expectedUsage !== null, actual !== null].filter(Boolean).length / 4,
+    actualDates: intervalActual?.dates || []
+  });
+  if (evidence.accepted && (evidence.factor < 1.2 || evidence.factor > 200)) {
+    return { ...evidence, accepted: false, excludedReason: 'FACTOR_OUT_OF_RANGE' };
+  }
+  return evidence;
+}
+
+function movementConversionFactorFromRecords(prev, curr, item) {
+  const evidence = movementFactorEvidenceFromRecords(prev, curr, item);
+  return evidence.accepted ? evidence.factor : null;
 }
 
 function isUsableMovementSummary(item, summary) {
   if (!summary || !Number.isFinite(summary.factor) || summary.factor <= 0) return false;
   const parts = orderUnitParts(item);
   if (!parts.same) return summary.samples >= 1;
-  return Number(summary.samples || 0) >= 2 && Number(summary.spread || 999) <= 1.35;
+  return Number(summary.samples || 0) >= 2 && Number(summary.relativeSpread || 999) <= 0.35;
 }
 
 function buildConversionAnalysis(history, currentSnapshot) {
@@ -2413,11 +2432,10 @@ function buildConversionAnalysis(history, currentSnapshot) {
     const prev = records[i - 1];
     const curr = records[i];
     orderItemList().forEach(item => {
-      const factor = movementConversionFactorFromRecords(prev, curr, item);
-      if (!factor) return;
+      const evidence = movementFactorEvidenceFromRecords(prev, curr, item);
       const key = unitKeyForItem(item);
-      (movementBuckets[item.name] ||= []).push(factor);
-      (unitBuckets[key] ||= []).push(factor);
+      (movementBuckets[item.name] ||= []).push(evidence);
+      if (evidence.accepted) (unitBuckets[key] ||= []).push(evidence.factor);
     });
   }
 
@@ -2430,7 +2448,7 @@ function buildConversionAnalysis(history, currentSnapshot) {
   const result = {};
   orderItemList().forEach(item => {
     const parts = orderUnitParts(item);
-    const movement = summarizeFactors(movementBuckets[item.name] || []);
+    const movement = summarizeMovementFactorEvidence(movementBuckets[item.name] || []);
     if (isUsableMovementSummary(item, movement)) {
       result[item.name] = { ...movement, source: 'movement', checkUnit: parts.checkUnit || '재고', orderUnit: parts.orderUnit || '발주' };
       return;
@@ -2487,7 +2505,7 @@ function conversionFactorForItem(item) {
   const manualFactor = manualUnitFactorForItem(item);
   if (manualFactor) return manualFactor;
   const analysis = conversionAnalysis[item.name];
-  if (analysis?.source === 'movement' && Number.isFinite(analysis.factor) && analysis.factor > 0) return analysis.factor;
+  // 재고 이동 추론은 evidence-only다. 사용자가 명시적으로 채택해 manual factor로 저장하기 전에는 계산에 적용하지 않는다.
   if (parts.same) return 1;
   if (analysis?.source === 'item' && Number.isFinite(analysis.factor) && analysis.factor > 0) return analysis.factor;
   if (
@@ -2579,14 +2597,79 @@ const UNIFIED_ORDER_MATCH_STATUSES = Object.freeze({
 const UNIFIED_ORDER_ISSUES = Object.freeze({
   PRICE_JOIN_BUG: '별명은 확정됐지만 엑셀 금액 행을 연결하지 못했습니다.',
   PRICE_SOURCE_MISSING: '확정된 실발주 별명과 가격 근거가 없습니다.',
+  DATA_CONFLICT: '서로 독립된 수량·단가·금액 근거가 허용 오차 밖에서 충돌합니다.',
+  DERIVATION_BUG: '산식 입력은 충분하지만 계산 결과를 만들지 못했습니다.',
   ALIAS_CONFLICT: '같은 실발주 별명이 여러 내부 품목에 중복 확정됐습니다.',
   UNIT_UNCONFIRMED: '재고 단위와 발주 단위의 환산값을 확인해야 합니다.',
+  UNIT_MISMATCH_LIKELY: '실발주 수량과 재고 증감 규모가 반복적으로 달라 환산단위 확인이 필요합니다.',
   PRICE_STALE: '사용한 단가 근거가 90일보다 오래됐습니다.',
   ITEM_UNMATCHED: '실발주 품목 별명이 아직 확정되지 않았습니다.'
 });
 
 function unifiedOrderIssue(code) {
   return { code, message: UNIFIED_ORDER_ISSUES[code] || code };
+}
+
+function presentNonnegativeNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function numericEvidenceNode(value, field, context = {}, formula = 'source', inputRefs = []) {
+  const number = presentNonnegativeNumber(value);
+  if (number === null) return null;
+  return {
+    value: number,
+    field,
+    sourceRunId: String(context.sourceRunId || context.runId || ''),
+    asOf: Number(context.asOf || context.eventAt || 0),
+    formula,
+    inputRefs: inputRefs.slice(),
+    provenance: String(context.provenance || context.source || 'LOSSLESS_LEDGER')
+  };
+}
+
+function equationValuesConflict(left, right) {
+  const a = Number(left);
+  const b = Number(right);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  const tolerance = Math.max(0.01, Math.max(Math.abs(a), Math.abs(b)) * 0.001);
+  return Math.abs(a - b) > tolerance;
+}
+
+function solveOrderLineEquation(inputs = {}, context = {}) {
+  const nodes = {
+    actualOrderQty: numericEvidenceNode(inputs.actualOrderQty, 'actualOrderQty', context),
+    amount: numericEvidenceNode(inputs.amount, 'amount', context),
+    actualUnitPrice: numericEvidenceNode(inputs.actualUnitPrice ?? inputs.unitPrice, 'actualUnitPrice', context)
+  };
+  const issues = [];
+  const qty = nodes.actualOrderQty?.value;
+  const amount = nodes.amount?.value;
+  const unitPrice = nodes.actualUnitPrice?.value;
+  if ((qty === 0 && amount !== undefined && amount > 0) || (unitPrice === 0 && amount !== undefined && amount > 0)) {
+    issues.push(unifiedOrderIssue('DATA_CONFLICT'));
+    return { ...nodes, issues, derivableInputCount: Object.values(nodes).filter(Boolean).length };
+  }
+  if (qty !== undefined && amount !== undefined && unitPrice !== undefined) {
+    if (equationValuesConflict(amount, qty * unitPrice)) issues.push(unifiedOrderIssue('DATA_CONFLICT'));
+    return { ...nodes, issues, derivableInputCount: 3 };
+  }
+  if (!nodes.amount && qty !== undefined && unitPrice !== undefined) {
+    nodes.amount = numericEvidenceNode(qty * unitPrice, 'amount', context, 'actualOrderQty * actualUnitPrice', ['actualOrderQty', 'actualUnitPrice']);
+  } else if (!nodes.actualUnitPrice && amount !== undefined && qty !== undefined && qty > 0) {
+    nodes.actualUnitPrice = numericEvidenceNode(amount / qty, 'actualUnitPrice', context, 'amount / actualOrderQty', ['amount', 'actualOrderQty']);
+  } else if (!nodes.actualOrderQty && amount !== undefined && unitPrice !== undefined && unitPrice > 0) {
+    nodes.actualOrderQty = numericEvidenceNode(amount / unitPrice, 'actualOrderQty', context, 'amount / actualUnitPrice', ['amount', 'actualUnitPrice']);
+  }
+  const derivableInputCount = Object.values(inputs).filter(value => presentNonnegativeNumber(value) !== null).length;
+  const derivationExpected = derivableInputCount >= 2 && !(
+    (qty === 0 && amount === 0 && unitPrice === undefined) ||
+    (unitPrice === 0 && amount === 0 && qty === undefined)
+  );
+  if (derivationExpected && Object.values(nodes).filter(Boolean).length < 3) issues.push(unifiedOrderIssue('DERIVATION_BUG'));
+  return { ...nodes, issues, derivableInputCount };
 }
 
 function normalizedActualNameKey(value) {
@@ -2650,6 +2733,118 @@ function explicitOrderUnitFactorForItem(item, aliasState) {
   return orderUnitParts(item).same ? 1 : null;
 }
 
+function movementFactorEvidence(inputs = {}, context = {}) {
+  const prevStock = presentNonnegativeNumber(inputs.prevStock);
+  const nextStock = presentNonnegativeNumber(inputs.nextStock);
+  const estimatedUsage = presentNonnegativeNumber(inputs.estimatedUsage);
+  const actualOrderQty = presentNonnegativeNumber(inputs.actualOrderQty);
+  let excludedReason = '';
+  if (context.timingKnown === false) excludedReason = 'DELIVERY_TIMING_UNKNOWN';
+  else if (prevStock === null || nextStock === null || estimatedUsage === null) excludedReason = 'INVENTORY_MISSING';
+  else if (actualOrderQty === null || actualOrderQty === 0) excludedReason = 'ACTUAL_QTY_ZERO';
+  if (excludedReason) return { accepted: false, excludedReason, inputs: { prevStock, nextStock, estimatedUsage, actualOrderQty } };
+  const deliveredStockUnits = nextStock - prevStock + estimatedUsage;
+  if (!Number.isFinite(deliveredStockUnits) || deliveredStockUnits <= 0) {
+    return { accepted: false, excludedReason: 'DELIVERY_NOT_POSITIVE', inputs: { prevStock, nextStock, estimatedUsage, actualOrderQty } };
+  }
+  const factor = deliveredStockUnits / actualOrderQty;
+  return {
+    accepted: true,
+    factor,
+    deliveredStockUnits,
+    sourceRunId: String(context.sourceRunId || ''),
+    asOf: Number(context.asOf || 0),
+    formula: '(nextStock - prevStock + estimatedUsage) / actualOrderQty',
+    inputRefs: ['prevStock', 'nextStock', 'estimatedUsage', 'actualOrderQty'],
+    provenance: 'INVENTORY_MOVEMENT_HISTORY',
+    completeness: Number(context.completeness ?? 1),
+    timingKnown: true,
+    inputs: { prevStock, nextStock, estimatedUsage, actualOrderQty }
+  };
+}
+
+function medianNumber(values) {
+  const sorted = values.filter(Number.isFinite).slice().sort((left, right) => left - right);
+  if (!sorted.length) return null;
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function summarizeMovementFactorEvidence(samples = [], now = Date.now()) {
+  const accepted = samples.filter(sample => sample?.accepted && Number.isFinite(sample.factor) && sample.factor > 0);
+  const excluded = samples.filter(sample => !sample?.accepted).map(sample => sample?.excludedReason || 'INVALID_SAMPLE');
+  if (!accepted.length) return { factor: null, samples: 0, confidence: 0, confidenceLabel: '근거없음', conflict: false, excluded };
+  const median = medianNumber(accepted.map(sample => sample.factor));
+  const mad = medianNumber(accepted.map(sample => Math.abs(sample.factor - median))) || 0;
+  const threshold = Math.max(median * 0.08, mad * 3, 0.05);
+  const filtered = accepted.filter(sample => Math.abs(sample.factor - median) <= threshold);
+  const kept = filtered.length ? filtered : accepted;
+  const robustMedian = medianNumber(kept.map(sample => sample.factor));
+  const min = Math.min(...kept.map(sample => sample.factor));
+  const max = Math.max(...kept.map(sample => sample.factor));
+  const relativeSpread = robustMedian > 0 ? (max - min) / robustMedian : Infinity;
+  const spread = min > 0 ? max / min : Infinity;
+  const conflict = accepted.length >= 2 && (kept.length < Math.ceil(accepted.length / 2) || relativeSpread > 0.25);
+  const newestAt = Math.max(0, ...kept.map(sample => Number(sample.asOf || 0)));
+  const recencyDays = newestAt > 0 ? Math.max(0, (Number(now) - newestAt) / 86400000) : 999;
+  const completeness = kept.reduce((sum, sample) => sum + Math.max(0, Math.min(1, Number(sample.completeness ?? 1))), 0) / kept.length;
+  const commonPacks = [1, 2, 4, 5, 6, 8, 10, 12, 20, 24, 30, 40, 50, 100];
+  const commonPack = commonPacks.reduce((best, value) => Math.abs(value - robustMedian) < Math.abs(best - robustMedian) ? value : best, commonPacks[0]);
+  const commonPackProximity = Math.abs(commonPack - robustMedian) / Math.max(commonPack, 1);
+  let confidence = accepted.length === 1 ? 0.35 : (accepted.length === 2 ? 0.62 : 0.78);
+  if (accepted.length >= 3 && relativeSpread <= 0.05) confidence += 0.12;
+  if (recencyDays <= 30) confidence += 0.05;
+  if (commonPackProximity <= 0.03) confidence += 0.05;
+  confidence *= completeness;
+  if (conflict) confidence = Math.min(confidence, 0.3);
+  confidence = Math.max(0, Math.min(0.99, confidence));
+  return {
+    factor: conflict ? null : robustMedian,
+    suggestedFactor: robustMedian,
+    samples: kept.length,
+    totalSamples: accepted.length,
+    rejectedOutliers: accepted.length - kept.length,
+    excluded,
+    median: robustMedian,
+    mad,
+    min,
+    max,
+    spread,
+    relativeSpread,
+    confidence,
+    confidenceLabel: confidence >= 0.8 ? '높음' : (confidence >= 0.55 ? '보통' : '낮음'),
+    conflict,
+    commonPack,
+    commonPackProximity,
+    newestAt,
+    provenance: 'INVENTORY_MOVEMENT_HISTORY',
+    formula: '(nextStock - prevStock + estimatedUsage) / actualOrderQty',
+    autoApply: false,
+    unitMismatchLikely: kept.length >= 2 && robustMedian >= 1.5,
+    evidence: kept
+  };
+}
+
+function movementFactorSuggestionForItem(item) {
+  const analysis = conversionAnalysis[item?.name];
+  if (!analysis || analysis.source !== 'movement' || !Number.isFinite(analysis.factor)) return null;
+  const confidence = Math.max(0, Math.min(0.99, Number(analysis.confidence || 0)));
+  return {
+    factor: Number(analysis.factor),
+    samples: Number(analysis.samples || 0),
+    totalSamples: Number(analysis.totalSamples || analysis.samples || 0),
+    rejectedOutliers: Number(analysis.rejectedOutliers || 0),
+    excluded: Array.isArray(analysis.excluded) ? analysis.excluded.slice() : [],
+    confidence,
+    confidenceLabel: analysis.confidenceLabel || (confidence >= 0.8 ? '높음' : (confidence >= 0.55 ? '보통' : '낮음')),
+    formula: analysis.formula || '(nextStock - prevStock + estimatedUsage) / actualOrderQty',
+    provenance: 'INVENTORY_MOVEMENT_HISTORY',
+    autoApply: false,
+    unitMismatchLikely: Boolean(analysis.unitMismatchLikely),
+    evidence: Array.isArray(analysis.evidence) ? analysis.evidence.slice() : []
+  };
+}
+
 function orderQtyForUnifiedRow(item, stockNeed, factor) {
   const need = Number(stockNeed);
   if (!Number.isFinite(need) || need <= 0) return 0;
@@ -2660,38 +2855,106 @@ function orderQtyForUnifiedRow(item, stockNeed, factor) {
   return applyOrderUnitCorrectionQty(item, roundOrderQty(need));
 }
 
-function priceEvidenceForActualAliases(actualAliases, ledger = sfaOrderLedgerForPayload(), now = Date.now()) {
+function orderLineEvidenceCandidate(values, context = {}) {
+  const equation = solveOrderLineEquation(values, context);
+  const conflict = equation.issues.some(issue => issue.code === 'DATA_CONFLICT');
+  return {
+    ...context,
+    equation,
+    actualOrderQty: equation.actualOrderQty?.value ?? null,
+    amount: equation.amount?.value ?? null,
+    unitPrice: equation.actualUnitPrice?.value ?? null,
+    valid: !conflict && equation.actualUnitPrice !== null,
+    issues: equation.issues
+  };
+}
+
+function currentExcelOrderLineCandidates(actualAliases, data = lastSfaCompareData) {
+  if (!data || typeof data !== 'object') return [];
+  const aliasKeys = new Set((actualAliases || []).map(normalizedActualNameKey).filter(Boolean));
+  if (!aliasKeys.size) return [];
+  const matchedByIndex = new Map((data.comparison?.matched || []).map(row => [String(row.row_index), row]));
+  const rawRows = Array.isArray(data.items) && data.items.length ? data.items : (data.comparison?.matched || []);
+  const eventAt = timestampMs(data.savedAt || data.updatedAt || data.last_analyzed_at || 0, 0);
+  const runId = sfaAnalysisRunId(data, 'excel');
+  return rawRows.map((row, index) => {
+    const compareRow = row.row_index !== undefined && row.row_index !== null ? matchedByIndex.get(String(row.row_index)) : null;
+    const actualName = siteItemName(row) || siteItemName(compareRow);
+    if (!aliasKeys.has(normalizedActualNameKey(actualName))) return null;
+    const qtyRaw = hasSiteValue(row, ['actualOrderQty', 'actual_order_qty', 'sfa_qty', 'qty', 'quantity', 'siteQty'])
+      ? (row.actualOrderQty ?? row.actual_order_qty ?? row.sfa_qty ?? row.qty ?? row.quantity ?? row.siteQty)
+      : (compareRow?.actualOrderQty ?? compareRow?.actual_order_qty ?? compareRow?.sfa_qty ?? compareRow?.qty);
+    const amountRaw = hasSiteValue(row, ['amount', 'sfa_amount', 'siteAmount', 'order_amount', 'total_amount', 'total'])
+      ? (row.amount ?? row.sfa_amount ?? row.siteAmount ?? row.order_amount ?? row.total_amount ?? row.total)
+      : (compareRow?.amount ?? compareRow?.sfa_amount ?? compareRow?.order_amount ?? compareRow?.total_amount ?? compareRow?.total);
+    const unitPriceRaw = row.actualUnitPrice ?? row.unitPrice ?? row.unit_price ?? row.sfa_unit_price ?? row.price ??
+      compareRow?.actualUnitPrice ?? compareRow?.unitPrice ?? compareRow?.unit_price ?? compareRow?.sfa_unit_price ?? compareRow?.price;
+    return orderLineEvidenceCandidate({
+      actualOrderQty: qtyRaw,
+      amount: parseMoney(amountRaw),
+      actualUnitPrice: parseMoney(unitPriceRaw)
+    }, {
+      priority: 1,
+      provenance: 'EXACT_CURRENT_EXCEL',
+      runId,
+      sourceRunId: runId,
+      sourceRunIds: [runId],
+      eventId: `${runId}#current:${row.row_index ?? index}`,
+      eventAt,
+      asOf: eventAt,
+      dateKey: sfaAnalysisDateKey(data, eventAt),
+      fileName: sfaAnalysisFileName(data),
+      actualName,
+      actualUnit: siteItemUnit(row) || siteItemUnit(compareRow)
+    });
+  }).filter(Boolean);
+}
+
+function priceEvidenceForActualAliases(actualAliases, ledger = sfaOrderLedgerForPayload(), now = Date.now(), data = lastSfaCompareData) {
   const aliasKeys = new Set((actualAliases || []).map(normalizedActualNameKey).filter(Boolean));
   if (!aliasKeys.size) return null;
-  const matching = [];
+  const matching = currentExcelOrderLineCandidates(actualAliases, data);
   (ledger.records || []).forEach(record => {
     (record.items || []).forEach(event => {
       const eventNames = [event.originalName, event.aliasName].map(normalizedActualNameKey).filter(Boolean);
       if (!eventNames.some(name => aliasKeys.has(name))) return;
-      const actualOrderQty = Number(event.actualOrderQty ?? event.quantity);
-      const amount = parseMoney(event.amount);
-      matching.push({
+      matching.push(orderLineEvidenceCandidate({
+        actualOrderQty: event.actualOrderQty ?? event.quantity,
+        amount: event.amount,
+        actualUnitPrice: event.actualUnitPrice
+      }, {
+        priority: 2,
+        provenance: 'LOSSLESS_LEDGER',
         runId: String(event.runId || record.runId || ''),
+        sourceRunId: String((event.sourceRunIds || [])[0] || event.runId || record.runId || ''),
+        sourceRunIds: stringArray(event.sourceRunIds, [event.runId || record.runId || '']),
         eventId: String(event.eventId || ''),
         eventAt: timestampMs(event.eventAt || record.updatedAt || record.savedAt || 0, 0),
         dateKey: normalizeHistoryDateKey(event.dateKey || record.dateKey),
         fileName: normalizedSfaFileName(event.fileName || record.fileName),
         actualName: String(event.originalName || event.aliasName || ''),
         actualUnit: String(event.unit || ''),
-        actualOrderQty,
-        amount,
-        valid: Number.isFinite(actualOrderQty) && actualOrderQty > 0 && amount !== null && amount > 0
-      });
+      }));
     });
   });
-  matching.sort((left, right) => right.eventAt - left.eventAt || right.eventId.localeCompare(left.eventId));
+  matching.sort((left, right) => left.priority - right.priority || right.eventAt - left.eventAt || right.eventId.localeCompare(left.eventId));
+  const blockingConflict = matching.find(row => row.issues.some(issue => issue.code === 'DATA_CONFLICT'));
+  if (blockingConflict && blockingConflict.priority === (matching[0]?.priority ?? blockingConflict.priority)) {
+    return { ...blockingConflict, basis: null, unresolved: true, stale: false };
+  }
   const selected = matching.find(row => row.valid);
-  if (!selected) return null;
+  if (!selected) {
+    const unresolved = matching[0];
+    return unresolved ? { ...unresolved, basis: null, unresolved: true, stale: false } : null;
+  }
   return {
     ...selected,
-    unitPrice: selected.amount / selected.actualOrderQty,
-    basis: 'SFA_ORDER_UNIT_AMOUNT_DIV_QTY',
-    fallbackFromNewerZeroQty: Boolean(matching[0] && !matching[0].valid && matching[0].eventAt >= selected.eventAt),
+    basis: selected.equation.actualUnitPrice.formula === 'source'
+      ? 'SFA_ORDER_UNIT_DIRECT_PRICE'
+      : 'SFA_ORDER_UNIT_AMOUNT_DIV_QTY',
+    fallbackFromNewerZeroQty: Boolean(matching.some(row =>
+      row !== selected && row.priority <= selected.priority && row.eventAt >= selected.eventAt && !row.valid && row.actualOrderQty === 0
+    )),
     stale: Number(now) - selected.eventAt > AI_USAGE_EVIDENCE_MAX_DAYS * 86400000
   };
 }
@@ -2705,6 +2968,7 @@ function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null,
     const candidateNames = candidateActualNamesForItem(item.name, ledger);
     const aliasConflict = aliasState.aliases.some(alias => conflictKeys.has(normalizedActualNameKey(alias)));
     const factor = explicitOrderUnitFactorForItem(item, aliasState);
+    const factorSuggestion = movementFactorSuggestionForItem(item);
     let matchStatus = UNIFIED_ORDER_MATCH_STATUSES.MATCHED;
     if (aliasConflict) matchStatus = UNIFIED_ORDER_MATCH_STATUSES.ALIAS_CONFLICT;
     else if (!aliasState.aliases.length) matchStatus = candidateNames.length
@@ -2713,15 +2977,37 @@ function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null,
     else if (!factor) matchStatus = UNIFIED_ORDER_MATCH_STATUSES.UNIT_UNCONFIRMED;
     const stockNeed = calcG(item, days);
     const orderQty = orderQtyForUnifiedRow(item, stockNeed, factor);
-    const priceEvidence = priceEvidenceForActualAliases(aliasState.aliases, ledger, now);
+    const priceEvidence = priceEvidenceForActualAliases(aliasState.aliases, ledger, now, data);
     const issues = [];
     if (aliasConflict) issues.push(unifiedOrderIssue('ALIAS_CONFLICT'));
     if (matchStatus === UNIFIED_ORDER_MATCH_STATUSES.UNIT_UNCONFIRMED) issues.push(unifiedOrderIssue('UNIT_UNCONFIRMED'));
     if (matchStatus === UNIFIED_ORDER_MATCH_STATUSES.ITEM_UNMATCHED) issues.push(unifiedOrderIssue('ITEM_UNMATCHED'));
-    if (aliasState.aliases.length && !priceEvidence) issues.push(unifiedOrderIssue('PRICE_JOIN_BUG'));
-    else if (!aliasState.aliases.length && !priceEvidence) issues.push(unifiedOrderIssue('PRICE_SOURCE_MISSING'));
+    if (factorSuggestion?.unitMismatchLikely) issues.push(unifiedOrderIssue('UNIT_MISMATCH_LIKELY'));
+    (priceEvidence?.issues || []).forEach(issue => {
+      if (!issues.some(existing => existing.code === issue.code)) issues.push(issue);
+    });
+    const hasResolvedPrice = priceEvidence?.valid && Number.isFinite(priceEvidence.unitPrice);
+    if (aliasState.aliases.length && !hasResolvedPrice && !issues.some(issue => issue.code === 'DATA_CONFLICT')) issues.push(unifiedOrderIssue('PRICE_JOIN_BUG'));
+    else if (!aliasState.aliases.length && !hasResolvedPrice) issues.push(unifiedOrderIssue('PRICE_SOURCE_MISSING'));
     if (priceEvidence?.stale) issues.push(unifiedOrderIssue('PRICE_STALE'));
-    const canCalculateAmount = priceEvidence && Number.isFinite(orderQty);
+    const factorEvidence = numericEvidenceNode(factor, 'factor', {
+      provenance: manualUnitFactorForItem(item) ? 'EXPLICIT_USER_FACTOR' : (orderUnitParts(item).same ? 'SAME_UNIT' : 'EXPLICIT_ALIAS_FACTOR'),
+      asOf: Number(aliasState.saved?.updatedAt || 0)
+    });
+    const stockNeedEvidence = numericEvidenceNode(stockNeed, 'stockNeed', {
+      provenance: 'INVENTORY_USAGE_EQUATION',
+      asOf: now
+    }, 'calcG(dailyUsage, salesWeights, stockTotal, buffer)', ['dailyUsage', 'salesWeights', 'stockTotal', 'buffer']);
+    const orderQtyEvidence = Number.isFinite(orderQty) ? numericEvidenceNode(orderQty, 'orderQty', {
+      provenance: 'DETERMINISTIC_DERIVATION',
+      asOf: now
+    }, factor === 1 && orderUnitParts(item).same ? 'roundUpDecimal(stockNeed)' : 'ceilDiscrete(stockNeed / factor)', ['stockNeed', 'factor']) : null;
+    const canCalculateAmount = hasResolvedPrice && Number.isFinite(orderQty);
+    const expectedAmountEvidence = canCalculateAmount ? numericEvidenceNode(orderQty * priceEvidence.unitPrice, 'expectedAmount', {
+      provenance: 'DETERMINISTIC_DERIVATION',
+      sourceRunId: priceEvidence.sourceRunId,
+      asOf: now
+    }, 'orderQty * actualUnitPrice', ['orderQty', 'actualUnitPrice']) : null;
     return {
       itemKey,
       internalName: item.name,
@@ -2729,12 +3015,22 @@ function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null,
       actualAliases: aliasState.aliases,
       matchStatus,
       factor,
+      factorEvidence,
+      factorSuggestion,
       stockTotal: displayStockTotal(item.name),
       stockNeed,
+      stockNeedEvidence,
       orderQty,
+      orderQtyEvidence,
       priceEvidence,
-      unitPrice: priceEvidence ? priceEvidence.unitPrice : null,
-      expectedAmount: canCalculateAmount ? orderQty * priceEvidence.unitPrice : null,
+      unitPrice: hasResolvedPrice ? priceEvidence.unitPrice : null,
+      unitPriceEvidence: hasResolvedPrice ? priceEvidence.equation.actualUnitPrice : null,
+      actualOrderQty: priceEvidence?.equation?.actualOrderQty?.value ?? null,
+      actualOrderQtyEvidence: priceEvidence?.equation?.actualOrderQty || null,
+      actualAmount: priceEvidence?.equation?.amount?.value ?? null,
+      actualAmountEvidence: priceEvidence?.equation?.amount || null,
+      expectedAmount: expectedAmountEvidence?.value ?? null,
+      expectedAmountEvidence,
       aiUsage: aiUsageReadModelForItem(item.name),
       issues
     };

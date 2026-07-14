@@ -13,13 +13,23 @@ async function waitFor(predicate, label) {
 
 (async () => {
   api.resetConfirmedSaveMachineForCheck();
-  api.clearLocalDirtyRevision();
+  api.setLocalDirtyForCheck(false);
+  api.setRevisionsForCheck(0, 0);
   api.setAliasMappingsForCheck({});
 
   const calls = [];
   sandbox.fetch = async (url, options = {}) => {
-    if (options.method === 'PUT') calls.push({ url: String(url), body: options.body });
-    return { ok: true, status: 200, json: async () => null, text: async () => '' };
+    if (!options.method) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get(name) { return String(name).toLowerCase() === 'etag' ? '"alias-fixture"' : null; } },
+        json: async () => null,
+        text: async () => ''
+      };
+    }
+    if (options.method === 'PUT') calls.push({ url: String(url), body: options.body, headers: options.headers });
+    return { ok: true, status: 200, headers: { get() { return null; } }, json: async () => null, text: async () => '' };
   };
 
   const aliasName = '냉동-치즈볼-BBQ치즈볼(크림)';
@@ -38,6 +48,7 @@ async function waitFor(predicate, label) {
   assert.strictEqual(mapping.source, 'user', 'arbitrary alias must remain user-owned');
 
   assert.strictEqual(calls[0].body, calls[1].body, 'manual alias action must confirm one identical current/history body');
+  assert.strictEqual(calls[0].headers['If-Match'], '"alias-fixture"', 'manual alias save must use the current Firebase ETag');
   const payload = JSON.parse(calls[0].body);
   assert.strictEqual(payload.orderAliasMappings[aliasName].actualName, arbitraryActualName, 'confirmed payload must contain the new alias');
   assert.strictEqual(payload.orderAliasMappings[aliasName].status, 'manual', 'confirmed payload must retain manual status');
