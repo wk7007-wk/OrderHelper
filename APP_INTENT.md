@@ -9,20 +9,24 @@
 
 ## 절대 기준
 - SFA 자동입력은 품목명, 단위, 별칭, 환산 규칙이 확정된 뒤에만 진행한다.
-- 계산식과 사용자 입력 기록은 화면 정리 때문에 숨기거나 잃지 않는다.
+- 계산식과 사용자 입력 기록은 화면 정리 때문에 숨기거나 잃지 않는다. 수치 입력 이벤트는 값 반영과 local draft 보존을 먼저 끝내고 계산/DOM 갱신을 최신 revision 기준으로 스케줄링해 입력을 막지 않는다. 원격 저장은 Enter 또는 저장·행 변경 같은 명시 행동에서만 확정한다.
+- 입력값과 출력 계산은 별도 화면이 아니라 같은 행에 둔다. 표의 stable `itemKey`와 구역별 stable `entryKey`는 유지하고 `구역 입력순`/`최초 SFA 발주순`은 동일 DOM/data의 정렬 컨텍스트만 바꾼다. `/current`와 `/history/{date}`에는 원본 `entries`와 함께 `inventoryByItemKey`, `stateRevision`, `inventoryRevision`을 저장하고, 저장 중 새 입력이나 포커스 중 대기한 원격 current가 최신 revision을 덮지 못하게 한다.
+- Enter 확정본은 localStorage `bbq_confirmed_save_queue_v1`의 immutable `active + queued latest`로 보존한다. `/current`와 같은 KST `/history/{date}`가 모두 성공해야 제거하며 timeout/부분실패/재시작은 확정 당시 입력 snapshot·date를 유지한다. 전송 전 두 node를 ETag로 다시 읽어 다른 client의 ledger event를 합치고, 한 CAS attempt 안에서는 동일 merged body를 두 node에 쓴다. Enter하지 않은 draft는 online/visibility/startup만으로 원격 전송하지 않는다.
 - 모바일 키보드 Enter/다음 동작은 실제 직원폰 흐름 기준으로 본다.
-- 사용자는 단위를 보지 않는다. 내부 분석 기준은 체크/재고 단위이며, 환산값은 `발주 1단위가 체크/재고 몇 단위인지`다. 예: 체크 10개=발주 1박스이면 환산값 10.
+- 사용자는 단위를 보지 않는다. `orderUnitToStockFactor=10`의 뜻은 발주수량 10이 아니라 `1발주 단위 = 재고/사용량 10개`다. 발주량은 `ceil(필요 개수 / factor)`로 계산해 25개 필요면 3발주, 실제 2발주는 재고/사용량 20개로 환산한다. factor 방향을 UI, correction payload, AI evidence에서 뒤집지 않는다.
 - 체크단위와 발주단위가 다르면 과거 재고 변동값, 날짜별 `필요기준-체크재고` 실사용량 추정값, SFA 실발주량으로 품목별 `orderUnitToStockFactor`를 추정해 발주량에 반영한다.
 - 하루사용량 입력/계산은 수동값을 기준으로 한다. `이전 남은재고 + 실발주 입고량 - 다음 남은재고 = 실사용량` 분석값은 엑셀분석 참고/리포트이며, 수동값과 발주 계산을 자동 덮어쓰지 않는다.
 - 엑셀분석으로 기록된 실발주 이력은 실사용 참고 배지/툴팁에 즉시 반영한다. `current/overrides/*/l` 수동 하루사용량은 자동 할당하거나 덮어쓰지 않는다.
+- 엑셀/SFA 분석은 최신 결과 확인으로 끝내지 않는다. 분석 결과 적용 시 `bbq_sfa_analysis_history` localStorage에 run 단위로 append/merge하고, 원본명·매핑명·수량 0·단위·금액·분석 source·분석일을 보존해 이후 별명 후보와 실사용/환산 후보 계산에서 참조한다.
 - 엑셀/SFA 분석 결과가 새로 도착하면 화면 적용 시점에 최신 `entries`/`overrides`/`orderDays`/`orderAliasMappings`와 `sfaActualHistory`로 별명 draft/effective mapping, 환산 후보, inline 보정을 다시 계산한다. 저장된 `confirmed`/`manual` 값은 유지하고 `default`/draft만 최신화한다.
 
 ## UI/동선 기준
-- 미입력, 입력완료, 숨김, 출력보기는 입력 동선을 방해하지 않아야 한다.
+- 구역/품목/재고/여유/일사용/필요량/추천발주·분석·금액은 한 표에서 본다. 미입력, 입력완료, 숨김, 정렬 전환은 입력 동선을 방해하지 않고 정렬 뒤에도 값·포커스·caret을 복구한다.
 - 발주 품목 출력순서는 최초 SFA 순서를 기준으로 고정한다. 저장되어 있던 사용자 지정 `outputOrder`는 읽어도 적용하지 않는다.
 - 본 페이지/SFA 비교 패널은 `1:1 매칭`, `단위 보정`, `미매칭`, `입출력`을 한 화면에서 전환해 확인한다.
 - SFA 품목명/규격/단위 기반 후보 산정, 확정/후보/미매칭/충돌 상태 표시, 내부 품목 수동 확정, CSV/탭/JSON 입력과 JSON export를 제공한다.
 - 사용자사이트 품목명은 실발주 상품명이 아니라 별명/표시명으로 본다. `별명 검수` 탭에서 내부 별명별 실발주 품목 후보와 체크단위→발주단위 환산 후보, 점수, 근거를 보고 사용자가 선택/수정한 경우에만 확정한다.
+- 별명 선택/새 실발주명, 사이트 품목 매칭, 신규 내부 품목, 미매칭 행은 주 표 해당 행에서도 처리한다. 상세 패널은 보조 검수면이며 주 표 왕복을 강제하지 않는다.
 
 ## 데이터/경계 기준
 - 웹 도구와 SiteBot/SFA 자동입력 경계는 분리한다.
@@ -36,10 +40,15 @@
 - Firebase 경로 이름에는 RTDB 금지 문자를 넣지 않는다.
 - GitHub Pages 반영 여부를 작업 완료와 별도로 확인한다.
 - 엑셀분석은 비교/실발주 확인 데이터와 참고 배지로만 쓰고, 수동 하루사용량/품목 단위표/재고/발주 원본을 별도 확인 없이 자동수정하지 않는다.
-- SFA 원천 품목 행은 보존하고, 사용자 확정 매칭과 단위 보정만 `orderSiteMappings`/`orderUnitCorrections`로 분리 저장한다.
+- SFA 원천 품목 행은 보존하고, 사용자 확정 매칭과 단위 보정만 `orderSiteMappings`/`orderUnitCorrections`로 분리 저장한다. 사이트/엑셀 품목이 MASTER에 없으면 분석 화면에서 원명 그대로 또는 임의 이름으로 `orderManualItems`를 추가하고 `orderSiteMappings` target으로 재사용한다.
 - 사용자사이트 별명→실발주항목 확정값과 환산 검수값은 `orderAliasMappings`로 분리 저장한다. 점수 높은 품목/환산 후보는 자동 확정하지 않고 `default` 선택값으로 표시/전달하며, 환산 후보에는 최근비교, 재고변동, 날짜별 실사용량 비교 근거를 포함한다. 환산값은 전역값이 아니라 별명/실발주항목별 값이며, 사용자가 `별명 검수` 탭 또는 체크 입력 행에서 후보 선택 시 `confirmed`, 직접 숫자 입력 시 `manual`로 저장한다.
+- 오차보기의 사용자 명시 선택/신규 품목 생성은 `orderSiteMappings`와 `orderAliasMappings`를 함께 갱신한다. 같은 정규화 이름이라도 원문+단위 identity가 다르면 별도 site key로 보존하고, 자동 고신뢰 후보는 `candidate`일 뿐 확정하지 않는다. 수량 `0`, 빈 배열, 충돌 상태도 current/history/effective read model에서 지우지 않는다.
+- SFA에 처음 보인 원문+단위는 fuzzy 점수가 높아도 자동 매칭하지 않고 `신규 발주 원문`으로 표시한다. 사용자가 기존 canonical 품목을 명시 선택한 뒤에만 local overlay `bbq_local_new_source_aliases_v1`에 저장하며, 원격 current 새로고침 뒤에도 overlay를 다시 합쳐 기존 확정 매핑과 재고 draft를 잃지 않는다.
 - 단위 보정은 환산계수, 묶음단위, 최소발주단위, 표기 보정으로 제한하며 다음 발주량 계산과 엑셀분석 요청에 반영한다.
-- `orderSiteMappings`, `orderAliasMappings`, `orderUnitCorrections`는 localStorage, Firebase `/order/desk_q7m9r3a8/current`, `/history/{date}` payload에 분리 저장한다. `orderAliasMappingDrafts`는 후보/default 상태와 `orderUnitToStockFactor` 의미를 보존하고, `effectiveOrderAliasMappings`는 `confirmed/manual` 우선 후 없으면 default를 쓰는 엑셀분석용 read model이다.
+- `orderSiteMappings`, `orderAliasMappings`, `orderUnitCorrections`, `orderManualItems`는 localStorage, Firebase `/order/desk_q7m9r3a8/current`, `/history/{date}` payload에 분리 저장한다. `orderAliasMappingDrafts`는 후보/default 상태와 `orderUnitToStockFactor` 의미를 보존하고, `effectiveOrderAliasMappings`는 `confirmed/manual` 우선 후 없으면 default를 쓰는 엑셀분석용 read model이다.
+- 로컬 분석 누적 이력 key는 `bbq_sfa_analysis_history`다. ledger v2 record는 `runId/source/date/file/items[]`, event는 stable `eventId`와 `eventAt/rowIndex/rawIdentity/originalName/mappedName/aliasName/quantity/actualOrderQty/unit/amount/sourceRunIds`를 보존한다. 같은 run 재수신은 최신 event 기준 idempotent merge하고, 물리 원천이 같은 local/Firebase mirror는 한 event로 합치되 모든 `sourceRunIds`를 남긴다. 다른 run과 같은 품목의 여러 원본 행은 append한다. current/history payload의 canonical `sfaOrderLedger`만 전체 event를 가지며 legacy history field는 compact pointer다.
+- 실사용량 AI 분석은 브라우저 직접 모델/API key가 아니라 기존 `/monitor/main_pc/sfa_order_request`의 bounded `aiUsageAnalysis.evidence` 계약으로 PC/SiteBot worker에 전달한다. 브라우저는 `/order/desk_q7m9r3a8/aiUsageAdvisory/latest`의 top-level `analysisRunId/generatedAt/status/items/audit` 결과를 advisory-only일 때만 읽고, 각 item에 run/time/status를 붙여 참고 배지로 표시한다. invalid/unknown-only/과거 retry는 fail-closed로 기존 값을 유지하며 `overrides/*/l`, 수동 환산, 재고, 실제 발주값을 자동 변경하지 않는다.
+- DB에서 읽은 구역/entry id/AI 문구는 HTML escape하고 행 버튼은 한 번만 붙는 delegated listener로 처리한다. 저장 데이터가 inline handler나 DOM으로 실행되면 안 된다.
 - 실발주 이력은 `/order/desk_q7m9r3a8/sfaActualHistory/{date}`, 단위/실사용 추정 리포트는 `/order/desk_q7m9r3a8/unitInference/latest`에 남긴다.
 - 로컬 SFA 엑셀 이력의 모든 발주 행은 OrderHelper MASTER 품목에 고신뢰 매핑되어야 한다. 부족한 품목은 전역 threshold를 낮추지 말고 명시 alias 또는 웹 마스터 보강으로 처리한 뒤 백필한다.
 - SFA 의미가 다른 품목은 숫자 통과를 위해 기존 MASTER에 묶지 않는다. 예: `BBQ충진식패티(100g)(마일드)`, `BBQ페퍼로니씬피자`는 `두마리치킨,파더스`와 별도 target이다.
@@ -64,8 +73,8 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 기준: `20260707-10` / 엑셀 결과 수신 시 최신 current-state 기준 alias/effective/inline 보정 재빌드 / 체크 입력 행 inline 별명·환산 보정 / GPS 허용 반경 임시 700m / SFA 사이트 품목↔내부 발주항목 1:1 매칭, 사용자사이트 별명→실발주항목+환산값 default/effective 분석 payload, 날짜별 실사용량 비교 환산 후보, `발주1단위=체크/재고 N단위` 방향 고정, GPS 없는 desktop 승인/grace fallback, 단위 보정, 미매칭 확인, 수동/JSON 입출력 패널 / 하루사용량 계산은 수동값 기준, 실사용량 분석은 참고 표시 전용, 엑셀 실발주 이력은 참고 배지 즉시 반영 / SFA 의미상 별도 품목은 별도 MASTER target 유지 / 출력순서는 최초 SFA 순서 고정 / 라이브 `https://wk7007-wk.github.io/OrderHelper/`
-- 완료 포인터: `20260707-10 Refresh SFA results with current order state`; 이전 inline 보정 포인터 `d72de17 Add inline alias correction controls`.
-- 완료 검증: `node tests/orderhelper_static_checks.js`, `git diff --check`. 실제 공장 PC 브라우저/SiteBot 화면 검증은 아직 별도 확인 대상이다.
+- 최신 기준: `20260715-02` / 단일 입력+출력 표 / 구역 입력순↔최초 SFA순 정렬 컨텍스트 / keyed 즉시 계산 패치와 focus fence / Enter-confirmed pair CAS / mirrored-source dedupe와 lossless SFA ledger v2 / bounded AI evidence + dedicated advisory latest / stored-XSS·listener 방어 / 기존 stable item/entry key·latest revision·수동값 보호 유지 / 라이브 `https://wk7007-wk.github.io/OrderHelper/`
+- 완료 포인터: `20260715-02 Live integration: explicit new-source overlay + dirty-refresh preservation + pair CAS/lossless ledger/advisory latest`; 이전 포인터 `20260715-01 Enter-confirmed immutable save queue`, `20260714-02 Single grid, lossless order ledger, AI advisory contract`.
+- 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, `node tests/orderhelper_single_grid_ledger_regression.js`, `node tests/orderhelper_p1_review_regression.js`, `node tests/orderhelper_autosave_regression.js`, `python3 tests/orderhelper_autosave_browser.py`, inline JS syntax, `git diff --check`. 로컬 Playwright는 Firebase를 interception해 ETag pair-CAS, IME/change/Enter, stored-XSS, delegated listener를 검증한다. 실제 공장 PC/SiteBot worker·live 배포 검증은 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
-- 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.
+- 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, upstream producer가 `runId`나 수량 0 행 없이 원천을 overwrite하면 브라우저 ledger만으로 복구할 수 없음, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.

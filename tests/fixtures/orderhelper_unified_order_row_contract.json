@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "statusEnum": [
+    "MATCHED",
+    "CANDIDATE",
+    "ALIAS_CONFLICT",
+    "UNIT_UNCONFIRMED",
+    "ITEM_UNMATCHED"
+  ],
+  "cases": [
+    {
+      "id": "matched_alias_price_exact",
+      "inventory": {"itemKey": "item_internal", "internalName": "내부품목", "stockTotal": 0, "stockNeed": 25},
+      "alias": {"actualName": "실발주품목", "status": "confirmed", "orderUnitToStockFactor": 10},
+      "ledgerEvents": [
+        {"runId": "run-new", "eventAt": 1784044800000, "originalName": "실발주품목", "aliasName": "실발주품목", "actualOrderQty": 5, "amount": 12000, "unit": "BOX"}
+      ],
+      "expected": {"matchStatus": "MATCHED", "orderQty": 3, "unitPrice": 2400, "expectedAmount": 7200, "issues": [], "occurrences": 1}
+    },
+    {
+      "id": "zero_qty_uses_latest_older_valid_price",
+      "inventory": {"itemKey": "item_zero", "internalName": "제로품목", "stockTotal": 0, "stockNeed": 20},
+      "alias": {"actualName": "제로실발주", "status": "manual", "orderUnitToStockFactor": 10},
+      "ledgerEvents": [
+        {"runId": "run-old", "eventAt": 1783958400000, "originalName": "제로실발주", "actualOrderQty": 4, "amount": 8000, "unit": "BOX"},
+        {"runId": "run-new", "eventAt": 1784044800000, "originalName": "제로실발주", "actualOrderQty": 0, "amount": 0, "unit": "BOX"}
+      ],
+      "expected": {"matchStatus": "MATCHED", "orderQty": 2, "unitPrice": 2000, "expectedAmount": 4000, "priceEvidenceRunId": "run-old", "occurrences": 1}
+    },
+    {
+      "id": "matched_alias_without_price_is_error",
+      "inventory": {"itemKey": "item_broken", "internalName": "조인오류품목", "stockTotal": 0, "stockNeed": 1},
+      "alias": {"actualName": "존재해야하는실발주", "status": "confirmed", "orderUnitToStockFactor": 1},
+      "ledgerEvents": [],
+      "expected": {"matchStatus": "MATCHED", "unitPrice": null, "expectedAmount": null, "issues": ["PRICE_JOIN_BUG"], "occurrences": 1}
+    },
+    {
+      "id": "unmatched_is_mutually_exclusive",
+      "inventory": {"itemKey": "item_unmatched", "internalName": "미매칭품목", "stockTotal": 0, "stockNeed": 1},
+      "alias": null,
+      "ledgerEvents": [],
+      "expected": {"matchStatus": "ITEM_UNMATCHED", "unitPrice": null, "expectedAmount": null, "issues": ["ITEM_UNMATCHED"], "occurrences": 1}
+    }
+  ]
+}
