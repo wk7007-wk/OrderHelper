@@ -58,7 +58,7 @@ storage.set('bbq_savedAt', '500');
 assert.strictEqual(api.shouldApplyIncomingCurrent({ savedAt: 900, stateRevision: 499, inventoryRevision: 900 }), false, 'a newer timestamp cannot bypass a stale state revision');
 assert.strictEqual(api.shouldApplyIncomingCurrent({ savedAt: 501, stateRevision: 501, inventoryRevision: 451 }), true, 'the newest revision must be eligible for current-state adoption');
 
-async function verifySaveInFlightRevisionFence() {
+async function verifyConfirmedSaveRevisionFence() {
   const putBodies = [];
   const firstPutResolvers = [];
   sandbox.document.getElementById('orderDays').value = '3';
@@ -73,22 +73,24 @@ async function verifySaveInFlightRevisionFence() {
     return { ok: true, json: async () => ({}), text: async () => '' };
   };
 
+  api.resetConfirmedSaveMachineForCheck();
+  api.setEntriesForCheck(entries);
   api.setRevisionsForCheck(1000, 900);
   api.setLocalDirtyForCheck(true);
-  const firstSave = api.saveToFBForCheck('raceRegression');
+  assert.strictEqual(api.confirmCurrentSave('enter'), true, 'first Enter must start one immutable current/history pair');
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.strictEqual(putBodies.length, 2, 'the first current/history pair must be in flight before the simulated new input');
 
   api.setRevisionsForCheck(1001, 901);
   api.setLocalDirtyForCheck(true);
+  assert.strictEqual(api.confirmCurrentSave('enter'), true, 'a second Enter during flight must queue the latest confirmed revision');
   firstPutResolvers.splice(0).forEach(resolve => resolve());
-  await firstSave;
 
   for (let i = 0; i < 30 && putBodies.length < 4; i += 1) {
     await new Promise(resolve => setTimeout(resolve, 5));
   }
   const currentWrites = putBodies.filter(row => row.url.includes('/current.json'));
-  assert.strictEqual(currentWrites.length, 2, 'a newer revision typed during save must force one follow-up current write');
+  assert.strictEqual(currentWrites.length, 2, 'a newer revision confirmed with Enter during save must force one follow-up current write');
   assert.strictEqual(currentWrites[0].body.stateRevision, 1000, 'first request must retain its captured revision');
   assert.strictEqual(currentWrites[1].body.stateRevision, 1001, 'follow-up request must carry the latest revision');
   const latestInventory = currentWrites[1].body.inventoryByItemKey[api.itemKeyForName(canonicalName)];
@@ -97,7 +99,7 @@ async function verifySaveInFlightRevisionFence() {
   assert.strictEqual(api.saveStatusForCheck().localDirty, false, 'only the latest revision response may clear localDirty');
 }
 
-verifySaveInFlightRevisionFence()
+verifyConfirmedSaveRevisionFence()
   .then(() => console.log('OrderHelper inventory/matching regression OK'))
   .catch(error => {
     console.error(error);

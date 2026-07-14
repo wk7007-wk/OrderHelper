@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260714-03';/, 'APP_VERSION must be bumped for autosave recovery');
+mustMatch(/const APP_VERSION = '20260715-01';/, 'APP_VERSION must be bumped for Enter-confirmed autosave recovery');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -263,19 +263,23 @@ mustMatch(/\$\{outputOrderDisplay\(item\.name, orderText\)\}\$\{renderOrderAnaly
 mustMatch(/document\.querySelectorAll\(`tr\[data-item-key="\$\{itemKey\}"\]`\)/, 'live calculation refresh must patch only rows with the same stable item key');
 mustMatch(/function scheduleDeferredInputWork\(options = \{\}\)/, 'input edits must use deferred calculation scheduler');
 mustMatch(/let deferredInputRevision = 0;/, 'deferred input work must track a latest revision token');
-mustMatch(/localStorage\.setItem\('bbq_entries', JSON\.stringify\(entries\)\);[\s\S]*localStorage\.setItem\(PENDING_SYNC_REVISION_STORAGE_KEY, String\(stateRevision\)\);[\s\S]*scheduleAutoSave\(reason\);/, 'input events must persist a durable local draft before deferred work');
+mustMatch(/localStorage\.setItem\('bbq_entries', JSON\.stringify\(entries\)\);[\s\S]*localStorage\.setItem\(PENDING_SYNC_REVISION_STORAGE_KEY, String\(stateRevision\)\);/, 'input events must persist a durable local draft before deferred work');
+mustNotMatch(/markDeferredInputDirty\([\s\S]*?scheduleAutoSave\(reason\)/, 'draft input must not schedule a remote save');
 mustMatch(/const work = deferredInputWork;\s*deferredInputWork = emptyDeferredInputWork\(\);\s*if \(revision !== deferredInputRevision\) return;/, 'deferred input work must not apply stale calculations over newer input');
 mustMatch(/const SAVE_REQUEST_TIMEOUT_MS = 20000;/, 'Firebase autosave must have a bounded request timeout');
-mustMatch(/async function putSaveTargets\(payload, dateKey, timeoutMs = SAVE_REQUEST_TIMEOUT_MS\)/, 'current/history writes need a shared abortable timeout');
+mustMatch(/const CONFIRMED_SAVE_QUEUE_STORAGE_KEY = 'bbq_confirmed_save_queue_v1';/, 'Enter-confirmed queue storage key missing');
+mustMatch(/async function putConfirmedSaveTargets\(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS\)/, 'current/history writes need a shared abortable timeout');
+mustMatch(/body: commit\.body, signal: controller\.signal/, 'both confirmed targets must replay the immutable body');
 mustMatch(/controller\.abort\(\);/, 'a failed save target must abort its sibling before releasing single-flight');
-mustMatch(/function retryPendingLocalSync\(reason = 'recovery'\)/, 'durable pending autosave retry helper missing');
-mustMatch(/window\.addEventListener\('online', \(\) => retryPendingLocalSync\('online'\)\);/, 'online recovery must retry a durable pending save');
+mustMatch(/function retryConfirmedRemotePending\(reason = 'recovery'\)/, 'durable confirmed save retry helper missing');
+mustMatch(/window\.addEventListener\('online', \(\) => retryConfirmedRemotePending\('online'\)\);/, 'online recovery must retry only a confirmed save');
 mustMatch(/setOutputStockTotalByItemKey\(itemKey, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true \}\);/, 'output stock edits must use the same stable item key and defer usage/order refresh');
 mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\] \}\);/, 'output buffer/daily edits must defer order refresh');
 mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*updateDerivedOrderForName\(ent\.name\);\s*scheduleDeferredInputWork\(\{ names: \[ent\.name\], recomputeUsage: true \}\);/, 'stock input must patch its output immediately before deferred heavy work');
-mustMatch(/flushDeferredInputWork\(\);\s*const hasPendingTimer = !!autoSaveTimer;/, 'flushAutoSave must persist any scheduled input work first');
+mustMatch(/function flushAutoSave\(reason\) \{\s*flushDeferredInputWork\(\);\s*if \(!reason \|\| reason === 'auto'\) return false;\s*return saveToFB\(reason\);/, 'flushAutoSave must reject draft/auto calls and persist scheduled input before explicit commit');
 mustMatch(/async function flushCurrentBeforeSfaAnalysisRequest\(\) \{\s*flushDeferredInputWork\(\);/, 'SFA request save gate must flush pending input work first');
-mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l changes must save');
+mustMatch(/if \(!confirmCurrentSave\('sfaAnalysis'\)\) return false;\s*return waitForSaveIdle\(\);/, 'SFA request must wait for an Enter-equivalent confirmed save');
+mustNotMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l change must remain a local draft');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
 mustMatch(/orderManualItems: orderManualItemsForPayload\(\), sfaAnalysisHistory: ledger, sfaOrderLedger: ledger, sfaActualHistory: \{ sourcePath: SFA_ACTUAL_HISTORY_PATH, ledger \}, aiUsageEvidence: buildAiUsageEvidence\(\), aiUsageAdvisory: sanitizeAiUsageAdvisory\(\), dailySales/, 'Firebase current/history payload must include the lossless ledger and advisory evidence');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
@@ -348,13 +352,14 @@ mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderManualItems
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
-mustMatch(/function setGridSortMode\(mode\) \{[\s\S]*flushDeferredInputWork\(\);[\s\S]*flushAutoSave\('sortSwitch'\);[\s\S]*gridSortMode = nextMode;[\s\S]*render\(\{ focusSnapshot \}\);/, 'sort context switch must flush pending state and restore the keyed focus snapshot');
+mustMatch(/function setGridSortMode\(mode\) \{[\s\S]*flushDeferredInputWork\(\);[\s\S]*gridSortMode = nextMode;[\s\S]*render\(\{ focusSnapshot \}\);/, 'sort context switch must flush deferred state and restore the keyed focus snapshot');
+mustNotMatch(/flushAutoSave\('sortSwitch'\)/, 'sort-only UI changes must not confirm an unentered draft');
 mustMatch(/const flowEpoch = stockFlowEpoch;[\s\S]*if \(flowEpoch !== stockFlowEpoch\) return;/, 'sort switch must fence a stale blur-driven stock advance');
 mustMatch(/function compareGridRows\(left, right, mode = gridSortMode\)/, 'single grid needs explicit input-zone and SFA sort contexts');
 mustMatch(/return mode === 'sfa' \? compareSfaRows\(left, right\) : compareInputRows\(left, right\);/, 'sort context must only change row order');
 mustMatch(/localStorage\.setItem\('bbq_orderDays', orderDaysEl\.value\)/, 'saveLocal must persist orderDays locally');
 mustMatch(/localStorage\.setItem\(ORDER_DAYS_RULE_STORAGE_KEY, ORDER_DAYS_RULE_VERSION\)/, 'orderDays local persistence must mark the current recommendation rule');
-mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'daily history path must be saved');
+mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{commit\.dateKey\}\.json`/, 'daily history path must use the confirmed commit date');
 mustNotMatch(/<th>순서<\/th>/, 'output order controls header must be removed');
 mustNotMatch(/onclick="moveOutputItem/, 'output row must not include move buttons');
 mustMatch(/data-field="k" value="\$\{displayDecimal\(getK\(item\)\)\}"/, 'k field must still render with one decimal');
@@ -370,7 +375,9 @@ mustNotMatch(/function renderAndFocusStock\([^)]*\) \{\s*render\(\);/, 'stock En
 mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
 mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');
 mustMatch(/sortStockRowsAndKeepFlow\(currentId, 'change'\)/, 'change with already-correct focus must preserve current DOM flow');
-mustMatch(/flushAutoSave\('auto'\)/, 'stock logs and sorted state must be saved immediately');
+mustNotMatch(/flushAutoSave\('auto'\)/, 'input/change paths must never confirm an unentered draft');
+mustMatch(/if \(e\.isComposing \|\| e\.keyCode === 229\) return;[\s\S]*if \(e\.key !== 'Enter'\) return;/, 'IME composition must not accidentally confirm a save');
+mustMatch(/if \(!\['stock', 'zone', 'k', 'l'\]\.includes\(e\.target\.dataset\.field\)\) return;/, 'all editable inventory fields must support Enter confirmation');
 mustNotMatch(/pushSaveLog\('키 /, 'stock key logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\(`보정 /, 'focus correction logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\('정렬이동 /, 'sort/focus logs must not be visible user logs');
@@ -492,10 +499,39 @@ this.__OrderHelperApi = {
   },
   revisionsForCheck() { return { stateRevision, inventoryRevision }; },
   setLocalDirtyForCheck(value) { localDirty = Boolean(value); },
-  saveStatusForCheck() { return { localDirty, saveInFlight, pendingSave, stateRevision, inventoryRevision }; },
-  saveToFBForCheck(reason = 'test') { return saveToFB(reason); },
-  putSaveTargets,
-  retryPendingLocalSync,
+  saveLocalForCheck(reason = 'draft') { saveLocal(reason); },
+  markInventoryMutationForCheck() { return markInventoryMutation(); },
+  saveStatusForCheck() { return { localDirty, saveInFlight, pendingSave, stateRevision, inventoryRevision, confirmedSaveQueueBlocked }; },
+  resetConfirmedSaveMachineForCheck() {
+    if (saveRetryTimer) clearTimeout(saveRetryTimer);
+    saveRetryTimer = null;
+    saveInFlight = false;
+    pendingSave = false;
+    pendingSaveReason = 'enter';
+    activeSaveCommitId = '';
+    saveAttempt = 0;
+    saveAttemptCommitId = '';
+    confirmedSaveSequence = 0;
+    confirmedSaveQueueBlocked = false;
+    localDirty = false;
+    stateRevision = 0;
+    inventoryRevision = 0;
+    localStorage.removeItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY);
+    localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
+    localStorage.removeItem('bbq_savedAt');
+    if (deferredInputWorkHandle) cancelFrameTask(deferredInputWorkHandle);
+    deferredInputWorkHandle = null;
+    deferredInputWork = emptyDeferredInputWork();
+  },
+  confirmCurrentSave,
+  sendActiveConfirmedSave,
+  retryConfirmedRemotePending,
+  putConfirmedSaveTargets,
+  readConfirmedSaveQueue,
+  writeConfirmedSaveQueue,
+  emptyConfirmedSaveQueue,
+  buildConfirmedSaveCommit,
+  confirmedQueueKeyForCheck: CONFIRMED_SAVE_QUEUE_STORAGE_KEY,
   hasPendingLocalSync,
   cancelAutosaveForCheck() {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);

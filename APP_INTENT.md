@@ -9,8 +9,9 @@
 
 ## 절대 기준
 - SFA 자동입력은 품목명, 단위, 별칭, 환산 규칙이 확정된 뒤에만 진행한다.
-- 계산식과 사용자 입력 기록은 화면 정리 때문에 숨기거나 잃지 않는다. 수치 입력 이벤트는 값 반영을 먼저 끝내고 계산/저장/DOM 갱신을 최신 revision 기준으로 스케줄링해 입력을 막지 않는다.
+- 계산식과 사용자 입력 기록은 화면 정리 때문에 숨기거나 잃지 않는다. 수치 입력 이벤트는 값 반영과 local draft 보존을 먼저 끝내고 계산/DOM 갱신을 최신 revision 기준으로 스케줄링해 입력을 막지 않는다. 원격 저장은 Enter 또는 저장·행 변경 같은 명시 행동에서만 확정한다.
 - 입력값과 출력 계산은 별도 화면이 아니라 같은 행에 둔다. 표의 stable `itemKey`와 구역별 stable `entryKey`는 유지하고 `구역 입력순`/`최초 SFA 발주순`은 동일 DOM/data의 정렬 컨텍스트만 바꾼다. `/current`와 `/history/{date}`에는 원본 `entries`와 함께 `inventoryByItemKey`, `stateRevision`, `inventoryRevision`을 저장하고, 저장 중 새 입력이나 포커스 중 대기한 원격 current가 최신 revision을 덮지 못하게 한다.
+- Enter 확정본은 localStorage `bbq_confirmed_save_queue_v1`의 immutable `active + queued latest`로 보존한다. `/current`와 같은 KST `/history/{date}`가 모두 성공해야 제거하며 timeout/부분실패/재시작은 확정 당시 body·date를 그대로 재시도한다. Enter하지 않은 draft는 online/visibility/startup만으로 원격 전송하지 않는다.
 - 모바일 키보드 Enter/다음 동작은 실제 직원폰 흐름 기준으로 본다.
 - 사용자는 단위를 보지 않는다. 내부 분석 기준은 체크/재고 단위이며, 환산값은 `발주 1단위가 체크/재고 몇 단위인지`다. 예: 체크 10개=발주 1박스이면 환산값 10.
 - 체크단위와 발주단위가 다르면 과거 재고 변동값, 날짜별 `필요기준-체크재고` 실사용량 추정값, SFA 실발주량으로 품목별 `orderUnitToStockFactor`를 추정해 발주량에 반영한다.
@@ -71,7 +72,7 @@
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
 - 최신 기준: `20260714-02` / 단일 입력+출력 표 / 구역 입력순↔최초 SFA순 정렬 컨텍스트 / keyed 즉시 계산 패치와 focus fence / 행내 별명·사이트·신규·미매칭 처리 / lossless SFA ledger v2 / AI advisory evidence contract / 기존 stable item/entry key·latest revision·수동값 보호 유지 / 라이브 `https://wk7007-wk.github.io/OrderHelper/`
-- 완료 포인터: `20260714-02 Single grid, lossless order ledger, AI advisory contract`; 이전 포인터 `20260714-01 Stable inventory and explicit alias mapping`, `20260710-05 Cumulative SFA analysis history`.
+- 완료 포인터: `20260715-01 Enter-confirmed immutable save queue`; 이전 포인터 `20260714-02 Single grid, lossless order ledger, AI advisory contract`, `20260714-01 Stable inventory and explicit alias mapping`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, `node tests/orderhelper_single_grid_ledger_regression.js`, inline JS syntax, `git diff --check`, 외부 요청 interception을 건 로컬 Playwright DOM smoke. 실제 공장 PC/SiteBot worker·live 배포 검증은 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.

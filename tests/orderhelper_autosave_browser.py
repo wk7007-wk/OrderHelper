@@ -8,8 +8,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 
-ROOT = Path(__file__).resolve().parents[1]
-HTML = (ROOT / "index.html").read_bytes()
+HTML = (Path(__file__).resolve().parents[1] / "index.html").read_bytes()
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -24,12 +23,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def wait_for_count(page, rows, key, minimum):
-    for _ in range(200):
-        if sum(1 for row_key, _payload in rows if row_key == key) >= minimum:
+def wait_for_puts(page, writes, count):
+    for _ in range(240):
+        if len(writes) >= count:
             return
         page.wait_for_timeout(25)
-    raise AssertionError(f"timed out waiting for {key} write #{minimum}")
+    raise AssertionError(f"timed out waiting for PUT #{count}")
 
 
 def main():
@@ -38,134 +37,156 @@ def main():
     origin = f"http://127.0.0.1:{server.server_address[1]}"
     remote = {"current": None, "history": None}
     writes = []
-
     try:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
-            context = browser.new_context()
-            page = context.new_page()
+            page = browser.new_page()
 
             def firebase_route(route, request):
-                url = request.url
                 if request.method == "PUT":
-                    payload = json.loads(request.post_data or "null")
-                    key = "current" if "/current.json" in url else "history"
-                    remote[key] = payload
-                    writes.append((key, payload))
-                    route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
-                    return
-                if "/current.json" in url:
+                    body = request.post_data or ""
+                    kind = "current" if "/current.json" in request.url else "history"
+                    remote[kind] = json.loads(body)
+                    writes.append({"kind": kind, "url": request.url, "body": body})
+                    route.fulfill(status=200, content_type="application/json", body=body)
+                elif "/current.json" in request.url:
                     route.fulfill(status=200, content_type="application/json", body=json.dumps(remote["current"]))
-                    return
-                route.fulfill(status=200, content_type="application/json", body="null")
+                else:
+                    route.fulfill(status=200, content_type="application/json", body="null")
 
             page.route("**/*firebasedatabase.app/**", firebase_route)
             page.goto(origin, wait_until="domcontentloaded")
             page.evaluate("startOrderHelperApp()")
 
-            first = page.evaluate(
+            fixture = page.evaluate(
                 """() => {
                     const input = document.querySelector('input.cell[data-field="stock"]');
-                    input.value = '23.5';
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    return { id: input.dataset.id, entryKey: input.dataset.entryKey };
+                    for (let value = 1; value <= 10; value += 1) {
+                        input.value = String(value);
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    window.dispatchEvent(new Event('online'));
+                    document.dispatchEvent(new Event('visibilitychange'));
+                    const local = JSON.parse(localStorage.getItem('bbq_entries') || '[]');
+                    return {
+                        id: input.dataset.id,
+                        itemKey: input.dataset.itemKey,
+                        localStock: local.find(row => row.id === input.dataset.id)?.stock,
+                        pending: Number(localStorage.getItem('bbq_pending_sync_revision') || 0),
+                        status: document.getElementById('saveState').textContent
+                    };
                 }"""
             )
-            wait_for_count(page, writes, "current", 1)
-            wait_for_count(page, writes, "history", 1)
-            current_payload = [payload for key, payload in writes if key == "current"][-1]
-            saved_entry = next(row for row in current_payload["entries"] if row["id"] == first["id"])
-            assert saved_entry["stock"] == 23.5, "debounced PUT did not carry the typed stock"
+            page.wait_for_timeout(1600)
+            assert writes == [], "ten stock inputs plus blur/online/visibility must produce PUT 0"
+            assert fixture["localStock"] == 10 and fixture["pending"] > 0
+            assert fixture["status"] == "로컬 입력됨 · Enter 저장"
 
-            before_flush = sum(1 for key, _payload in writes if key == "current")
+            page.reload(wait_until="domcontentloaded")
+            page.evaluate("startOrderHelperApp(); document.activeElement?.blur()")
+            page.wait_for_timeout(1200)
+            draft_reload = page.evaluate("id => entries.find(row => row.id === id)?.stock", fixture["id"])
+            assert draft_reload == 10, "draft-only reload must keep the latest local value"
+            assert writes == [], "draft-only reload must produce PUT 0"
+
+            page.evaluate(
+                """id => {
+                    const input = Array.from(document.querySelectorAll('input.cell[data-field="stock"]')).find(row => row.dataset.id === id);
+                    input.value = '11';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, isComposing: true, bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }""",
+                fixture["id"],
+            )
+            page.wait_for_timeout(1100)
+            assert writes == [], "IME Enter and blur-only must produce PUT 0"
+
+            page.evaluate(
+                """id => {
+                    const input = Array.from(document.querySelectorAll('input.cell[data-field="stock"]')).find(row => row.dataset.id === id);
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }""",
+                fixture["id"],
+            )
+            wait_for_puts(page, writes, 2)
+            page.wait_for_timeout(250)
+            assert len(writes) == 2, "Enter followed by change must not duplicate PUTs"
+            assert {row["kind"] for row in writes} == {"current", "history"}
+            assert writes[0]["body"] == writes[1]["body"]
+            entered_payload = json.loads(writes[0]["body"])
+            entered_row = next(row for row in entered_payload["entries"] if row["id"] == fixture["id"])
+            assert entered_row["stock"] == 11
+            keyed = entered_payload["inventoryByItemKey"][fixture["itemKey"]]
+            assert keyed["total"] == 11, "saved keyed inventory must match the entered stock/output read model"
+
+            before_zone = len(writes)
+            page.evaluate(
+                """id => {
+                    const input = Array.from(document.querySelectorAll('input.cell[data-field="zone"]')).find(row => row.dataset.id === id);
+                    input.value = 'Enter구역';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }""",
+                fixture["id"],
+            )
+            page.wait_for_timeout(1100)
+            assert len(writes) == before_zone, "zone blur must produce PUT 0"
+            page.evaluate(
+                """id => {
+                    const input = Array.from(document.querySelectorAll('input.cell[data-field="zone"]')).find(row => row.dataset.id === id);
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                }""",
+                fixture["id"],
+            )
+            wait_for_puts(page, writes, before_zone + 2)
+
+            before_base = len(writes)
             page.evaluate(
                 """() => {
-                    const input = document.querySelector('input.cell[data-field="zone"]');
-                    input.value = '긴급저장구역';
+                    const input = document.getElementById('baseSalesInput');
+                    input.value = '305';
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                 }"""
             )
-            wait_for_count(page, writes, "current", before_flush + 1)
-            current_payload = [payload for key, payload in writes if key == "current"][-1]
-            saved_entry = next(row for row in current_payload["entries"] if row["id"] == first["id"])
-            assert saved_entry["zone"] == "긴급저장구역", "change/flush PUT did not carry the typed zone"
+            page.wait_for_timeout(1100)
+            assert len(writes) == before_base, "base-sales blur must produce PUT 0"
+            page.evaluate(
+                "document.getElementById('baseSalesInput').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))"
+            )
+            wait_for_puts(page, writes, before_base + 2)
 
-            page.evaluate("localStorage.clear()")
-            page.reload(wait_until="domcontentloaded")
-            page.evaluate("startOrderHelperApp()")
-            page.evaluate("document.activeElement?.blur()")
-            page.wait_for_timeout(350)
-            page.evaluate("autoLoadFromFB(false)")
-            for _ in range(200):
-                ready = page.evaluate(
-                    """id => {
-                        const row = entries.find(item => item.id === id);
-                        return row?.stock === 23.5 && row?.zone === '긴급저장구역';
-                    }""",
-                    first["id"],
-                )
-                if ready:
-                    break
-                page.wait_for_timeout(25)
-            restored = page.evaluate(
+            before_action = len(writes)
+            page.evaluate("id => addRow(id)", fixture["id"])
+            wait_for_puts(page, writes, before_action + 2)
+
+            page.evaluate(
                 """id => {
-                    const row = entries.find(item => item.id === id);
-                    return { stock: row.stock, zone: row.zone };
-                }""",
-                first["id"],
-            )
-            assert restored == {"stock": 23.5, "zone": "긴급저장구역"}, (
-                f"GET reload did not restore the saved input: restored={restored}, "
-                f"remote={next(row for row in remote['current']['entries'] if row['id'] == first['id'])}"
-            )
-
-            immediate_draft = page.evaluate(
-                """() => {
-                    window.requestAnimationFrame = () => 777;
-                    window.cancelAnimationFrame = () => {};
-                    const input = document.querySelector('input.cell[data-field="stock"]');
-                    input.value = '31';
+                    const input = Array.from(document.querySelectorAll('input.cell[data-field="stock"]')).find(row => row.dataset.id === id);
+                    input.value = '44';
                     input.dispatchEvent(new Event('input', { bubbles: true }));
-                    const local = JSON.parse(localStorage.getItem('bbq_entries') || '[]');
-                    return {
-                        stock: local.find(row => row.id === input.dataset.id)?.stock,
-                        pending: Number(localStorage.getItem('bbq_pending_sync_revision') || 0)
-                    };
-                }"""
+                    const commit = buildConfirmedSaveCommit('enter');
+                    if (!writeConfirmedSaveQueue({ v: 1, active: commit, queued: null })) throw new Error('queue fixture write failed');
+                    window.__pendingBody = commit.body;
+                }""",
+                fixture["id"],
             )
-            assert immediate_draft["stock"] == 31, "input event must persist before deferred frame work"
-            assert immediate_draft["pending"] > 0, "input event must leave a durable pending-sync marker"
-
-            timeout_result = page.evaluate(
-                """async () => {
-                    const originalFetch = window.fetch;
-                    window.fetch = (_url, options = {}) => new Promise((_resolve, reject) => {
-                        options.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
-                    });
-                    const started = performance.now();
-                    let errorName = '';
-                    try {
-                        await putSaveTargets({ test: true }, '20260714', 50);
-                    } catch (error) {
-                        errorName = error.name;
-                    } finally {
-                        window.fetch = originalFetch;
-                    }
-                    return { elapsed: performance.now() - started, errorName };
-                }"""
-            )
-            assert timeout_result["errorName"] == "AbortError", "stalled target must be aborted"
-            assert timeout_result["elapsed"] < 500, "stalled target timeout must release promptly in the fixture"
+            pending_body = page.evaluate("window.__pendingBody")
+            before_reload_pending = len(writes)
+            page.reload(wait_until="domcontentloaded")
+            page.evaluate("startOrderHelperApp(); document.activeElement?.blur()")
+            wait_for_puts(page, writes, before_reload_pending + 2)
+            resumed = writes[before_reload_pending : before_reload_pending + 2]
+            assert resumed[0]["body"] == pending_body and resumed[1]["body"] == pending_body
 
             browser.close()
     finally:
         server.shutdown()
 
-    print(
-        "OrderHelper autosave browser regression OK "
-        "(input -> debounce PUT, change flush PUT, reload GET restore, durable draft, stalled fetch abort)"
-    )
+    print("OrderHelper integrated Enter-confirmed browser regression OK")
 
 
 if __name__ == "__main__":

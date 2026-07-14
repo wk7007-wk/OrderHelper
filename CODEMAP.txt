@@ -3,9 +3,10 @@
 
 ## 파일 → 역할
 - APP_INTENT.md: 앱 목적, 사용자 결과, 절대 기준, Web+SiteBot 경계, read-only preflight, 공장 PC browser evidence, live write boundary, 완료 기준
-- index.html: 입력+출력 단일 9열 표, 구역 입력순↔최초 SFA순 정렬 컨텍스트, stable `itemKey`/구역별 `entryKey`, keyed 계산 셀 즉시 patch와 focus/caret/stock-flow epoch fence, `inventoryByItemKey`+latest revision current/history read model, 행내 사이트/별명/신규품목/미매칭 처리, lossless `sfaOrderLedger` v2, PC/SiteBot용 `aiUsageAnalysis.evidence`와 advisory-only UI, 수동 하루사용량/환산 보호, Firebase 동기화, 인증 게이트. 환산 방향은 `발주 1단위 = 체크/재고 N단위`다.
+- index.html: 입력+출력 단일 9열 표, 구역 입력순↔최초 SFA순 정렬 컨텍스트, stable `itemKey`/구역별 `entryKey`, keyed 계산 셀 즉시 patch와 focus/caret/stock-flow epoch fence, `inventoryByItemKey`+latest revision current/history read model, Enter/명시 행동만 확정하는 immutable `bbq_confirmed_save_queue_v1`, 행내 사이트/별명/신규품목/미매칭 처리, lossless `sfaOrderLedger` v2, PC/SiteBot용 `aiUsageAnalysis.evidence`와 advisory-only UI, 수동 하루사용량/환산 보호, Firebase 동기화, 인증 게이트. 환산 방향은 `발주 1단위 = 체크/재고 N단위`다.
 - tests/orderhelper_static_checks.js: 기존 전체 정적/VM 회귀 + stable key/revision/명시 alias 생성 계약 검증
-- tests/orderhelper_inventory_matching_regression.js: 입력 재고→출력 합계→current/history keyed payload, duplicate zone/id, legacy name, 0/blank, save-in-flight follow-up revision, 신규품목/별명/동명이름/빈 배열 회귀
+- tests/orderhelper_inventory_matching_regression.js: 입력 재고→출력 합계→current/history keyed payload, duplicate zone/id, legacy name, 0/blank, active+queued Enter revision fence, 신규품목/별명/동명이름/빈 배열 회귀
+- tests/orderhelper_autosave_regression.js + tests/orderhelper_autosave_browser.py: draft-only PUT 0, Enter current/history exact body, active+queued, timeout/부분실패 exact retry, reload 복구, quota/corruption fail-closed 회귀
 - tests/orderhelper_single_grid_ledger_regression.js: 단일 표 정렬 2종, keyed focus/caret, 150행 입력 burst scheduler/render count, same-run retry/new-run append/duplicate/0/remote merge/누적 total, AI evidence 수동값 보호 회귀
 - /order/desk_q7m9r3a8: read-only preflight source. records/state 확인용 Firebase 경로.
 - ORDER_LIST_ANALYSIS_HANDOFF.md: 발주 자동화 조사/진단 인계
