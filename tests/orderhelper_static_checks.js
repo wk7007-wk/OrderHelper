@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260710-05';/, 'APP_VERSION must be bumped for cumulative SFA analysis history');
+mustMatch(/const APP_VERSION = '20260714-01';/, 'APP_VERSION must be bumped for stable inventory and explicit alias mapping');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -64,6 +64,13 @@ mustMatch(/loadUsageHistory\(true\);/, 'usage history must load on page start');
 mustMatch(/setInterval\(\(\) => loadUsageHistory\(true\), 300000\);/, 'usage history must refresh periodically');
 mustMatch(/function handleOutputCellInput\(target\)/, 'output edit handler missing');
 mustMatch(/function setOutputStockTotal\(name, value\)/, 'output stock total setter missing');
+mustMatch(/function itemKeyForName\(name\)/, 'inventory rows need a stable item key shared by input and output');
+mustMatch(/function sanitizeEntries\(source = entries\)/, 'inventory entries need stable unique entry keys');
+mustMatch(/function inventoryByItemKeyForPayload\(\)/, 'current/history payload needs the same keyed inventory read model as output');
+mustMatch(/let stateRevision = 0;/, 'local/current saves need a monotonic state revision');
+mustMatch(/let inventoryRevision = 0;/, 'inventory saves need a monotonic inventory revision');
+mustMatch(/function shouldApplyIncomingCurrent\(data\)/, 'remote current application needs a latest-revision gate');
+mustMatch(/function applyPendingFBDataIfSafe\(\)/, 'focus-deferred remote current must be revalidated before application');
 mustMatch(/let actualOrders = \{\};/, 'actual order state missing');
 mustMatch(/let conversionAnalysis = \{\};/, 'conversion analysis state missing');
 mustMatch(/function setActualOrderValue\(name, value\)/, 'actual order setter missing');
@@ -156,8 +163,12 @@ mustMatch(/function buildOrderAliasMatches\(data = lastSfaCompareData\)/, 'order
 mustMatch(/const usageRecords = historyRecordsWithCurrent\(usageHistory, currentAnalysisSnapshot\(\)\);/, 'alias matching should build usage conversion records once');
 mustMatch(/function setOrderSiteMapping\(siteKey, targetName, siteName = '', siteUnit = ''\)/, 'order-site mapping setter missing');
 mustMatch(/function addOrderSiteManualItem\(siteKey, itemName, siteName = '', siteUnit = ''\)/, 'manual SFA item add handler missing');
+mustMatch(/function applyExplicitSiteMapping\(siteKey, targetName, siteName = '', siteUnit = '', mode = 'confirmed'\)/, 'explicit site selection must update both site and alias state');
+mustMatch(/function setManualOrderAlias\(aliasName, actualName, actualUnit = ''\)/, 'alias review must allow an explicit new actual-name alias');
 mustMatch(/class="sfa-new-item-custom"/, 'manual SFA custom item add button missing');
 mustMatch(/class="sfa-new-item-source"/, 'manual SFA source-name item add button missing');
+mustMatch(/class="sfa-edit sfa-alias-new-input"/, 'alias review needs a new alias input');
+mustMatch(/class="sfa-alias-new-button"/, 'alias review needs an explicit new alias action');
 mustMatch(/localStorage\.setItem\(ORDER_MANUAL_ITEMS_STORAGE_KEY, JSON\.stringify\(orderManualItemsForPayload\(\)\)\)/, 'manual items must persist locally');
 mustMatch(/manualItems: orderManualItemsForPayload\(\)/, 'analysis IO export must include manual items');
 mustMatch(/analysisHistory: sfaAnalysisHistoryForPayload\(\)/, 'analysis IO export must include cumulative analysis history');
@@ -226,7 +237,7 @@ mustMatch(/renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, 
 mustMatch(/예상 발주금액 \$\{formatWon\(estimate\.expected_order_amount\)\}/, 'amount chip title must disclose expected order amount');
 mustMatch(/단가 \$\{formatWon\(estimate\.unit_price\)\} \(\$\{estimate\.basis\}\)/, 'amount chip title must disclose unit price basis');
 mustMatch(/function outputOrderDisplay\(name, value\)/, 'output order must be read-only display');
-mustMatch(/class="output-order-value" data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="order"/, 'output order display marker missing');
+mustMatch(/class="output-order-value" data-output-key="\$\{escapeHtml\(itemKeyForName\(name\)\)\}" data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="order"/, 'output order display marker missing');
 mustNotMatch(/outputNumberInput\(item\.name, 'order'/, 'output order must not render as an editable input');
 mustMatch(/outputNumberInput\(item\.name, 'stock', displayDecimal\(E\)\)/, 'output stock must display one decimal place');
 mustMatch(/outputNumberInput\(item\.name, 'k', displayDecimal\(getK\(item\)\)\)/, 'output buffer must display one decimal place');
@@ -237,9 +248,9 @@ mustMatch(/const isDuplicateCell = gCell\.classList\.contains\('dup'\);/, 'dupli
 mustMatch(/function scheduleDeferredInputWork\(options = \{\}\)/, 'input edits must use deferred calculation scheduler');
 mustMatch(/let deferredInputRevision = 0;/, 'deferred input work must track a latest revision token');
 mustMatch(/saveLocal\(work\.saveReason \|\| 'auto'\);\s*if \(revision !== deferredInputRevision\) return;/, 'deferred input work must not apply stale calculations over newer input');
-mustMatch(/setOutputStockTotal\(name, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true \}\);/, 'output stock edits must defer usage and order refresh');
+mustMatch(/setOutputStockTotalByItemKey\(itemKey, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true \}\);/, 'output stock edits must use the same stable item key and defer usage/order refresh');
 mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\] \}\);/, 'output buffer/daily edits must defer order refresh');
-mustMatch(/ent\.stock = v === '' \? null : parseFloat\(v\);\s*scheduleDeferredInputWork\(\{ names: \[ent\.name\], recomputeUsage: true \}\);/, 'stock input must not synchronously recalculate while typing');
+mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*scheduleDeferredInputWork\(\{ names: \[ent\.name\], recomputeUsage: true \}\);/, 'stock input must preserve finite values and revision before deferred calculation');
 mustMatch(/flushDeferredInputWork\(\);\s*const hasPendingTimer = !!autoSaveTimer;/, 'flushAutoSave must persist any scheduled input work first');
 mustMatch(/async function flushCurrentBeforeSfaAnalysisRequest\(\) \{\s*flushDeferredInputWork\(\);/, 'SFA request save gate must flush pending input work first');
 mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l changes must save');
@@ -316,6 +327,7 @@ mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderManualItems
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
+mustMatch(/function toggleMode\(\) \{\s*flushDeferredInputWork\(\);\s*if \(localDirty \|\| autoSaveTimer\) flushAutoSave\('modeSwitch'\);/, 'mode switch must flush pending input state before rendering output');
 mustMatch(/localStorage\.setItem\('bbq_orderDays', orderDaysEl\.value\)/, 'saveLocal must persist orderDays locally');
 mustMatch(/localStorage\.setItem\(ORDER_DAYS_RULE_STORAGE_KEY, ORDER_DAYS_RULE_VERSION\)/, 'orderDays local persistence must mark the current recommendation rule');
 mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'daily history path must be saved');
@@ -418,6 +430,8 @@ vm.runInContext(`${scripts}
 this.__OrderHelperApi = {
   MASTER,
   orderItemList,
+  itemKeyForName,
+  orderSiteItemKey,
   normalizeSiteItemName,
   scoreSiteToMaster,
   buildOrderSiteMatches,
@@ -433,6 +447,20 @@ this.__OrderHelperApi = {
   orderManualItemsForPayload,
   sfaAnalysisHistoryForPayload,
   appendSfaAnalysisHistory,
+  setEntriesForCheck(value) { entries = sanitizeEntries(value); },
+  entriesForCheck() { return entries; },
+  totalStockForCheck(name) { return totalStock(name); },
+  displayStockTotalForCheck(name) { return displayStockTotal(name); },
+  inventoryByItemKeyForPayload,
+  setRevisionsForCheck(stateValue, inventoryValue) {
+    stateRevision = Number(stateValue || 0);
+    inventoryRevision = Number(inventoryValue || 0);
+  },
+  revisionsForCheck() { return { stateRevision, inventoryRevision }; },
+  setLocalDirtyForCheck(value) { localDirty = Boolean(value); },
+  saveStatusForCheck() { return { localDirty, saveInFlight, pendingSave, stateRevision, inventoryRevision }; },
+  saveToFBForCheck(reason = 'test') { return saveToFB(reason); },
+  shouldApplyIncomingCurrent,
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
   setAliasMappingsForCheck(value) { orderAliasMappings = sanitizeOrderAliasMappings(value); },
@@ -441,16 +469,39 @@ this.__OrderHelperApi = {
   addManualSiteMappingForCheck(siteKey, itemName, siteName, siteUnit) {
     const nextName = ensureManualOrderItem(itemName, siteUnit, 'test', siteName);
     ensureEntryForOrderItem(nextName);
-    orderSiteMappings[siteKey] = { targetName: nextName, siteName, siteUnit, updatedAt: Date.now() };
-    orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+    applyExplicitSiteMapping(siteKey, nextName, siteName, siteUnit, 'manual');
+  },
+  applyExplicitSiteMappingForCheck(siteKey, targetName, siteName, siteUnit, mode = 'confirmed') {
+    applyExplicitSiteMapping(siteKey, targetName, siteName, siteUnit, mode);
+  },
+  setManualOrderAliasForCheck(aliasName, actualName, actualUnit = '') {
+    storeExplicitAliasMapping(aliasName, actualName, actualUnit, 'manual', 'test explicit alias');
   },
   getSiteMappingsForCheck() { return orderSiteMappings; },
+  getAliasMappingsForCheck() { return orderAliasMappings; },
   setUsageHistoryForCheck(value) { usageHistory = value || {}; },
   setSfaActualHistoryForCheck(value) { sfaActualHistory = value || {}; },
 };`, sandbox);
 
 const api = sandbox.__OrderHelperApi;
 const plain = value => JSON.parse(JSON.stringify(value));
+const inventoryName = api.MASTER[0].name;
+api.setEntriesForCheck([
+  { id: 'dup-entry', name: inventoryName, zone: '주방', stock: 0 },
+  { id: 'dup-entry', name: inventoryName, zone: '창고', stock: 2 },
+]);
+const inventoryEntries = plain(api.entriesForCheck());
+assert.strictEqual(new Set(inventoryEntries.map(row => row.entryKey)).size, 2, 'duplicate zone rows must receive unique stable entry keys');
+assert(inventoryEntries.every(row => row.itemKey === api.itemKeyForName(inventoryName)), 'input rows must share the exact stable item key used by output');
+assert.strictEqual(api.totalStockForCheck(inventoryName), 2, 'duplicate zones including explicit zero must aggregate through the stable item key');
+const keyedInventory = plain(api.inventoryByItemKeyForPayload());
+assert.strictEqual(keyedInventory[api.itemKeyForName(inventoryName)].total, 2, 'current/history inventory read model must match output total');
+assert(keyedInventory[api.itemKeyForName(inventoryName)].entries.some(row => row.stock === 0), 'keyed inventory payload must preserve explicit zero stock');
+api.setRevisionsForCheck(200, 150);
+storage.set('bbq_savedAt', '200');
+assert.strictEqual(api.shouldApplyIncomingCurrent({ savedAt: 999, stateRevision: 199, inventoryRevision: 999 }), false, 'stale state revision must not overwrite newer local input');
+assert.strictEqual(api.shouldApplyIncomingCurrent({ savedAt: 201, stateRevision: 201, inventoryRevision: 151 }), true, 'newer current revision should be accepted');
+assert.strictEqual(api.shouldApplyIncomingCurrent({ savedAt: 200, stateRevision: 200, inventoryRevision: 150 }), false, 'same revision/savedAt must be deduplicated');
 assert.strictEqual(api.normalizeSiteItemName('BBQ치즈볼(크림)'), 'BBQ치즈볼', 'site item normalizer should remove parenthesized spec');
 assert(api.scoreSiteToMaster('BBQ치즈볼', '냉동-치즈볼-BBQ치즈볼(크림)') >= 0.84, 'site/master score should find obvious candidate');
 const siteData = {
@@ -460,12 +511,39 @@ const siteData = {
 };
 let matches = api.buildOrderSiteMatches(siteData);
 assert.strictEqual(matches[0].targetName, '냉동-치즈볼-BBQ치즈볼(크림)', 'matching builder should choose best local candidate');
+assert.strictEqual(matches[0].status, 'candidate', 'high-confidence local analysis must remain a candidate until the user selects it');
 api.setSiteMappingsForCheck({ [matches[0].siteKey]: { targetName: '냉동-치즈볼-BBQ황금알치즈볼', siteName: 'BBQ치즈볼', siteUnit: 'BOX' } });
 matches = api.buildOrderSiteMatches(siteData);
 assert.strictEqual(matches[0].targetName, '냉동-치즈볼-BBQ황금알치즈볼', 'user mapping should override local candidate');
+assert.notStrictEqual(
+  api.orderSiteItemKey({ name: '원재료 A(대)', unit: 'BOX' }),
+  api.orderSiteItemKey({ name: '원재료A', unit: 'BOX' }),
+  'same normalized names with different raw identities must not collapse to one persisted site key'
+);
+const sameNormalizedRows = api.buildOrderSiteMatches({
+  ok: true,
+  items: [
+    { name: '원재료 A(대)', qty: 0, unit: 'BOX', row_index: 91 },
+    { name: '원재료A', qty: 2, unit: 'BOX', row_index: 92 },
+  ],
+  comparison: { matched: [], missing: [], extra: [] },
+});
+assert.strictEqual(sameNormalizedRows.length, 2, 'same normalized names must remain independently selectable/creatable');
+const zeroQtyMatches = api.buildOrderSiteMatches({
+  ok: true,
+  items: [{ name: '0수량 신규품목', qty: 0, unit: 'EA', row_index: 93 }],
+  comparison: {
+    matched: [{ row_index: 93, sfa_name: '0수량 신규품목', sfa_qty: 7, sfa_unit: 'EA', expected_name: '물티슈(500)', score: 0.9 }],
+    missing: [],
+    extra: [],
+  },
+});
+assert.strictEqual(zeroQtyMatches[0].siteQty, 0, 'an explicit zero inventory/order-site quantity must not fall through to a comparison value');
 api.setManualItemsForCheck([]);
 api.setSiteMappingsForCheck({});
-api.addManualSiteMappingForCheck('원재료A|box', '원재료A', '원재료A', 'BOX');
+api.setAliasMappingsForCheck({});
+const sourceManualKey = api.orderSiteItemKey({ name: '원재료A', unit: 'BOX' });
+api.addManualSiteMappingForCheck(sourceManualKey, '원재료A', '원재료A', 'BOX');
 let manualMatches = api.buildOrderSiteMatches({
   ok: true,
   items: [{ name: '원재료A', qty: 1, unit: 'BOX', row_index: 2 }],
@@ -474,14 +552,20 @@ let manualMatches = api.buildOrderSiteMatches({
 assert.strictEqual(manualMatches[0].targetName, '원재료A', 'source-name manual item should become reusable site mapping target');
 assert(api.orderItemList().some(item => item.name === '원재료A'), 'source-name manual item should join selectable order items');
 assert(api.orderManualItemsForPayload().some(row => row.name === '원재료A' && row.unit === 'BOX'), 'source-name manual item should persist in payload form');
-api.addManualSiteMappingForCheck('임의품목|ea', '사용자 임의명', '임의품목', 'EA');
+assert.strictEqual(api.getAliasMappingsForCheck()['원재료A'].actualName, '원재료A', 'explicit new item creation must also create its user-confirmed site alias');
+assert.strictEqual(api.getAliasMappingsForCheck()['원재료A'].status, 'manual', 'newly created aliases must be marked manual, never auto-confirmed');
+const customManualKey = api.orderSiteItemKey({ name: '임의품목', unit: 'EA' });
+api.addManualSiteMappingForCheck(customManualKey, '사용자 임의명', '임의품목', 'EA');
 manualMatches = api.buildOrderSiteMatches({
   ok: true,
   items: [{ name: '임의품목', qty: 3, unit: 'EA', row_index: 3 }],
   comparison: { matched: [], missing: [], extra: [] },
 });
 assert.strictEqual(manualMatches[0].targetName, '사용자 임의명', 'custom manual item name should become reusable site mapping target');
-assert.strictEqual(api.getSiteMappingsForCheck()['임의품목|ea'].siteName, '임의품목', 'manual mapping must preserve the raw SFA site name');
+assert.strictEqual(api.getSiteMappingsForCheck()[customManualKey].siteName, '임의품목', 'manual mapping must preserve the raw SFA site name');
+api.setManualOrderAliasForCheck('사용자 임의명', '신규 실발주 별명', 'BOX');
+assert.strictEqual(api.getAliasMappingsForCheck()['사용자 임의명'].actualName, '신규 실발주 별명', 'alias review must accept an explicitly typed new actual-order alias');
+assert.strictEqual(api.effectiveOrderAliasMappingsForPayload()['사용자 임의명'].actualName, '신규 실발주 별명', 'new alias must immediately feed the effective current/history read model');
 const freshMeat = api.MASTER.find(item => item.name === '신선육(10호)-뼈한마리');
 api.setUnitCorrectionsForCheck({ [freshMeat.name]: { factor: 10, orderMultiple: 2, minOrderQty: 2 } });
 assert.strictEqual(api.conversionFactorForItem(freshMeat), 10, 'manual factor should override inferred conversion');
@@ -624,4 +708,5 @@ assert.strictEqual(confirmedAlias.actualName, 'BBQ치즈볼', 'SFA payload state
 assert.strictEqual(confirmedAlias.conversionFactor, 3, 'SFA payload state should not overwrite manual conversion with a rebuilt default');
 assert.strictEqual(confirmedAlias.conversionStatus, 'manual', 'SFA payload state should preserve manual conversion status');
 
+module.exports = { api, storage, plain, sandbox };
 console.log('OrderHelper static checks OK');

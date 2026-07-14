@@ -10,6 +10,7 @@
 ## 절대 기준
 - SFA 자동입력은 품목명, 단위, 별칭, 환산 규칙이 확정된 뒤에만 진행한다.
 - 계산식과 사용자 입력 기록은 화면 정리 때문에 숨기거나 잃지 않는다. 수치 입력 이벤트는 값 반영을 먼저 끝내고 계산/저장/DOM 갱신을 최신 revision 기준으로 스케줄링해 입력을 막지 않는다.
+- 입력/출력 재고는 표시명이 아니라 동일한 stable `itemKey`와 구역별 stable `entryKey`로 연결한다. `/current`와 `/history/{date}`에는 원본 `entries`와 함께 `inventoryByItemKey`, `stateRevision`, `inventoryRevision`을 저장하고, 저장 중 새 입력이나 포커스 중 대기한 원격 current가 최신 revision을 덮지 못하게 한다.
 - 모바일 키보드 Enter/다음 동작은 실제 직원폰 흐름 기준으로 본다.
 - 사용자는 단위를 보지 않는다. 내부 분석 기준은 체크/재고 단위이며, 환산값은 `발주 1단위가 체크/재고 몇 단위인지`다. 예: 체크 10개=발주 1박스이면 환산값 10.
 - 체크단위와 발주단위가 다르면 과거 재고 변동값, 날짜별 `필요기준-체크재고` 실사용량 추정값, SFA 실발주량으로 품목별 `orderUnitToStockFactor`를 추정해 발주량에 반영한다.
@@ -39,6 +40,7 @@
 - 엑셀분석은 비교/실발주 확인 데이터와 참고 배지로만 쓰고, 수동 하루사용량/품목 단위표/재고/발주 원본을 별도 확인 없이 자동수정하지 않는다.
 - SFA 원천 품목 행은 보존하고, 사용자 확정 매칭과 단위 보정만 `orderSiteMappings`/`orderUnitCorrections`로 분리 저장한다. 사이트/엑셀 품목이 MASTER에 없으면 분석 화면에서 원명 그대로 또는 임의 이름으로 `orderManualItems`를 추가하고 `orderSiteMappings` target으로 재사용한다.
 - 사용자사이트 별명→실발주항목 확정값과 환산 검수값은 `orderAliasMappings`로 분리 저장한다. 점수 높은 품목/환산 후보는 자동 확정하지 않고 `default` 선택값으로 표시/전달하며, 환산 후보에는 최근비교, 재고변동, 날짜별 실사용량 비교 근거를 포함한다. 환산값은 전역값이 아니라 별명/실발주항목별 값이며, 사용자가 `별명 검수` 탭 또는 체크 입력 행에서 후보 선택 시 `confirmed`, 직접 숫자 입력 시 `manual`로 저장한다.
+- 오차보기의 사용자 명시 선택/신규 품목 생성은 `orderSiteMappings`와 `orderAliasMappings`를 함께 갱신한다. 같은 정규화 이름이라도 원문+단위 identity가 다르면 별도 site key로 보존하고, 자동 고신뢰 후보는 `candidate`일 뿐 확정하지 않는다. 수량 `0`, 빈 배열, 충돌 상태도 current/history/effective read model에서 지우지 않는다.
 - 단위 보정은 환산계수, 묶음단위, 최소발주단위, 표기 보정으로 제한하며 다음 발주량 계산과 엑셀분석 요청에 반영한다.
 - `orderSiteMappings`, `orderAliasMappings`, `orderUnitCorrections`, `orderManualItems`는 localStorage, Firebase `/order/desk_q7m9r3a8/current`, `/history/{date}` payload에 분리 저장한다. `orderAliasMappingDrafts`는 후보/default 상태와 `orderUnitToStockFactor` 의미를 보존하고, `effectiveOrderAliasMappings`는 `confirmed/manual` 우선 후 없으면 default를 쓰는 엑셀분석용 read model이다.
 - 로컬 분석 누적 이력 key는 `bbq_sfa_analysis_history`다. 구조는 `{ version, records[] }`이며 각 record는 `{ id, dateKey, savedAt, source, fileName, itemCount, items[] }`, item은 `{ originalName, mappedName, quantity, unit, amount, rowIndex, status, score, dateKey, source }`를 보존한다. 같은 run id는 merge하고 다른 분석은 append한다.
@@ -66,8 +68,8 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 기준: `20260710-05` / 엑셀/SFA 분석 결과는 `bbq_sfa_analysis_history`에 run 단위 append-or-merge되어 별명 후보와 실사용/환산 후보 계산에 참조됨 / 수치 입력은 deferred scheduler+revision으로 입력 이벤트를 막지 않고 최신값 계산을 반영 / 미매칭 SFA·엑셀 품목은 원명 또는 임의명으로 `orderManualItems` 추가 후 `orderSiteMappings` target 재사용 / 엑셀 결과 수신 시 최신 current-state 기준 alias/effective/inline 보정 재빌드 / 체크 입력 행 inline 별명·환산 보정 / GPS 허용 반경 임시 700m / SFA 사이트 품목↔내부 발주항목 1:1 매칭, 사용자사이트 별명→실발주항목+환산값 default/effective 분석 payload, 날짜별 실사용량 비교 환산 후보, `발주1단위=체크/재고 N단위` 방향 고정, GPS 없는 desktop 승인/grace fallback, 단위 보정, 미매칭 확인, 수동/JSON 입출력 패널 / 하루사용량 계산은 수동값 기준, 실사용량 분석은 참고 표시 전용, 엑셀 실발주 이력은 참고 배지 즉시 반영 / SFA 의미상 별도 품목은 별도 target 유지 / 출력순서는 최초 SFA 순서 고정 / 라이브 `https://wk7007-wk.github.io/OrderHelper/`
-- 완료 포인터: `20260710-05 Cumulative SFA analysis history`; 이전 포인터 `20260710-04 Deferred input + manual SFA item mapping`, `20260707-10 Refresh SFA results with current order state`, `d72de17 Add inline alias correction controls`.
-- 완료 검증: `node tests/orderhelper_static_checks.js`, `git diff --check`. 실제 공장 PC 브라우저/SiteBot 화면 검증은 아직 별도 확인 대상이다.
+- 최신 기준: `20260714-01` / 입력↔출력 stable item/entry key와 keyed inventory payload / save-in-flight·원격 current latest-revision fence / mode 전환 pending flush / 오차보기 명시 선택·신규품목의 site+alias 동시 저장 / 신규 실발주 별명 직접 생성 / 같은 정규화 이름 별도 identity / 0·빈 배열·충돌 보존 / 기존 `20260710-05` 누적 SFA 분석·수동값 보호 기준 유지 / 출력순서는 최초 SFA 순서 고정 / 라이브 `https://wk7007-wk.github.io/OrderHelper/`
+- 완료 포인터: `20260714-01 Stable inventory and explicit alias mapping`; 이전 포인터 `20260710-05 Cumulative SFA analysis history`, `20260710-04 Deferred input + manual SFA item mapping`, `20260707-10 Refresh SFA results with current order state`.
+- 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, inline JS syntax, `git diff --check`. 실제 공장 PC 브라우저/SiteBot 화면 검증은 아직 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.

@@ -70,6 +70,9 @@
   .sfa-select, .sfa-edit, .sfa-textarea { width: 100%; background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 7px 8px; font-size: 12px; }
   .sfa-select:focus, .sfa-edit:focus, .sfa-textarea:focus { outline: none; border-color: #e94560; }
   .sfa-alias-fields { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(74px, .65fr) minmax(62px, .45fr); gap: 5px; align-items: center; }
+  .sfa-alias-editor { min-width: 0; }
+  .sfa-alias-new-fields { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(54px, .35fr) auto; gap: 4px; margin-top: 5px; }
+  .sfa-alias-new-fields button { min-height: 30px; padding: 5px 8px; border: 1px solid rgba(49, 90, 141, 0.72); border-radius: 4px; background: #315a8d; color: #fff; font-size: 11px; font-weight: 800; cursor: pointer; }
   .sfa-new-item-fields { display: grid; grid-template-columns: minmax(110px, 1fr) auto auto; gap: 4px; align-items: center; }
   .sfa-new-item-fields .sfa-select { grid-column: 1 / -1; }
   .sfa-new-item-fields .sfa-edit { min-width: 0; }
@@ -211,9 +214,10 @@
     .desktop-access-row { grid-template-columns: 1fr; }
     .sfa-match-row .sfa-select,
     .sfa-new-item-fields,
+    .sfa-match-row .sfa-alias-editor,
     .sfa-match-row .sfa-alias-fields,
     .sfa-match-row .sfa-unit-fields { grid-column: 1 / -1; }
-    .sfa-alias-fields { grid-template-columns: 1fr; }
+    .sfa-alias-fields, .sfa-alias-new-fields { grid-template-columns: 1fr; }
     .inline-alias-fields { grid-template-columns: 1fr; }
     .sfa-io-grid { grid-template-columns: 1fr; }
     .table-wrap { border-top: 1px solid #0f3460; }
@@ -346,7 +350,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260710-05';
+const APP_VERSION = '20260714-01';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -876,9 +880,35 @@ let usageHistory = {};
 let usageAnalysis = {};
 let sfaActualHistory = {};
 let sfaAnalysisHistory = { records: [] };
+let stateRevision = 0;
+let inventoryRevision = 0;
 
 function canonicalItemName(name) {
   return ITEM_NAME_ALIASES[name] || name;
+}
+
+function itemKeyForName(name) {
+  const canonical = canonicalItemName(String(name || '').trim().replace(/\s+/g, ' '));
+  return canonical ? `item_${encodeURIComponent(canonical).replace(/\./g, '%2E')}` : '';
+}
+
+function itemNameFromKey(itemKey) {
+  const raw = String(itemKey || '');
+  if (!raw.startsWith('item_')) return '';
+  try {
+    return canonicalItemName(decodeURIComponent(raw.slice(5).replace(/%2E/gi, '.')));
+  } catch {
+    return '';
+  }
+}
+
+function nextMonotonicRevision(current = 0) {
+  return Math.max(Number(current || 0) + 1, Date.now());
+}
+
+function markInventoryMutation() {
+  inventoryRevision = nextMonotonicRevision(inventoryRevision);
+  return inventoryRevision;
 }
 
 function legacyItemNames(name) {
@@ -969,7 +999,9 @@ function ensureEntryForOrderItem(name) {
   const itemName = canonicalItemName(name || '');
   if (!knownItemNameSet().has(itemName)) return;
   if (!entries.some(entry => entry.name === itemName)) {
-    entries.push({ id: newId(), name: itemName, zone: '', stock: null });
+    const entryKey = newId();
+    entries.push({ id: entryKey, entryKey, itemKey: itemKeyForName(itemName), name: itemName, zone: '', stock: null });
+    markInventoryMutation();
   }
 }
 
@@ -1138,11 +1170,47 @@ function appendSfaAnalysisHistory(data, source = 'excel') {
   return record;
 }
 
-function migrateEntriesByName(source = entries) {
+function sanitizeEntries(source = entries) {
   const known = knownItemNameSet();
-  return (Array.isArray(source) ? source : [])
-    .map(entry => ({ ...entry, name: canonicalItemName(entry?.name || '') }))
-    .filter(entry => known.has(entry.name));
+  const rows = Array.isArray(source) ? source : [];
+  let allocator = rows.reduce((maxValue, entry) => {
+    const match = /^e(\d+)$/.exec(String(entry?.entryKey || entry?.id || ''));
+    return match ? Math.max(maxValue, Number(match[1]) + 1) : maxValue;
+  }, Math.max(1, Number(nextId || 1)));
+  const usedEntryKeys = new Set();
+  const nextEntryKey = () => {
+    let candidate = '';
+    do candidate = `e${allocator++}`;
+    while (usedEntryKeys.has(candidate));
+    return candidate;
+  };
+  const out = [];
+  rows.forEach(entry => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return;
+    const fromKey = itemNameFromKey(entry.itemKey);
+    const name = canonicalItemName(String(entry.name || fromKey || '').trim());
+    if (!known.has(name)) return;
+    let entryKey = String(entry.entryKey || entry.id || '').trim();
+    if (!entryKey || usedEntryKeys.has(entryKey)) entryKey = nextEntryKey();
+    usedEntryKeys.add(entryKey);
+    const rawStock = entry.stock;
+    const numericStock = rawStock === '' || rawStock == null ? null : Number(rawStock);
+    out.push({
+      ...entry,
+      id: entryKey,
+      entryKey,
+      itemKey: itemKeyForName(name),
+      name,
+      zone: String(entry.zone || ''),
+      stock: numericStock == null || !Number.isFinite(numericStock) ? null : numericStock
+    });
+  });
+  nextId = Math.max(nextId, allocator);
+  return out;
+}
+
+function migrateEntriesByName(source = entries) {
+  return sanitizeEntries(source);
 }
 
 function migrateNamedObject(source = {}) {
@@ -1279,6 +1347,8 @@ const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';
 const ORDER_MANUAL_ITEMS_STORAGE_KEY = 'bbq_order_manual_items';
 const SFA_MANUAL_ITEMS_STORAGE_KEY = 'bbq_sfa_manual_items';
 const SFA_ANALYSIS_HISTORY_STORAGE_KEY = 'bbq_sfa_analysis_history';
+const STATE_REVISION_STORAGE_KEY = 'bbq_state_revision';
+const INVENTORY_REVISION_STORAGE_KEY = 'bbq_inventory_revision';
 const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
 const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';
 function newId() { return 'e' + (nextId++); }
@@ -1290,9 +1360,69 @@ function getL(item) {
   return baseDailyUsage(item);
 }
 function getK(item) { return overrides[item.name]?.k ?? (item.buffer || 0); }
+function stockAggregateByItemKey(itemKey) {
+  let total = 0;
+  let hasValue = false;
+  entries.filter(entry => (entry.itemKey || itemKeyForName(entry.name)) === itemKey).forEach(entry => {
+    if (entry.stock == null || entry.stock === '') return;
+    const stock = Number(entry.stock);
+    if (!Number.isFinite(stock)) return;
+    hasValue = true;
+    total += stock;
+  });
+  return { total, hasValue };
+}
+
+function totalStockByItemKey(itemKey) {
+  return stockAggregateByItemKey(itemKey).total;
+}
+
 function totalStock(name) {
-  return entries.filter(e => e.name === name)
-    .reduce((s, e) => s + (e.stock != null && e.stock !== '' ? Number(e.stock) : 0), 0);
+  return totalStockByItemKey(itemKeyForName(name));
+}
+
+function displayStockTotal(name) {
+  const aggregate = stockAggregateByItemKey(itemKeyForName(name));
+  return aggregate.hasValue ? aggregate.total : null;
+}
+
+function inventoryByItemKeyForPayload() {
+  const out = {};
+  sanitizeEntries(entries).forEach(entry => {
+    const itemKey = entry.itemKey || itemKeyForName(entry.name);
+    if (!out[itemKey]) out[itemKey] = { itemKey, name: entry.name, total: null, hasValue: false, entries: [] };
+    const stock = entry.stock == null ? null : Number(entry.stock);
+    out[itemKey].entries.push({
+      entryKey: entry.entryKey || entry.id,
+      zone: entry.zone || '',
+      stock: Number.isFinite(stock) ? stock : null
+    });
+    if (Number.isFinite(stock)) {
+      if (!out[itemKey].hasValue) out[itemKey].total = 0;
+      out[itemKey].hasValue = true;
+      out[itemKey].total += stock;
+    }
+  });
+  return out;
+}
+
+function entriesFromInventoryByItemKey(source = {}) {
+  const rows = [];
+  Object.entries(source && typeof source === 'object' ? source : {}).forEach(([key, value]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const name = canonicalItemName(value.name || itemNameFromKey(value.itemKey || key));
+    (Array.isArray(value.entries) ? value.entries : []).forEach(entry => {
+      rows.push({
+        id: entry?.entryKey || entry?.id || '',
+        entryKey: entry?.entryKey || entry?.id || '',
+        itemKey: value.itemKey || key || itemKeyForName(name),
+        name,
+        zone: entry?.zone || '',
+        stock: Object.prototype.hasOwnProperty.call(entry || {}, 'stock') ? entry.stock : null
+      });
+    });
+  });
+  return sanitizeEntries(rows);
 }
 function todayKST() {
   const k = new Date(Date.now() + 9 * 3600000);
@@ -1393,13 +1523,18 @@ function setOverrideValue(name, field, value) {
 }
 
 function setOutputStockTotal(name, value) {
-  const sameEntries = entries.filter(entry => entry.name === name);
+  return setOutputStockTotalByItemKey(itemKeyForName(name), value);
+}
+
+function setOutputStockTotalByItemKey(itemKey, value) {
+  const sameEntries = entries.filter(entry => (entry.itemKey || itemKeyForName(entry.name)) === itemKey);
   if (sameEntries.length === 0) return;
   const num = value === '' ? null : parseFloat(value);
   sameEntries.forEach((entry, idx) => {
     if (idx === 0) entry.stock = Number.isFinite(num) ? num : null;
     else entry.stock = null;
   });
+  markInventoryMutation();
 }
 
 function cleanActualOrders(source = actualOrders) {
@@ -1821,11 +1956,12 @@ function renderOrderAmountSpan(item, stockNeed) {
 function updateOutputOrderForName(name) {
   const item = orderItemByName(name);
   if (!item) return;
+  const itemKey = itemKeyForName(item.name);
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const g = calcG(item, days);
   const isNeed = g > 0;
   document.querySelectorAll('.output-order-value[data-output-name]').forEach(output => {
-    if (output.dataset.outputName !== name) return;
+    if ((output.dataset.outputKey || itemKeyForName(output.dataset.outputName)) !== itemKey) return;
     output.textContent = isNeed ? displayOrderQty(item, days) : '';
     const qtyCell = output.closest('td.order-qty');
     if (qtyCell) qtyCell.classList.toggle('pos', isNeed);
@@ -1839,12 +1975,13 @@ function updateOutputOrderForName(name) {
 }
 
 function handleOutputCellInput(target) {
-  const name = target?.dataset?.outputName;
+  const itemKey = target?.dataset?.outputKey || itemKeyForName(target?.dataset?.outputName);
+  const name = itemNameFromKey(itemKey) || canonicalItemName(target?.dataset?.outputName || '');
   const field = target?.dataset?.outputField;
-  if (!name || !field) return false;
+  if (!itemKey || !name || !field) return false;
   const value = target.value;
   if (field === 'stock') {
-    setOutputStockTotal(name, value);
+    setOutputStockTotalByItemKey(itemKey, value);
     scheduleDeferredInputWork({ names: [name], recomputeUsage: true });
   } else if (field === 'k' || field === 'l') {
     setOverrideValue(name, field, value);
@@ -2302,8 +2439,11 @@ function buildSfaAnalysisPayloadState(data = lastSfaCompareData) {
   const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(data);
   const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(data);
   return {
+    stateRevision,
+    inventoryRevision,
     orderDays: days,
     entries,
+    inventoryByItemKey: inventoryByItemKeyForPayload(),
     overrides,
     actualOrders: cleanActualOrders(),
     orderSiteMappings,
@@ -2503,6 +2643,19 @@ function normalizeSiteItemName(text) {
     .replace(/[^0-9A-Z가-힣]+/g, '');
 }
 
+function normalizeSiteIdentityName(text) {
+  return String(text || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+function stableIdentityHash(text) {
+  let hash = 0x811c9dc5;
+  for (const ch of String(text || '')) {
+    hash ^= ch.codePointAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
 function siteSizeMarkers(text) {
   return new Set(Array.from(String(text || '').matchAll(/\((대|중|소)\)/g)).map(match => match[1]));
 }
@@ -2573,7 +2726,25 @@ function siteItemAmount(row) {
   return parseMoney(row?.sfa_amount ?? row?.amount ?? row?.total_amount ?? row?.total);
 }
 
+function hasSiteValue(row, fields) {
+  return Boolean(row && fields.some(field => Object.prototype.hasOwnProperty.call(row, field)));
+}
+
+function resolvedSiteQty(primary, fallback) {
+  return hasSiteValue(primary, ['sfa_qty', 'qty', 'expected_qty']) ? siteItemQty(primary) : siteItemQty(fallback);
+}
+
+function resolvedSiteAmount(primary, fallback) {
+  return hasSiteValue(primary, ['sfa_amount', 'amount', 'total_amount', 'total']) ? siteItemAmount(primary) : siteItemAmount(fallback);
+}
+
 function orderSiteItemKey(row) {
+  const name = normalizeSiteIdentityName(siteItemName(row));
+  const unit = normalizeOrderUnit(siteItemUnit(row));
+  return `site_${stableIdentityHash(`${name || '-'}\u001f${unit || '-'}`)}`;
+}
+
+function legacyOrderSiteItemKey(row) {
   const name = normalizeSiteItemName(siteItemName(row));
   const unit = normalizeOrderUnit(siteItemUnit(row));
   return `${name || '-'}|${unit || '-'}`;
@@ -2603,6 +2774,7 @@ function comparisonRowLookup(data) {
   (data?.comparison?.matched || []).forEach(row => {
     if (row.row_index !== undefined && row.row_index !== null) byIndex.set(String(row.row_index), row);
     byKey.set(orderSiteItemKey({ name: row.sfa_name, unit: row.sfa_unit }), row);
+    byKey.set(legacyOrderSiteItemKey({ name: row.sfa_name, unit: row.sfa_unit }), row);
   });
   return { byIndex, byKey };
 }
@@ -3175,7 +3347,7 @@ function buildOrderSiteMatches(data = lastSfaCompareData) {
   const lookup = comparisonRowLookup(data);
   const out = rows.map(row => {
     const siteKey = row._siteKey || orderSiteItemKey(row);
-    const correction = orderSiteMappings[siteKey];
+    const correction = orderSiteMappings[siteKey] || orderSiteMappings[legacyOrderSiteItemKey(row)];
     const compareRow = row.row_index !== undefined && row.row_index !== null
       ? lookup.byIndex.get(String(row.row_index)) || lookup.byKey.get(siteKey)
       : lookup.byKey.get(siteKey);
@@ -3197,13 +3369,13 @@ function buildOrderSiteMatches(data = lastSfaCompareData) {
       source = 'local';
     }
     let status = 'unmatched';
-    if (targetName) status = source === 'user' || score >= 0.82 ? 'confirmed' : 'candidate';
+    if (targetName) status = source === 'user' ? 'confirmed' : 'candidate';
     return {
       siteKey,
       siteName: siteItemName(row) || siteItemName(compareRow),
       siteUnit: siteItemUnit(row) || siteItemUnit(compareRow),
-      siteQty: siteItemQty(row) || siteItemQty(compareRow),
-      amount: siteItemAmount(row) || siteItemAmount(compareRow),
+      siteQty: resolvedSiteQty(row, compareRow),
+      amount: resolvedSiteAmount(row, compareRow),
       targetName,
       targetUnit: orderItemByName(targetName)?.unit || '',
       score,
@@ -3251,8 +3423,8 @@ function masterSelectHtml(row) {
   return `<div class="sfa-new-item-fields">
     <select class="sfa-select sfa-match-select" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">${options.join('')}</select>
     <input class="sfa-edit sfa-new-item-input" type="text" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}" placeholder="새 항목명">
-    <button class="sfa-new-item-custom" type="button" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">추가</button>
-    <button class="sfa-new-item-source" type="button" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">원명</button>
+    <button class="sfa-new-item-custom" type="button" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">신규 품목</button>
+    <button class="sfa-new-item-source" type="button" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">원명 생성</button>
   </div>`;
 }
 
@@ -3262,13 +3434,13 @@ function sfaMatchRowHtml(row) {
     : '후보 없음';
   const meta = [
     row.siteUnit ? `사이트단위 ${row.siteUnit}` : '',
-    row.siteQty ? `수량 ${fmt(row.siteQty, 1)}` : '',
+    Number.isFinite(Number(row.siteQty)) ? `수량 ${fmt(row.siteQty, 1)}` : '',
     row.score ? `점수 ${Math.round(row.score * 100)}%` : '',
     row.source === 'user' ? '사용자 보정' : ''
   ].filter(Boolean).join(' · ');
   return `<div class="sfa-match-row ${row.status}">
     <div class="sfa-match-status">${sfaStatusText(row.status)}</div>
-    <div>
+    <div class="sfa-alias-editor">
       <div class="sfa-match-name">${escapeHtml(row.siteName)}</div>
       <div class="sfa-match-meta">${escapeHtml(meta || candidateText)}</div>
     </div>
@@ -3397,7 +3569,14 @@ function aliasMatchRowHtml(row) {
       <div class="sfa-match-name">${escapeHtml(row.aliasName)}</div>
       <div class="sfa-match-meta">${escapeHtml(meta || '사용자사이트 별명')}</div>
     </div>
-    <div class="sfa-alias-fields">${aliasActualSelectHtml(row)}${aliasConversionFieldsHtml(row)}</div>
+    <div>
+      <div class="sfa-alias-fields">${aliasActualSelectHtml(row)}${aliasConversionFieldsHtml(row)}</div>
+      <div class="sfa-alias-new-fields">
+        <input class="sfa-edit sfa-alias-new-input" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="새 실발주 별명">
+        <input class="sfa-edit sfa-alias-new-unit" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="단위">
+        <button class="sfa-alias-new-button" type="button" data-alias-name="${escapeHtml(row.aliasName)}">별명 생성</button>
+      </div>
+    </div>
     <div class="sfa-match-meta">${escapeHtml(actualText)}<br>${escapeHtml(row.reason || '')}<br>${escapeHtml(row.conversionReason || '')}</div>
   </div>`;
 }
@@ -3480,16 +3659,50 @@ function persistOrderCorrections(reason = 'correction') {
   flushAutoSave(reason);
 }
 
-function setOrderSiteMapping(siteKey, targetName, siteName = '', siteUnit = '') {
-  if (!siteKey) return;
-  const known = knownItemNameSet();
+function storeExplicitAliasMapping(aliasName, actualName, actualUnit = '', mode = 'confirmed', reason = '사용자 사이트 매칭 확정') {
+  const itemName = canonicalItemName(aliasName || '');
+  const nextActual = String(actualName || '').trim().slice(0, 160);
+  if (!knownItemNameSet().has(itemName) || !nextActual) return false;
+  const existing = orderAliasMappings[itemName] || {};
+  orderAliasMappings[itemName] = {
+    ...existing,
+    aliasName: itemName,
+    actualName: nextActual,
+    actualUnit: String(actualUnit || existing.actualUnit || '').slice(0, 40),
+    status: mode === 'manual' ? 'manual' : 'confirmed',
+    source: 'user',
+    score: 1,
+    reason,
+    updatedAt: Date.now()
+  };
+  orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
+  return Boolean(orderAliasMappings[itemName]);
+}
+
+function applyExplicitSiteMapping(siteKey, targetName, siteName = '', siteUnit = '', mode = 'confirmed') {
+  if (!siteKey) return '';
   const nextTarget = canonicalItemName(targetName || '');
-  if (!nextTarget || !known.has(nextTarget)) {
+  const legacyKey = legacyOrderSiteItemKey({ name: siteName, unit: siteUnit });
+  if (!nextTarget || !knownItemNameSet().has(nextTarget)) {
     delete orderSiteMappings[siteKey];
-  } else {
-    orderSiteMappings[siteKey] = { targetName: nextTarget, siteName, siteUnit, updatedAt: Date.now() };
+    if (legacyKey !== siteKey) delete orderSiteMappings[legacyKey];
+    orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+    return '';
   }
+  if (legacyKey !== siteKey) delete orderSiteMappings[legacyKey];
+  orderSiteMappings[siteKey] = {
+    targetName: nextTarget,
+    siteName: String(siteName || '').slice(0, 120),
+    siteUnit: String(siteUnit || '').slice(0, 40),
+    updatedAt: Date.now()
+  };
   orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+  if (siteName) storeExplicitAliasMapping(nextTarget, siteName, siteUnit, mode, mode === 'manual' ? '사용자 신규 별명 생성' : '사용자 사이트 매칭 확정');
+  return nextTarget;
+}
+
+function setOrderSiteMapping(siteKey, targetName, siteName = '', siteUnit = '') {
+  applyExplicitSiteMapping(siteKey, targetName, siteName, siteUnit, 'confirmed');
   persistOrderCorrections('mapping');
 }
 
@@ -3503,15 +3716,19 @@ function addOrderSiteManualItem(siteKey, itemName, siteName = '', siteUnit = '')
   const nextName = ensureManualOrderItem(cleanName, siteUnit, 'sfaMapping', siteName || cleanName);
   if (!nextName) return;
   ensureEntryForOrderItem(nextName);
-  orderSiteMappings[siteKey] = {
-    targetName: nextName,
-    siteName: String(siteName || cleanName).slice(0, 120),
-    siteUnit: String(siteUnit || '').slice(0, 40),
-    updatedAt: Date.now()
-  };
-  orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+  applyExplicitSiteMapping(siteKey, nextName, siteName || cleanName, siteUnit, 'manual');
   persistOrderCorrections('manualItem');
-  toast('새 항목 추가됨');
+  toast('신규 품목과 별명 저장됨');
+}
+
+function setManualOrderAlias(aliasName, actualName, actualUnit = '') {
+  if (!String(actualName || '').trim()) {
+    toast('새 별명을 입력하세요');
+    return;
+  }
+  if (!storeExplicitAliasMapping(aliasName, actualName, actualUnit, 'manual', '사용자 신규 별명 생성')) return;
+  persistOrderCorrections('aliasMapping');
+  toast('새 별명 저장됨');
 }
 
 function setOrderAliasMapping(aliasName, actualName) {
@@ -3643,6 +3860,14 @@ function bindSfaCorrectionInputs() {
   document.querySelectorAll('.sfa-alias-select').forEach(sel => {
     sel.addEventListener('change', e => {
       setOrderAliasMapping(e.target.dataset.aliasName, e.target.value);
+    });
+  });
+  document.querySelectorAll('.sfa-alias-new-button').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const wrap = e.target.closest('.sfa-alias-new-fields');
+      const actualName = wrap?.querySelector('.sfa-alias-new-input')?.value || '';
+      const actualUnit = wrap?.querySelector('.sfa-alias-new-unit')?.value || '';
+      setManualOrderAlias(e.target.dataset.aliasName, actualName, actualUnit);
     });
   });
   document.querySelectorAll('.sfa-alias-factor-select').forEach(sel => {
@@ -4360,11 +4585,11 @@ function moveOutputItem(name, direction) {
 }
 
 function outputNumberInput(name, field, value) {
-  return `<input class="cell" type="number" inputmode="decimal" step="0.1" data-output-name="${escapeHtml(name)}" data-output-field="${field}" value="${escapeHtml(value)}">`;
+  return `<input class="cell" type="number" inputmode="decimal" step="0.1" data-output-key="${escapeHtml(itemKeyForName(name))}" data-output-name="${escapeHtml(name)}" data-output-field="${field}" value="${escapeHtml(value)}">`;
 }
 
 function outputOrderDisplay(name, value) {
-  return `<span class="output-order-value" data-output-name="${escapeHtml(name)}" data-output-field="order">${escapeHtml(value)}</span>`;
+  return `<span class="output-order-value" data-output-key="${escapeHtml(itemKeyForName(name))}" data-output-name="${escapeHtml(name)}" data-output-field="order">${escapeHtml(value)}</span>`;
 }
 
 function emptyDeferredInputWork() {
@@ -4459,10 +4684,13 @@ function bindCellInputs() {
       if (!ent) return;
       if (f === 'stock') {
         logStockEvent(e, 'input');
-        ent.stock = v === '' ? null : parseFloat(v);
+        const stock = v === '' ? null : Number(v);
+        ent.stock = stock == null || !Number.isFinite(stock) ? null : stock;
+        markInventoryMutation();
         scheduleDeferredInputWork({ names: [ent.name], recomputeUsage: true });
       } else if (f === 'zone') {
         ent.zone = v;
+        markInventoryMutation();
         scheduleDeferredInputWork({ saveReason: 'auto' });
       } else {
         // k or l (overrides per name)
@@ -4547,7 +4775,7 @@ function render() {
     const list = getOutputItems(days);
     list.forEach((item, idx) => {
       const g = calcG(item, days);
-      const E = totalStock(item.name);
+      const E = displayStockTotal(item.name);
       const tr = document.createElement('tr');
       tr.classList.add('need');
       const safeName = item.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -4610,9 +4838,9 @@ function render() {
       : '';
 
     tr.innerHTML = `
-      <td><input class="cell zone" type="text" tabindex="-1" data-id="${ent.id}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
-      <td class="name" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}</td>
-      <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
+      <td><input class="cell zone" type="text" tabindex="-1" data-id="${ent.id}" data-entry-key="${escapeHtml(ent.entryKey || ent.id)}" data-item-key="${escapeHtml(ent.itemKey || itemKeyForName(item.name))}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
+      <td class="name" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}</td>
+      <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-entry-key="${escapeHtml(ent.entryKey || ent.id)}" data-item-key="${escapeHtml(ent.itemKey || itemKeyForName(item.name))}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
       ${KL}
       ${gCell}
       <td>${item.unit||''}</td>
@@ -4666,10 +4894,12 @@ function updateGForName(name) {
 function addRow(fromId) {
   const src = entries.find(x => x.id === fromId);
   if (!src) return;
-  const newEntry = { id: newId(), name: src.name, zone: '', stock: null };
+  const entryKey = newId();
+  const newEntry = { id: entryKey, entryKey, itemKey: src.itemKey || itemKeyForName(src.name), name: src.name, zone: '', stock: null };
   // 같은 품목 마지막 entry 뒤에 삽입
   const idx = entries.map(e => e.name).lastIndexOf(src.name);
   entries.splice(idx + 1, 0, newEntry);
+  markInventoryMutation();
   saveLocal();
   render();
 }
@@ -4680,11 +4910,14 @@ function deleteRow(id) {
   const sameNameCount = entries.filter(e => e.name === entries[idx].name).length;
   if (sameNameCount <= 1) { toast('마지막 행은 삭제 불가'); return; }
   entries.splice(idx, 1);
+  markInventoryMutation();
   saveLocal();
   render();
 }
 
 function toggleMode() {
+  flushDeferredInputWork();
+  if (localDirty || autoSaveTimer) flushAutoSave('modeSwitch');
   viewMode = (viewMode === 'input') ? 'output' : 'input';
   const btn = document.getElementById('modeBtn');
   if (viewMode === 'input') {
@@ -4700,6 +4933,7 @@ function toggleMode() {
 function resetStocks() {
   if (!confirm('모든 재고 값을 비울까요? 구역, 여유, 일사용은 유지됩니다.')) return;
   entries.forEach(ent => { ent.stock = null; });
+  markInventoryMutation();
   saveLocal('reset');
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer);
@@ -4716,6 +4950,7 @@ function saveLocal(reason = 'auto') {
   const orderDaysEl = document.getElementById('orderDays');
   if (orderDaysEl) localStorage.setItem('bbq_orderDays', orderDaysEl.value);
   migrateRuntimeItemNames();
+  if (!suppressAutoSave) stateRevision = nextMonotonicRevision(stateRevision);
   outputOrder = [];
   actualOrders = cleanActualOrders();
   localStorage.setItem('bbq_entries', JSON.stringify(entries));
@@ -4728,6 +4963,8 @@ function saveLocal(reason = 'auto') {
   localStorage.setItem(ORDER_ALIAS_MAPPING_STORAGE_KEY, JSON.stringify(orderAliasMappings));
   localStorage.setItem(ORDER_UNIT_CORRECTION_STORAGE_KEY, JSON.stringify(orderUnitCorrections));
   localStorage.setItem(ORDER_MANUAL_ITEMS_STORAGE_KEY, JSON.stringify(orderManualItemsForPayload()));
+  localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
+  localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
   if (baseSales == null) localStorage.removeItem('bbq_baseSales');
   else {
     localStorage.setItem('bbq_baseSales', JSON.stringify(baseSales));
@@ -4832,6 +5069,8 @@ async function saveToFB(reason = 'manual') {
   const activeReason = reason;
   migrateRuntimeItemNames();
   const now = Date.now();
+  const savingStateRevision = stateRevision;
+  const savingInventoryRevision = inventoryRevision;
   const dateKey = kstDateKey(now);
   const days = parseInt(document.getElementById('orderDays').value);
   const calc = {};
@@ -4844,7 +5083,7 @@ async function saveToFB(reason = 'manual') {
   actualOrders = cleanActualOrders();
   const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(lastSfaCompareData);
   const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(lastSfaCompareData);
-  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
+  const payload = { savedAt: now, stateRevision: savingStateRevision, inventoryRevision: savingInventoryRevision, dateKey, orderDays: days, entries: sanitizeEntries(entries), inventoryByItemKey: inventoryByItemKeyForPayload(), overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
@@ -4877,12 +5116,23 @@ async function saveToFB(reason = 'manual') {
     saveAttempt = 0;
     if (saveRetryTimer) { clearTimeout(saveRetryTimer); saveRetryTimer = null; }
     localStorage.setItem('bbq_savedAt', String(now));
-    // pendingSave=true 면 진행 중 추가 입력 있었음 → localDirty 유지(다음 PUT 가 최신 entries 로 재발사). pendingSave=false 면 PUT payload == 현재 entries → dirty 해제.
-    if (!pendingSave) localDirty = false;
-    console.log('[saveToFB] OK savedAt=', now, 'pendingSave=', pendingSave);
+    const saveMatchesLatestState = savingStateRevision === stateRevision &&
+      savingInventoryRevision === inventoryRevision && !deferredInputWork.dirty;
+    if (!saveMatchesLatestState) {
+      localDirty = true;
+      pendingSave = true;
+      pendingSaveReason = pendingSaveReason || activeReason || 'auto';
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = null;
+      }
+    } else if (!pendingSave) {
+      localDirty = false;
+    }
+    console.log('[saveToFB] OK savedAt=', now, 'pendingSave=', pendingSave, 'stateRevision=', savingStateRevision, 'latest=', stateRevision);
     pushSaveLog(saveReasonLabel(activeReason) + ' 완료', 'success', now);
-    renderSaveState('저장됨', 'saved');
-    toast(saveReasonLabel(activeReason) + ' 완료 (' + new Date(now).toLocaleTimeString('ko-KR') + ')');
+    renderSaveState(saveMatchesLatestState && !pendingSave ? '저장됨' : '신규 입력 저장 대기', saveMatchesLatestState && !pendingSave ? 'saved' : 'dirty');
+    if (saveMatchesLatestState && !pendingSave) toast(saveReasonLabel(activeReason) + ' 완료 (' + new Date(now).toLocaleTimeString('ko-KR') + ')');
     document.getElementById('lastSaved').textContent = lastSavedLabel(activeReason) + ' ' + new Date(now).toLocaleTimeString('ko-KR');
     loadUsageHistory(true);
   } catch (e) {
@@ -4900,6 +5150,8 @@ async function saveToFB(reason = 'manual') {
       pendingSaveReason = 'auto';
       // 단일 이벤트 루프 — setTimeout 0 콜백과 사용자 이벤트 핸들러가 동일 틱에 겹치지 않으므로 재진입 race 없음.
       setTimeout(() => saveToFB(nextReason), 0);
+    } else {
+      applyPendingFBDataIfSafe();
     }
   }
 }
@@ -4907,6 +5159,30 @@ async function saveToFB(reason = 'manual') {
 // 입력 포커스 추적 (실시간 동기화 시 덮어쓰기 방지)
 let inputFocused = false;
 let pendingFBData = null;
+
+function shouldApplyIncomingCurrent(data) {
+  if (!data || !data.savedAt) return false;
+  const incomingRevision = Number(data.stateRevision || data.inventoryRevision || data.savedAt || 0);
+  const localRevision = Number(stateRevision || inventoryRevision || 0);
+  const incomingSavedAt = Number(data.savedAt || 0);
+  const localSavedAt = Number(localStorage.getItem('bbq_savedAt') || 0);
+  if (incomingRevision < localRevision) return false;
+  if (incomingRevision > localRevision) return true;
+  return incomingSavedAt > localSavedAt;
+}
+
+function applyPendingFBDataIfSafe() {
+  if (!pendingFBData || inputFocused) return false;
+  if (localDirty || deferredInputWork.dirty || saveInFlight || pendingSave || autoSaveTimer) return false;
+  const data = pendingFBData;
+  if (!shouldApplyIncomingCurrent(data)) {
+    pendingFBData = null;
+    return false;
+  }
+  pendingFBData = null;
+  return applyFBData(data);
+}
+
 document.addEventListener('focusin', e => {
   if (e.target.matches('input,select,textarea')) inputFocused = true;
 });
@@ -4914,10 +5190,7 @@ document.addEventListener('focusout', e => {
   if (e.target.matches('input,select,textarea')) {
     inputFocused = false;
     setTimeout(() => {
-      if (!inputFocused && pendingFBData) {
-        applyFBData(pendingFBData);
-        pendingFBData = null;
-      }
+      applyPendingFBDataIfSafe();
     }, 300);
   }
 });
@@ -4939,11 +5212,12 @@ function setOrderDaysValue(value) {
 }
 
 function applyFBData(data) {
-  if (!data || !data.savedAt) return;
+  if (!shouldApplyIncomingCurrent(data)) return false;
   // FB가 source of truth: 그대로 교체. 로컬 변경 보호는 autoLoadFromFB의 localDirty 체크가 담당
   if (Object.prototype.hasOwnProperty.call(data, 'orderDays')) setOrderDaysValue(data.orderDays);
   if (Object.prototype.hasOwnProperty.call(data, 'orderManualItems')) orderManualItems = sanitizeOrderManualItems(data.orderManualItems);
   if (Object.prototype.hasOwnProperty.call(data, 'entries')) entries = migrateEntriesByName(data.entries);
+  else if (Object.prototype.hasOwnProperty.call(data, 'inventoryByItemKey')) entries = entriesFromInventoryByItemKey(data.inventoryByItemKey);
   if (Object.prototype.hasOwnProperty.call(data, 'overrides')) overrides = migrateNamedObject(data.overrides);
   if (Object.prototype.hasOwnProperty.call(data, 'outputOrder')) outputOrder = [];
   if (Object.prototype.hasOwnProperty.call(data, 'actualOrders') && normalizeHistoryDateKey(data.dateKey) === kstDateKey(Date.now())) {
@@ -4959,6 +5233,8 @@ function applyFBData(data) {
     const n = Number(data.baseSales);
     baseSales = Number.isFinite(n) && n > 0 ? n : DEFAULT_BASE_SALES;
   }
+  stateRevision = Number(data.stateRevision || data.inventoryRevision || data.savedAt || stateRevision);
+  inventoryRevision = Number(data.inventoryRevision || data.stateRevision || data.savedAt || inventoryRevision);
   // 마이그레이션: FB 데이터에 MASTER 에서 사라진 이름 잔존 시 정리 (구 이름 / 등 RTDB 키 사고 방지)
   migrateRuntimeItemNames();
   let maxN = 0;
@@ -4966,7 +5242,8 @@ function applyFBData(data) {
   nextId = maxN + 1;
   orderItemList().forEach(item => {
     if (!entries.some(e => e.name === item.name)) {
-      entries.push({ id: newId(), name: item.name, zone: '', stock: null });
+      const entryKey = newId();
+      entries.push({ id: entryKey, entryKey, itemKey: itemKeyForName(item.name), name: item.name, zone: '', stock: null });
     }
   });
   localStorage.setItem('bbq_savedAt', String(data.savedAt));
@@ -4979,6 +5256,7 @@ function applyFBData(data) {
   renderSaveState('동기화됨', 'idle');
   document.getElementById('lastSaved').textContent = '동기화 ' + new Date(data.savedAt).toLocaleTimeString('ko-KR');
   loadUsageHistory(true);
+  return true;
 }
 
 // Firebase 폴링 (5초마다, 입력 중이면 보류)
@@ -4987,15 +5265,13 @@ async function autoLoadFromFB(silent) {
     const res = await fetch(`${FB_URL}${FB_PATH}/current.json?_=` + Date.now());
     if (!res.ok) { console.warn('[autoLoad] HTTP', res.status); return; }
     const data = await res.json();
-    if (!data || !data.savedAt) return;
-    const localSavedAt = parseInt(localStorage.getItem('bbq_savedAt') || '0');
-    if (data.savedAt <= localSavedAt) return;
+    if (!shouldApplyIncomingCurrent(data)) return;
     if (localDirty) return; // 로컬에 미저장 변경 있음 → 보호. 저장 후 다시 폴링.
     if (inputFocused) {
-      pendingFBData = data;
+      if (!pendingFBData || Number(data.stateRevision || data.savedAt || 0) >= Number(pendingFBData.stateRevision || pendingFBData.savedAt || 0)) pendingFBData = data;
       return;
     }
-    applyFBData(data);
+    if (!applyFBData(data)) return;
     pushSaveLog('다른 기기 저장 반영', 'sync', data.savedAt);
     if (!silent) toast('동기화 (' + new Date(data.savedAt).toLocaleTimeString('ko-KR') + ')');
   } catch (e) {
@@ -5050,6 +5326,8 @@ document.addEventListener('keydown', e => {
 
 // 로컬 복원 (entries 우선, 없으면 옛날 stocks 마이그레이션, 없으면 빈 entries)
 try {
+  stateRevision = Number(localStorage.getItem(STATE_REVISION_STORAGE_KEY) || 0);
+  inventoryRevision = Number(localStorage.getItem(INVENTORY_REVISION_STORAGE_KEY) || 0);
   const omi = localStorage.getItem(ORDER_MANUAL_ITEMS_STORAGE_KEY);
   if (omi) orderManualItems = sanitizeOrderManualItems(JSON.parse(omi));
   const sah = localStorage.getItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY);
@@ -5065,12 +5343,17 @@ try {
     const sRaw = localStorage.getItem('bbq_stocks');
     let oldStocks = {};
     if (sRaw) try { oldStocks = JSON.parse(sRaw); } catch {}
-    entries = orderItemList().map(item => ({
-      id: newId(),
-      name: item.name,
-      zone: '',
-      stock: storedStockForName(oldStocks, item.name)
-    }));
+    entries = orderItemList().map(item => {
+      const entryKey = newId();
+      return {
+        id: entryKey,
+        entryKey,
+        itemKey: itemKeyForName(item.name),
+        name: item.name,
+        zone: '',
+        stock: storedStockForName(oldStocks, item.name)
+      };
+    });
   }
   const o = localStorage.getItem('bbq_overrides'); if (o) overrides = JSON.parse(o);
   localStorage.removeItem(OUTPUT_ORDER_STORAGE_KEY);
@@ -5113,7 +5396,8 @@ function startOrderHelperApp() {
   // 기본/사용자 항목 목록에는 있는데 entries에 없는 품목 보충
   orderItemList().forEach(item => {
     if (!entries.some(e => e.name === item.name)) {
-      entries.push({ id: newId(), name: item.name, zone: '', stock: null });
+      const entryKey = newId();
+      entries.push({ id: entryKey, entryKey, itemKey: itemKeyForName(item.name), name: item.name, zone: '', stock: null });
     }
   });
 
