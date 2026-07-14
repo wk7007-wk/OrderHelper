@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0715.0209';/, 'APP_VERSION must match the KST autosave hotfix build time');
+mustMatch(/const APP_VERSION = '0715.0318';/, 'APP_VERSION must match the KST arbitrary-alias hotfix build time');
 mustMatch(/const SAVE_REQUEST_TIMEOUT_MS = 20000;/, 'Firebase autosave must have a bounded request timeout');
 mustMatch(/async function putConfirmedSaveTargets\(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS\)/, 'confirmed current/history writes need a shared abortable timeout');
 mustMatch(/controller\.abort\(\);/, 'a failed save target must abort its sibling before releasing single-flight');
@@ -167,6 +167,13 @@ mustMatch(/orderSiteMappings = mergeLocalNewSourceAliases\(orderSiteMappings\);/
 mustMatch(/신규 발주 원문 · 사용자 확정 필요/, 'Alias UI must surface order-present mapping-absent raw rows');
 mustMatch(/function orderCycleMissingWarning\(name\)[\s\S]*overrides\.l \/ MASTER\.daily[\s\S]*currentOrderDaysValue\(\)/, 'order-absent canonical rows may show only a read-only daily/orderDays diagnostic');
 mustMatch(/function setOrderAliasMapping\(aliasName, actualName\)/, 'order alias mapping setter missing');
+mustMatch(/function setManualOrderAlias\(aliasName, actualName, actualUnit = ''\)/, 'arbitrary manual alias setter missing');
+mustMatch(/status: 'manual',[\s\S]*reason: candidate\?\.reason \|\| '사용자 신규 별명 생성'/, 'arbitrary aliases must be preserved as explicit manual corrections');
+mustMatch(/class="sfa-edit sfa-alias-new-input"/, 'alias review must expose an arbitrary actual-name input');
+mustMatch(/class="sfa-alias-new-button"/, 'alias review must expose an explicit create action');
+mustMatch(/class="sfa-edit inline-alias-new-input"/, 'inline correction must expose the same arbitrary alias input');
+mustMatch(/function isExplicitAliasEnter\(event\)[\s\S]*!event\.isComposing[\s\S]*event\.keyCode !== 229/, 'manual alias Enter must ignore IME composition');
+mustMatch(/if \(!isExplicitAliasEnter\(event\)\) return;[\s\S]*saveManualAliasFromControl\(event\.currentTarget\);/, 'manual alias Enter must be an explicit confirmed action');
 mustMatch(/function setOrderAliasConversion\(aliasName, value, mode = 'candidate'\)/, 'order alias conversion setter missing');
 mustMatch(/function inlineAliasCorrectionHtml\(row\)/, 'input row inline alias correction renderer missing');
 mustMatch(/class="inline-alias-correction \$\{statusClass\}"/, 'input row alias correction must render a compact details block');
@@ -436,6 +443,8 @@ this.__OrderHelperApi = {
   confirmNewSourceAliasMapping,
   orderSiteItemKey,
   setAliasMappingsForCheck(value) { orderAliasMappings = sanitizeOrderAliasMappings(value); },
+  getAliasMappingsForCheck() { return orderAliasMappings; },
+  setManualOrderAlias,
   setUsageHistoryForCheck(value) { usageHistory = value || {}; },
   setSfaActualHistoryForCheck(value) { sfaActualHistory = value || {}; },
   setEntriesForCheck(value) { entries = value; },
