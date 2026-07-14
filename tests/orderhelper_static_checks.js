@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260715-02';/, 'APP_VERSION must be bumped for P1 save/advisory hardening');
+mustMatch(/const APP_VERSION = '0715.0318';/, 'APP_VERSION must match the KST arbitrary-alias hotfix build time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -220,6 +220,13 @@ mustMatch(/analysisHistory: sfaAnalysisHistoryForPayload\(\)/, 'analysis IO expo
 mustMatch(/sfaAnalysisHistoryRecords\(\)\.forEach\(record =>/, 'actual order candidates must read cumulative SFA analysis history');
 mustMatch(/latestSfaAnalysisRecordsByDate\(\)\.forEach\(record =>/, 'usage calculations must read latest cumulative SFA analysis record per date');
 mustMatch(/function setOrderAliasMapping\(aliasName, actualName\)/, 'order alias mapping setter missing');
+mustMatch(/function setManualOrderAlias\(aliasName, actualName, actualUnit = ''\)/, 'arbitrary manual alias setter missing');
+mustMatch(/status: 'manual',[\s\S]*reason: candidate\?\.reason \|\| '사용자 신규 별명 생성'/, 'arbitrary aliases must be preserved as explicit manual corrections');
+mustMatch(/class="sfa-edit sfa-alias-new-input"/, 'alias review must expose an arbitrary actual-name input');
+mustMatch(/class="sfa-alias-new-button"/, 'alias review must expose an explicit create action');
+mustMatch(/class="sfa-edit inline-alias-new-input"/, 'inline correction must expose the same arbitrary alias input');
+mustMatch(/function isExplicitAliasEnter\(event\)[\s\S]*!event\.isComposing[\s\S]*event\.keyCode !== 229/, 'manual alias Enter must ignore IME composition');
+mustMatch(/if \(!isExplicitAliasEnter\(event\)\) return;[\s\S]*saveManualAliasFromControl\(event\.currentTarget\);/, 'manual alias Enter must be an explicit confirmed action');
 mustMatch(/function setOrderAliasConversion\(aliasName, value, mode = 'candidate'\)/, 'order alias conversion setter missing');
 mustMatch(/function inlineAliasCorrectionHtml\(row\)/, 'input row inline alias correction renderer missing');
 mustMatch(/class="inline-alias-correction \$\{statusClass\}"/, 'input row alias correction must render a compact details block');
@@ -613,6 +620,18 @@ this.__OrderHelperApi = {
   setSfaAnalysisHistoryForCheck(value) {
     sfaAnalysisHistory = sanitizeSfaAnalysisHistory(value);
     markSfaLedgerChanged();
+  },
+  getAliasMappingsForCheck() { return orderAliasMappings; },
+  setManualOrderAlias,
+  getEntriesForCheck() { return entries; },
+  totalStock,
+  displayDecimal,
+  applyFBData,
+  saveLocalDraft,
+  flushAutoSave,
+  retryConfirmedRemotePending,
+  saveMachineForCheck() {
+    return { saveInFlight, pendingSave, activeSaveCommitId, confirmedSaveQueueBlocked, localDirty, stateRevision, inventoryRevision };
   },
   mergeSfaAnalysisHistoryForCheck(value) {
     sfaAnalysisHistory = mergeSfaAnalysisHistories(sfaAnalysisHistory, value);

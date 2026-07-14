@@ -72,7 +72,7 @@
   .sfa-alias-fields { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(74px, .65fr) minmax(62px, .45fr); gap: 5px; align-items: center; }
   .sfa-alias-editor { min-width: 0; }
   .sfa-alias-new-fields { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(54px, .35fr) auto; gap: 4px; margin-top: 5px; }
-  .sfa-alias-new-fields button { min-height: 30px; padding: 5px 8px; border: 1px solid rgba(49, 90, 141, 0.72); border-radius: 4px; background: #315a8d; color: #fff; font-size: 11px; font-weight: 800; cursor: pointer; }
+  .sfa-alias-new-fields button, .inline-alias-new-fields button { min-height: 30px; padding: 5px 8px; border: 1px solid rgba(49, 90, 141, 0.72); border-radius: 4px; background: #315a8d; color: #fff; font-size: 11px; font-weight: 800; cursor: pointer; }
   .sfa-new-item-fields { display: grid; grid-template-columns: minmax(110px, 1fr) auto auto; gap: 4px; align-items: center; }
   .sfa-new-item-fields .sfa-select { grid-column: 1 / -1; }
   .sfa-new-item-fields .sfa-edit { min-width: 0; }
@@ -92,6 +92,8 @@
   .inline-alias-fields { display: grid; grid-template-columns: minmax(88px, 1fr) minmax(72px, .8fr) minmax(54px, .48fr); gap: 4px; align-items: end; }
   .inline-alias-fields label { display: grid; gap: 2px; color: #9aa7b7; font-size: 9px; font-weight: 700; }
   .inline-alias-fields .sfa-select, .inline-alias-fields .sfa-edit { min-height: 26px; padding: 4px 5px; border-radius: 4px; font-size: 10px; }
+  .inline-alias-new-fields { display: grid; grid-template-columns: minmax(88px, 1fr) minmax(54px, .38fr) auto; gap: 4px; }
+  .inline-alias-new-fields .sfa-edit { min-height: 26px; padding: 4px 5px; border-radius: 4px; font-size: 10px; }
   .inline-alias-meta { color: #93a4bb; font-size: 9px; white-space: normal; }
   .inline-alias-new-fields { display: grid; grid-template-columns: minmax(92px, 1fr) minmax(46px, .35fr) auto; gap: 4px; }
   .inline-alias-new-fields .sfa-edit { min-height: 26px; padding: 4px 5px; font-size: 10px; }
@@ -378,7 +380,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260715-02';
+const APP_VERSION = '0715.0318';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -4575,6 +4577,11 @@ function inlineAliasCorrectionHtml(row) {
         <input class="sfa-edit inline-alias-new-unit" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="단위">
         <button class="inline-alias-new-button" type="button" data-alias-name="${escapeHtml(row.aliasName)}">별명 추가</button>
       </div>
+      <div class="inline-alias-new-fields">
+        <input class="sfa-edit inline-alias-new-input" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="새 실발주 별명">
+        <input class="sfa-edit inline-alias-new-unit" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="단위">
+        <button class="inline-alias-new-button" type="button" data-alias-name="${escapeHtml(row.aliasName)}">별명 생성</button>
+      </div>
       <div class="inline-alias-meta">${escapeHtml(meta || '기본 후보를 분석 payload에 사용합니다. 선택은 확정, 숫자 입력은 직접값으로 저장됩니다.')}</div>
     </div>
   </details>`;
@@ -4623,7 +4630,7 @@ function aliasMatchRowHtml(row) {
       <div class="sfa-match-name">${escapeHtml(row.aliasName)}</div>
       <div class="sfa-match-meta">${escapeHtml(meta || '사용자사이트 별명')}</div>
     </div>
-    <div>
+    <div class="sfa-alias-editor">
       <div class="sfa-alias-fields">${aliasActualSelectHtml(row)}${aliasConversionFieldsHtml(row)}</div>
       <div class="sfa-alias-new-fields">
         <input class="sfa-edit sfa-alias-new-input" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="새 실발주 별명">
@@ -4787,16 +4794,6 @@ function addOrderSiteManualItem(siteKey, itemName, siteName = '', siteUnit = '')
   toast('신규 품목과 별명 저장됨');
 }
 
-function setManualOrderAlias(aliasName, actualName, actualUnit = '') {
-  if (!String(actualName || '').trim()) {
-    toast('새 별명을 입력하세요');
-    return;
-  }
-  if (!storeExplicitAliasMapping(aliasName, actualName, actualUnit, 'manual', '사용자 신규 별명 생성')) return;
-  persistOrderCorrections('aliasMapping');
-  toast('새 별명 저장됨');
-}
-
 function setOrderAliasMapping(aliasName, actualName) {
   const itemName = canonicalItemName(aliasName || '');
   if (!knownItemNameSet().has(itemName)) return;
@@ -4831,6 +4828,55 @@ function setOrderAliasMapping(aliasName, actualName) {
   }
   orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
   persistOrderCorrections('aliasMapping');
+}
+
+function setManualOrderAlias(aliasName, actualName, actualUnit = '') {
+  const itemName = canonicalItemName(aliasName || '');
+  const nextActual = String(actualName || '').trim().slice(0, 160);
+  const nextUnit = String(actualUnit || '').trim().slice(0, 40);
+  if (!knownItemNameSet().has(itemName) || !nextActual) {
+    toast('새 별명을 입력하세요');
+    return false;
+  }
+  const currentRow = buildOrderAliasMatches(lastSfaCompareData).find(row => row.aliasName === itemName);
+  const candidate = currentRow?.candidates?.find(row => row.actualName === nextActual) ||
+    collectActualOrderCandidates(lastSfaCompareData).find(row => row.actualName === nextActual);
+  const conversionDefault = currentRow?.conversionDefault || currentRow?.conversionCandidates?.[0] || null;
+  const existing = orderAliasMappings[itemName] || {};
+  const conversionFactor = normalizeConversionFactor(existing.conversionFactor) || conversionDefault?.factor || null;
+  const existingConversionLocked = Boolean(normalizeConversionFactor(existing.conversionFactor) && isUserSelectedAliasStatus(existing.conversionStatus));
+  orderAliasMappings[itemName] = {
+    aliasName: itemName,
+    actualName: nextActual,
+    actualUnit: nextUnit || candidate?.actualUnit || '',
+    status: 'manual',
+    source: 'user',
+    score: Number(candidate?.score || 1),
+    reason: candidate?.reason || '사용자 신규 별명 생성',
+    ...(conversionFactor ? {
+      conversionFactor,
+      conversionStatus: existingConversionLocked ? existing.conversionStatus : 'default',
+      conversionSource: existing.conversionSource || conversionDefault?.source || '',
+      conversionScore: Number(existing.conversionScore || conversionDefault?.score || 0),
+      conversionReason: existing.conversionReason || conversionCandidateReason(conversionDefault)
+    } : {}),
+    updatedAt: Date.now()
+  };
+  orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
+  persistOrderCorrections('aliasMapping');
+  toast('새 별명 저장됨');
+  return orderAliasMappings[itemName]?.actualName === nextActual && orderAliasMappings[itemName]?.status === 'manual';
+}
+
+function saveManualAliasFromControl(control) {
+  const wrap = control?.closest('.sfa-alias-new-fields, .inline-alias-new-fields');
+  const nameInput = wrap?.querySelector('.sfa-alias-new-input, .inline-alias-new-input');
+  const unitInput = wrap?.querySelector('.sfa-alias-new-unit, .inline-alias-new-unit');
+  return setManualOrderAlias(control?.dataset.aliasName || nameInput?.dataset.aliasName, nameInput?.value || '', unitInput?.value || '');
+}
+
+function isExplicitAliasEnter(event) {
+  return event.key === 'Enter' && !event.isComposing && event.keyCode !== 229;
 }
 
 function setOrderAliasConversion(aliasName, value, mode = 'candidate') {
@@ -4931,12 +4977,14 @@ function bindSfaCorrectionInputs() {
       setOrderAliasMapping(e.target.dataset.aliasName, e.target.value);
     });
   });
-  document.querySelectorAll('.sfa-alias-new-button').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const wrap = e.target.closest('.sfa-alias-new-fields');
-      const actualName = wrap?.querySelector('.sfa-alias-new-input')?.value || '';
-      const actualUnit = wrap?.querySelector('.sfa-alias-new-unit')?.value || '';
-      setManualOrderAlias(e.target.dataset.aliasName, actualName, actualUnit);
+  document.querySelectorAll('.sfa-alias-new-button').forEach(button => {
+    button.addEventListener('click', event => saveManualAliasFromControl(event.currentTarget));
+  });
+  document.querySelectorAll('.sfa-alias-new-input, .sfa-alias-new-unit').forEach(input => {
+    input.addEventListener('keydown', event => {
+      if (!isExplicitAliasEnter(event)) return;
+      event.preventDefault();
+      saveManualAliasFromControl(event.currentTarget);
     });
   });
   document.querySelectorAll('.sfa-alias-factor-select').forEach(sel => {
@@ -4972,14 +5020,14 @@ function bindInlineAliasControls() {
       setOrderAliasConversion(e.target.dataset.aliasName, e.target.value, 'manual');
     });
   });
-  document.querySelectorAll('.inline-alias-new-button').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const wrap = e.target.closest('.inline-alias-new-fields');
-      setManualOrderAlias(
-        e.target.dataset.aliasName,
-        wrap?.querySelector('.inline-alias-new-input')?.value || '',
-        wrap?.querySelector('.inline-alias-new-unit')?.value || ''
-      );
+  document.querySelectorAll('.inline-alias-new-button').forEach(button => {
+    button.addEventListener('click', event => saveManualAliasFromControl(event.currentTarget));
+  });
+  document.querySelectorAll('.inline-alias-new-input, .inline-alias-new-unit').forEach(input => {
+    input.addEventListener('keydown', event => {
+      if (!isExplicitAliasEnter(event)) return;
+      event.preventDefault();
+      saveManualAliasFromControl(event.currentTarget);
     });
   });
 }
