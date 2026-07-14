@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260714-01';/, 'APP_VERSION must be bumped for stable inventory and explicit alias mapping');
+mustMatch(/const APP_VERSION = '20260714-02';/, 'APP_VERSION must be bumped for single-grid inventory and ledger contract');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -54,12 +54,23 @@ mustMatch(/let sfaActualHistory = \{\};/, 'SFA actual history state missing');
 mustMatch(/let sfaAnalysisHistory = \{ records: \[\] \};/, 'SFA analysis cumulative history state missing');
 mustMatch(/const SFA_ANALYSIS_HISTORY_STORAGE_KEY = 'bbq_sfa_analysis_history';/, 'SFA analysis cumulative history localStorage key missing');
 mustMatch(/function appendSfaAnalysisHistory\(data, source = 'excel'\)/, 'SFA analysis results must be append-or-merge persisted');
+mustMatch(/function sfaLedgerEventId\(runId, item = \{\}, fallbackIndex = 0\)/, 'lossless order ledger needs stable per-row event ids');
+mustMatch(/function mergeSfaAnalysisHistories\(\.\.\.sources\)/, 'same-run retries and remote ledgers need idempotent item-level merge');
+mustMatch(/function sfaActualHistoryLedgerForPayload\(source = sfaActualHistory\)/, 'legacy SFA actual-history rows must also feed the lossless ledger');
+mustMatch(/version: 2,[\s\S]*eventCount:/, 'order ledger payload must publish its lossless event contract version');
+mustMatch(/actualOrderQty: Number\.isFinite\(actualOrderQty\) \? actualOrderQty : 0/, 'ledger must preserve actual order quantity including zero');
+mustMatch(/rawIdentity,[\s\S]*eventId = sfaLedgerEventId/, 'ledger events must preserve raw identity and a stable event id');
+mustMatch(/function buildAiUsageEvidence\(windowDays = AI_USAGE_EVIDENCE_MAX_DAYS, now = Date\.now\(\)\)/, 'AI usage evidence builder missing');
+mustMatch(/neverOverwrite: \['overrides\/\*\/l', 'orderUnitCorrections', 'actualOrders'\]/, 'AI usage contract must protect every manual value');
+mustMatch(/browserModelCall: false,[\s\S]*browserApiKey: false/, 'browser must not call a model or carry an API key');
+mustMatch(/responseField: 'aiUsageAdvisory'/, 'server worker advisory response pointer missing');
+mustMatch(/function renderAiUsageAdvisorySpan\(name\)/, 'AI suggested usage must render as an advisory chip');
 mustMatch(/localStorage\.setItem\(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON\.stringify\(sfaAnalysisHistoryForPayload\(\)\)\)/, 'SFA analysis cumulative history must persist locally');
 mustMatch(/appendSfaAnalysisHistory\(data, reason === 'manualInput' \? 'manual' : 'excel'\);/, 'fresh SFA/manual analysis results must update cumulative history before rendering');
 mustMatch(/function buildUsageAnalysis\(history, currentSnapshot\)/, 'usage analysis builder missing');
 mustMatch(/USAGE_ANALYSIS_MAX_DAYS \* 86400000/, 'usage analysis must limit old history records');
 mustMatch(/const usage = order\.source === 'actual'[\s\S]*prevStock \+ \(Number\(order\.actualQty \|\| 0\) \* Number\(order\.orderUnitToStockFactor \|\| 1\)\) - currStock[\s\S]*: prevStock \+ orderQty - currStock;/, 'usage analysis must convert actual SFA orders back into stock units before inferring usage');
-mustMatch(/data-analysis-name="\$\{escapeHtml\(name\)\}"/, 'daily analysis marker must be rendered next to daily usage');
+mustMatch(/data-analysis-key="\$\{escapeHtml\(itemKeyForName\(name\)\)\}" data-analysis-name="\$\{escapeHtml\(name\)\}"/, 'daily analysis marker must use the stable item key');
 mustMatch(/loadUsageHistory\(true\);/, 'usage history must load on page start');
 mustMatch(/setInterval\(\(\) => loadUsageHistory\(true\), 300000\);/, 'usage history must refresh periodically');
 mustMatch(/function handleOutputCellInput\(target\)/, 'output edit handler missing');
@@ -87,8 +98,10 @@ mustMatch(/expected_order_amount: recommendedQty \* price\.unitPrice/, 'amount e
 mustMatch(/return Math\.ceil\(\(n - 1e-9\) \* 10\) \/ 10;/, 'order quantity must round up to one decimal instead of whole units');
 mustMatch(/return fmt\(outputOrderQty\(item, days\), 1\);/, 'order quantity display must preserve one decimal digit');
 mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
-mustMatch(/function bindCellInputs\(\)/, 'cell event binding must be shared by input and output views');
-mustMatch(/bindCellInputs\(\);\s*updateStickyOffsets\(\);\s*return;/, 'output view must bind stock/buffer/daily inputs before returning');
+mustMatch(/function bindCellInputs\(\)/, 'single-grid cell event binding missing');
+mustMatch(/<th>필요량<\/th>\s*<th>추천발주 · 분석 · 금액<\/th>/, 'single grid must show need and recommended output columns beside editable inputs');
+assert.strictEqual((html.match(/<table\b/g) || []).length, 1, 'input and output must share exactly one table');
+mustNotMatch(/id="modeBtn"|function toggleMode\(|let viewMode\s*=/, 'separate input/output view mode must be removed');
 mustMatch(/function normalizeOrderUnit\(unit\)/, 'unit alias normalizer missing');
 mustMatch(/\['box', '박스', '박'\]\.includes\(value\)/, 'box/박스/박 must be treated as the same order unit');
 mustMatch(/checkUnitKey === orderUnitKey/, 'unit equality must compare normalized unit aliases');
@@ -119,13 +132,13 @@ mustMatch(/loadSfaCompareLatest\(true, hadPendingRequest\)/, 'fresh SFA completi
 mustMatch(/function buildSfaAnalysisPayloadState\(data = lastSfaCompareData\)/, 'SFA payload state builder missing');
 mustMatch(/function refreshSfaResultViewsWithCurrentState\(data = lastSfaCompareData, reason = 'sfaResult'\)/, 'SFA result refresh helper missing');
 mustMatch(/lastSfaCompareData = data;\s*await autoLoadFromFB\(true\);\s*await loadUsageHistory\(true\);\s*refreshSfaResultViewsWithCurrentState\(data, 'latestCompare'\);/, 'fresh SFA comparison must load latest current/history before rebuilding alias and inline views');
-mustMatch(/if \(lastSfaCompareData && \(viewMode === 'output' \|\| document\.querySelector\('\.inline-alias-correction'\)\)\) render\(\);/, 'SFA history load must force main rows and inline alias controls to refresh');
+mustMatch(/if \(lastSfaCompareData && document\.querySelector\('\.inline-alias-correction'\)\) renderPreservingGridFocus\(\);/, 'SFA history refresh must preserve focused single-grid input');
 mustMatch(/const appliedText = lastSfaResultAppliedAt \? ` · 적용 \$\{sfaCompareTime\(lastSfaResultAppliedAt\)\}` : '';/, 'SFA compare meta must track UI application time');
 mustMatch(/완료 \$\{sfaCompareTime\(data\.savedAt\)\}` : ''\}\$\{appliedText\}/, 'SFA compare meta must separate Excel completion and UI application times');
 mustMatch(/setInterval\(\(\) => loadSfaOrderStatus\(false\), 10000\);/, 'SFA status must refresh every 10 seconds');
 mustMatch(/mode: 'scan_pc_downloads'/, 'SFA request must target the PC download folder flow');
 mustMatch(/const currentSaved = await flushCurrentBeforeSfaAnalysisRequest\(\);[\s\S]*const sfaAnalysisState = buildSfaAnalysisPayloadState\(lastSfaCompareData\);/, 'SFA request must save current state before building effective alias payload');
-mustMatch(/orderDays: sfaAnalysisState\.orderDays,[\s\S]*entries: sfaAnalysisState\.entries,[\s\S]*overrides: sfaAnalysisState\.overrides,[\s\S]*orderAliasMappings: sfaAnalysisState\.orderAliasMappings,[\s\S]*orderAliasMappingDrafts: sfaAnalysisState\.orderAliasMappingDrafts,[\s\S]*effectiveOrderAliasMappings: sfaAnalysisState\.effectiveOrderAliasMappings,[\s\S]*orderManualItems: sfaAnalysisState\.orderManualItems,[\s\S]*sfaAnalysisHistory: sfaAnalysisState\.sfaAnalysisHistory,/, 'SFA request payload must carry latest current state, manual items, cumulative history, and rebuilt alias read models');
+mustMatch(/orderDays: sfaAnalysisState\.orderDays,[\s\S]*entries: sfaAnalysisState\.entries,[\s\S]*overrides: sfaAnalysisState\.overrides,[\s\S]*orderAliasMappings: sfaAnalysisState\.orderAliasMappings,[\s\S]*orderAliasMappingDrafts: sfaAnalysisState\.orderAliasMappingDrafts,[\s\S]*effectiveOrderAliasMappings: sfaAnalysisState\.effectiveOrderAliasMappings,[\s\S]*orderManualItems: sfaAnalysisState\.orderManualItems,[\s\S]*sfaAnalysisHistory: sfaAnalysisState\.sfaAnalysisHistory,[\s\S]*sfaOrderLedger: sfaAnalysisState\.sfaOrderLedger,[\s\S]*aiUsageAnalysis:/, 'SFA request payload must carry latest state, lossless ledger, and AI advisory evidence contract');
 mustMatch(/PC 다운로드 폴더 분석 요청함/, 'SFA request must give user feedback');
 mustMatch(/renderSfaStatus\(\{ state: 'requested'/, 'SFA request must update visible status immediately');
 mustMatch(/수동 일사용\/발주값 자동변경 없음/, 'SFA compare panel must disclose that analysis does not edit manual daily/order values');
@@ -182,12 +195,17 @@ mustMatch(/class="sfa-select inline-alias-select"/, 'input row actual-name alias
 mustMatch(/class="sfa-select inline-alias-factor-select"/, 'input row conversion candidate selector missing');
 mustMatch(/class="sfa-edit inline-alias-factor-input"/, 'input row manual conversion input missing');
 mustMatch(/function bindInlineAliasControls\(\)/, 'input row inline alias binding missing');
+mustMatch(/class="sfa-edit inline-alias-new-input"/, 'same row must allow a typed new actual-order alias');
+mustMatch(/class="inline-alias-new-button"/, 'same row must save a typed new alias explicitly');
+mustMatch(/function inlineSiteMatchesHtml\(itemName, rows\)/, 'same row must expose SFA site matching controls');
+mustMatch(/function inlineUnmatchedSiteRowHtml\(row\)/, 'unmatched SFA rows must remain inside the single grid');
+mustMatch(/function bindInlineSiteControls\(\)/, 'inline site/new-item controls must be bound without opening another tab');
 mustMatch(/setOrderAliasMapping\(e\.target\.dataset\.aliasName, e\.target\.value\);/, 'inline alias selector must reuse confirmed alias mapping setter');
 mustMatch(/setOrderAliasConversion\(e\.target\.dataset\.aliasName, e\.target\.value, 'candidate'\);/, 'inline conversion candidate selector must save through confirmed conversion setter');
 mustMatch(/setOrderAliasConversion\(e\.target\.dataset\.aliasName, e\.target\.value, 'manual'\);/, 'inline manual conversion input must save through manual conversion setter');
 mustMatch(/const inlineAliasRowsByName = new Map\(buildOrderAliasMatches\(lastSfaCompareData\)\.map\(row => \[row\.aliasName, row\]\)\);/, 'input view must share alias match rows with alias review state');
 mustMatch(/data-item-name="\$\{escapeHtml\(item\.name\)\}"/, 'input row name cell must keep item identity while showing inline correction controls');
-mustMatch(/bindInlineAliasControls\(\);\s*updateStickyOffsets\(\);/, 'input view must bind inline alias controls after rendering rows');
+mustMatch(/bindInlineAliasControls\(\);\s*bindInlineSiteControls\(\);\s*updateStickyOffsets\(\);/, 'single grid must bind inline alias and site controls after rendering rows');
 mustMatch(/const allowedStatuses = new Set\(\['candidate', 'default', 'confirmed', 'manual'\]\);/, 'alias mapping sanitizer must preserve default status');
 mustMatch(/if \(status === 'default'\) return '기본';/, 'alias default status must be visible in UI');
 mustMatch(/function conversionStatusText\(status\)/, 'conversion status label helper missing');
@@ -239,23 +257,21 @@ mustMatch(/단가 \$\{formatWon\(estimate\.unit_price\)\} \(\$\{estimate\.basis\
 mustMatch(/function outputOrderDisplay\(name, value\)/, 'output order must be read-only display');
 mustMatch(/class="output-order-value" data-output-key="\$\{escapeHtml\(itemKeyForName\(name\)\)\}" data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="order"/, 'output order display marker missing');
 mustNotMatch(/outputNumberInput\(item\.name, 'order'/, 'output order must not render as an editable input');
-mustMatch(/outputNumberInput\(item\.name, 'stock', displayDecimal\(E\)\)/, 'output stock must display one decimal place');
-mustMatch(/outputNumberInput\(item\.name, 'k', displayDecimal\(getK\(item\)\)\)/, 'output buffer must display one decimal place');
-mustMatch(/outputNumberInput\(item\.name, 'l', displayDecimal\(getL\(item\)\)\)/, 'output daily usage must display one decimal place');
-mustMatch(/const orderText = isNeed \? displayOrderQty\(item, days\) : '';/, 'input order view must show the same order-unit quantity as output view');
-mustMatch(/gCell\.textContent = isNeed \? displayOrderQty\(item, days\) : '';/, 'live input order refresh must use the same output quantity');
-mustMatch(/const isDuplicateCell = gCell\.classList\.contains\('dup'\);/, 'duplicate input rows must keep the same order quantity while preserving duplicate styling');
+mustMatch(/const orderText = isNeed \? displayOrderQty\(item, days\) : '';/, 'single grid must show the recommended order-unit quantity');
+mustMatch(/<span class="need-output-value">\$\{isNeed \? displayDecimal\(g\) : ''\}<\/span>/, 'same row must show the raw stock-unit need');
+mustMatch(/\$\{outputOrderDisplay\(item\.name, orderText\)\}\$\{renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g\)\}/, 'same row must show recommended order, analysis, and amount');
+mustMatch(/document\.querySelectorAll\(`tr\[data-item-key="\$\{itemKey\}"\]`\)/, 'live calculation refresh must patch only rows with the same stable item key');
 mustMatch(/function scheduleDeferredInputWork\(options = \{\}\)/, 'input edits must use deferred calculation scheduler');
 mustMatch(/let deferredInputRevision = 0;/, 'deferred input work must track a latest revision token');
 mustMatch(/saveLocal\(work\.saveReason \|\| 'auto'\);\s*if \(revision !== deferredInputRevision\) return;/, 'deferred input work must not apply stale calculations over newer input');
 mustMatch(/setOutputStockTotalByItemKey\(itemKey, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true \}\);/, 'output stock edits must use the same stable item key and defer usage/order refresh');
 mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\] \}\);/, 'output buffer/daily edits must defer order refresh');
-mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*scheduleDeferredInputWork\(\{ names: \[ent\.name\], recomputeUsage: true \}\);/, 'stock input must preserve finite values and revision before deferred calculation');
+mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*updateDerivedOrderForName\(ent\.name\);\s*scheduleDeferredInputWork\(\{ names: \[ent\.name\], recomputeUsage: true \}\);/, 'stock input must patch its output immediately before deferred heavy work');
 mustMatch(/flushDeferredInputWork\(\);\s*const hasPendingTimer = !!autoSaveTimer;/, 'flushAutoSave must persist any scheduled input work first');
 mustMatch(/async function flushCurrentBeforeSfaAnalysisRequest\(\) \{\s*flushDeferredInputWork\(\);/, 'SFA request save gate must flush pending input work first');
 mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l changes must save');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
-mustMatch(/actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload\(\), dailySales/, 'Firebase payload must include actual orders, corrections, and manual items');
+mustMatch(/orderManualItems: orderManualItemsForPayload\(\), sfaAnalysisHistory: ledger, sfaOrderLedger: ledger, sfaActualHistory: \{ sourcePath: SFA_ACTUAL_HISTORY_PATH, ledger \}, aiUsageEvidence: buildAiUsageEvidence\(\), aiUsageAdvisory: sanitizeAiUsageAdvisory\(\), dailySales/, 'Firebase current/history payload must include the lossless ledger and advisory evidence');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
 mustMatch(/const convertedActual = orderUnitToStockFactor \? actual \* orderUnitToStockFactor : actual;/, 'usage analysis must convert actual SFA order quantity back to stock-check units');
 mustMatch(/orderUnitToStockFactor direction: one order unit contains this many stock\/check units\./, 'orderUnitToStockFactor direction comment missing');
@@ -270,7 +286,7 @@ mustMatch(/function baseDailyUsage\(item\)/, 'base daily usage helper must exist
 mustMatch(/calcG\(item, days, \{ baseDaily: true \}\)/, 'analysis snapshot must avoid feeding inferred usage back into itself');
 mustMatch(/data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="\$\{field\}"/, 'output edit inputs must use output-only dataset fields');
 mustMatch(/if \(handleOutputCellInput\(e\.target\)\) return;/, 'output edit input must bypass row-id input handler');
-mustMatch(/if \(e\.target\.dataset\.outputField\) \{\s*handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);\s*render\(\);\s*return;\s*\}/, 'output edit change must save and rerender');
+mustNotMatch(/if \(e\.target\.dataset\.outputField\) \{[\s\S]{0,160}render\(\);/, 'cell change must not full-render the grid');
 mustMatch(/let debugLogs = \[\];/, 'debug logs state missing');
 mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local storage key missing');
 mustMatch(/let outputOrder = \[\];/, 'output order state missing');
@@ -280,7 +296,6 @@ mustMatch(/function getOutputItems\(days\)/, 'output item sort helper missing');
 mustMatch(/function moveOutputItem\(name, direction\)/, 'output move helper missing');
 mustMatch(/return orderItemList\(\)\.filter\(item => calcG\(item, days\) > 0\)\.sort\(defaultOutputCompare\);/, 'output view must use default order plus user-created items');
 mustMatch(/localStorage\.removeItem\(OUTPUT_ORDER_STORAGE_KEY\)/, 'stored custom output order must be cleared locally');
-mustMatch(/outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload\(\), dailySales/, 'Firebase payload must include output, actual order, corrections, and manual items');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'outputOrder'\)\) outputOrder = \[\];/, 'Firebase sync must ignore saved custom output order');
 mustNotMatch(/outputOrder = visibleNames\.concat\(remaining\);/, 'output move must not persist custom order');
 mustNotMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(outputOrder\)\)/, 'custom output order must not be stored locally');
@@ -327,7 +342,10 @@ mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderManualItems
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
-mustMatch(/function toggleMode\(\) \{\s*flushDeferredInputWork\(\);\s*if \(localDirty \|\| autoSaveTimer\) flushAutoSave\('modeSwitch'\);/, 'mode switch must flush pending input state before rendering output');
+mustMatch(/function setGridSortMode\(mode\) \{[\s\S]*flushDeferredInputWork\(\);[\s\S]*flushAutoSave\('sortSwitch'\);[\s\S]*gridSortMode = nextMode;[\s\S]*render\(\{ focusSnapshot \}\);/, 'sort context switch must flush pending state and restore the keyed focus snapshot');
+mustMatch(/const flowEpoch = stockFlowEpoch;[\s\S]*if \(flowEpoch !== stockFlowEpoch\) return;/, 'sort switch must fence a stale blur-driven stock advance');
+mustMatch(/function compareGridRows\(left, right, mode = gridSortMode\)/, 'single grid needs explicit input-zone and SFA sort contexts');
+mustMatch(/return mode === 'sfa' \? compareSfaRows\(left, right\) : compareInputRows\(left, right\);/, 'sort context must only change row order');
 mustMatch(/localStorage\.setItem\('bbq_orderDays', orderDaysEl\.value\)/, 'saveLocal must persist orderDays locally');
 mustMatch(/localStorage\.setItem\(ORDER_DAYS_RULE_STORAGE_KEY, ORDER_DAYS_RULE_VERSION\)/, 'orderDays local persistence must mark the current recommendation rule');
 mustMatch(/fetch\(`\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{dateKey\}\.json`/, 'daily history path must be saved');
@@ -337,14 +355,15 @@ mustMatch(/data-field="k" value="\$\{displayDecimal\(getK\(item\)\)\}"/, 'k fiel
 mustMatch(/data-field="l" value="\$\{displayDecimal\(getL\(item\)\)\}"/, 'l field must still render with one decimal');
 mustMatch(/function recommendedDays\(\) \{\s*const d = new Date\(\)\.getDay\(\);\s*if \(d === 4 \|\| d === 5\) return 4;\s*return 3;\s*\}/, 'recommended order days must be 4 only on Thu/Fri and 3 otherwise');
 mustMatch(/setOrderDaysValue\(savedDaysRule === ORDER_DAYS_RULE_VERSION \? \(savedDays \|\| rec\) : rec\);/, 'old site-local recommendation values must be refreshed after rule changes');
-mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="k"/, 'k field must be skipped by keyboard next navigation');
-mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-field="l"/, 'l field must be skipped by keyboard next navigation');
+mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-entry-key="\$\{escapeHtml\(ent\.entryKey \|\| ent\.id\)\}" data-item-key="\$\{escapeHtml\(itemKeyForName\(item\.name\)\)\}" data-field="k"/, 'k field must keep stable row identity and be skipped by next navigation');
+mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{ent\.id\}" data-entry-key="\$\{escapeHtml\(ent\.entryKey \|\| ent\.id\)\}" data-item-key="\$\{escapeHtml\(itemKeyForName\(item\.name\)\)\}" data-field="l"/, 'l field must keep stable row identity and be skipped by next navigation');
 mustMatch(/class="cell zone" type="text" tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');
 mustMatch(/<button class="add" tabindex="-1"/, 'row action buttons must be skipped by keyboard next navigation');
-mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must render sorted rows and restore focus');
+mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must move within the current DOM order');
+mustNotMatch(/function renderAndFocusStock\([^)]*\) \{\s*render\(\);/, 'stock Enter must not full-render or resort the table');
 mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
 mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');
-mustMatch(/sortStockRowsAndKeepFlow\(currentId, 'change'\)/, 'change with already-correct focus must still sort rows');
+mustMatch(/sortStockRowsAndKeepFlow\(currentId, 'change'\)/, 'change with already-correct focus must preserve current DOM flow');
 mustMatch(/flushAutoSave\('auto'\)/, 'stock logs and sorted state must be saved immediately');
 mustNotMatch(/pushSaveLog\('키 /, 'stock key logs must not be visible user logs');
 mustNotMatch(/pushSaveLog\(`보정 /, 'focus correction logs must not be visible user logs');
@@ -446,7 +465,15 @@ this.__OrderHelperApi = {
   conversionFactorForItem,
   orderManualItemsForPayload,
   sfaAnalysisHistoryForPayload,
+  sfaActualHistoryLedgerForPayload,
+  sfaOrderLedgerForPayload,
   appendSfaAnalysisHistory,
+  mergeSfaAnalysisHistories,
+  buildAiUsageEvidence,
+  sanitizeAiUsageAdvisory,
+  compareGridRows,
+  gridFocusSnapshot,
+  restoreGridFocus,
   setEntriesForCheck(value) { entries = sanitizeEntries(value); },
   entriesForCheck() { return entries; },
   totalStockForCheck(name) { return totalStock(name); },
@@ -466,6 +493,33 @@ this.__OrderHelperApi = {
   setAliasMappingsForCheck(value) { orderAliasMappings = sanitizeOrderAliasMappings(value); },
   setManualItemsForCheck(value) { orderManualItems = sanitizeOrderManualItems(value); },
   setSfaAnalysisHistoryForCheck(value) { sfaAnalysisHistory = sanitizeSfaAnalysisHistory(value); },
+  mergeSfaAnalysisHistoryForCheck(value) { sfaAnalysisHistory = mergeSfaAnalysisHistories(sfaAnalysisHistory, value); },
+  setOverridesForCheck(value) { overrides = value || {}; },
+  getOverridesForCheck() { return overrides; },
+  setAiUsageAdvisoryForCheck(value) { aiUsageAdvisory = sanitizeAiUsageAdvisory(value); },
+  gridRowsForCheck(value, mode = 'input') {
+    return (value || []).map(entry => ({ entry, item: orderItemByName(entry.name), hidden: false }))
+      .filter(row => row.item)
+      .sort((left, right) => compareGridRows(left, right, mode))
+      .map(row => row.entry.entryKey || row.entry.id);
+  },
+  resetGridPerfForCheck() {
+    gridPerf.fullRenders = 0;
+    gridPerf.keyedRowPatches = 0;
+    gridPerf.deferredRuns = 0;
+    gridPerf.scheduledFrames = 0;
+  },
+  gridPerfForCheck() { return { ...gridPerf, deferredRevision: deferredInputRevision }; },
+  scheduleGridInputForCheck(name) {
+    updateDerivedOrderForName(name);
+    scheduleDeferredInputWork({ names: [name] });
+  },
+  flushGridInputForCheck() {
+    const previous = suppressAutoSave;
+    suppressAutoSave = true;
+    flushDeferredInputWork();
+    suppressAutoSave = previous;
+  },
   addManualSiteMappingForCheck(siteKey, itemName, siteName, siteUnit) {
     const nextName = ensureManualOrderItem(itemName, siteUnit, 'test', siteName);
     ensureEntryForOrderItem(nextName);

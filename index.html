@@ -93,6 +93,17 @@
   .inline-alias-fields label { display: grid; gap: 2px; color: #9aa7b7; font-size: 9px; font-weight: 700; }
   .inline-alias-fields .sfa-select, .inline-alias-fields .sfa-edit { min-height: 26px; padding: 4px 5px; border-radius: 4px; font-size: 10px; }
   .inline-alias-meta { color: #93a4bb; font-size: 9px; white-space: normal; }
+  .inline-alias-new-fields { display: grid; grid-template-columns: minmax(92px, 1fr) minmax(46px, .35fr) auto; gap: 4px; }
+  .inline-alias-new-fields .sfa-edit { min-height: 26px; padding: 4px 5px; font-size: 10px; }
+  .inline-alias-new-fields button { min-height: 26px; padding: 4px 6px; border: 1px solid #315a8d; border-radius: 4px; background: #315a8d; color: #fff; font-size: 10px; font-weight: 800; }
+  .inline-site-match { margin-top: 4px; max-width: 270px; color: #9aa7b7; font-size: 10px; }
+  .inline-site-match summary { cursor: pointer; color: #bfdbfe; font-weight: 800; white-space: normal; }
+  .inline-site-list { display: grid; gap: 5px; margin-top: 4px; }
+  .inline-site-card { display: grid; gap: 4px; padding: 5px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(8, 14, 24, 0.38); }
+  .inline-site-card .sfa-new-item-fields { grid-template-columns: minmax(110px, 1fr) auto auto; }
+  .inline-unmatched-row td { background: rgba(249, 115, 22, 0.08); }
+  .inline-unmatched-row .sfa-new-item-fields { max-width: 580px; }
+  .need-output { color: #fca5a5; font-weight: 800; }
   .sfa-unit-fields { display: grid; grid-template-columns: repeat(3, minmax(52px, 1fr)); gap: 5px; }
   .sfa-unit-fields label { display: grid; gap: 3px; color: #9aa7b7; font-size: 10px; }
   .sfa-io-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
@@ -105,11 +116,18 @@
   .desktop-access-row.approved { border-color: rgba(34, 197, 94, 0.34); background: rgba(34, 197, 94, 0.08); }
   .desktop-access-row.pending { border-color: rgba(249, 115, 22, 0.4); background: rgba(249, 115, 22, 0.1); }
   .desktop-access-row button { background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 6px 9px; font-size: 11px; font-weight: 800; }
+  .grid-sort-control { display: inline-flex; align-items: center; gap: 3px; padding: 2px; border: 1px solid #315a8d; border-radius: 8px; background: rgba(8, 14, 24, 0.42); }
+  .top .grid-sort-control button { padding: 5px 9px; border-radius: 5px; background: transparent; color: #9fb2ca; }
+  .top .grid-sort-control button.active { background: #315a8d; color: #fff; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table { width: 100%; min-width: 760px; border-collapse: collapse; }
+  table { width: 100%; min-width: 1180px; border-collapse: separate; border-spacing: 0; }
   thead { background: #0f3460; z-index: 5; }
   th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid #0f3460; white-space: nowrap; }
-  th { font-size: 11px; color: #ccc; font-weight: 600; }
+  th { position: sticky; top: var(--sticky-top); z-index: 6; background: #0f3460; font-size: 11px; color: #ccc; font-weight: 600; }
+  #thead th:nth-child(1), #tbody td:nth-child(1) { position: sticky; left: 0; width: 106px; min-width: 106px; max-width: 106px; }
+  #thead th:nth-child(2), #tbody td:nth-child(2) { position: sticky; left: 106px; width: 220px; min-width: 220px; max-width: 220px; }
+  #thead th:nth-child(-n+2) { z-index: 8; }
+  #tbody td:nth-child(-n+2) { z-index: 3; background: #1a1a2e; }
   tr.need td { background: rgba(233, 69, 96, 0.08); }
   td.qty { text-align: right; font-variant-numeric: tabular-nums; }
   td.name { max-width: 280px; white-space: normal; }
@@ -124,6 +142,8 @@
   .daily-cell { display: inline-flex; align-items: center; gap: 6px; }
   .daily-analysis { display: inline-flex; align-items: center; min-height: 18px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(14, 165, 233, 0.12); color: #7dd3fc; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
   .daily-analysis.empty { display: none; }
+  .ai-usage-advisory { display: inline-flex; align-items: center; min-height: 18px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(168, 85, 247, 0.38); background: rgba(126, 34, 206, 0.14); color: #e9d5ff; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
+  .ai-usage-advisory.empty { display: none; }
   .order-qty.pos { font-weight: bold; font-size: 14px; color: #e94560; }
   .order-qty.dup { color: #888; font-weight: normal; font-size: 11px; }
   td.actions { white-space: nowrap; }
@@ -219,6 +239,10 @@
     .sfa-match-row .sfa-unit-fields { grid-column: 1 / -1; }
     .sfa-alias-fields, .sfa-alias-new-fields { grid-template-columns: 1fr; }
     .inline-alias-fields { grid-template-columns: 1fr; }
+    .inline-alias-new-fields { grid-template-columns: 1fr; }
+    .grid-sort-control { order: 2; }
+    #thead th:nth-child(1), #tbody td:nth-child(1) { width: 98px; min-width: 98px; max-width: 98px; }
+    #thead th:nth-child(2), #tbody td:nth-child(2) { left: 98px; width: 180px; min-width: 180px; max-width: 180px; }
     .sfa-io-grid { grid-template-columns: 1fr; }
     .table-wrap { border-top: 1px solid #0f3460; }
   }
@@ -246,7 +270,10 @@
     </select>
   </label>
   <span class="meta" id="cycleHint"></span>
-  <button id="modeBtn" onclick="toggleMode()">출력 보기</button>
+  <span class="grid-sort-control" role="group" aria-label="표 정렬">
+    <button id="sortInputBtn" class="active" type="button" onclick="setGridSortMode('input')">구역 입력순</button>
+    <button id="sortSfaBtn" type="button" onclick="setGridSortMode('sfa')">SFA 발주순</button>
+  </span>
   <button id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis()">엑셀분석</button>
   <button id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel()">오차보기</button>
   <button id="desktopAccessBtn" type="button" onclick="toggleDesktopAccessPanel()">접근관리</button>
@@ -323,7 +350,8 @@
         <th>재고</th>
         <th>여유</th>
         <th>일사용</th>
-        <th>발주</th>
+        <th>필요량</th>
+        <th>추천발주 · 분석 · 금액</th>
         <th>단위</th>
         <th id="thAct"></th>
       </tr>
@@ -350,7 +378,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260714-01';
+const APP_VERSION = '20260714-02';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -358,6 +386,8 @@ const SFA_ORDER_REQUEST_PATH = '/monitor/main_pc/sfa_order_request';
 const SFA_ORDER_STATUS_PATH = '/monitor/main_pc/sfa_order';
 const SFA_COMPARE_PATH = `${FB_PATH}/sfaCompare/latest`;
 const SFA_ACTUAL_HISTORY_PATH = `${FB_PATH}/sfaActualHistory`;
+const AI_USAGE_EVIDENCE_MAX_DAYS = 90;
+const AI_USAGE_EVIDENCE_MAX_EVENTS = 2000;
 const DESKTOP_ACCESS_PATH = `${FB_PATH}/desktopAccess`;
 const USAGE_ANALYSIS_MAX_DAYS = 90;
 const DEFAULT_BASE_SALES = 280;
@@ -855,7 +885,9 @@ let entries = [];     // [{id, name, zone, stock}] — 한 품목이 N구역에 
 let overrides = {};   // {name: {k?, l?}}  — 품목별 보정
 let dailySales = [];  // [number?] 길이 = days, 매출(만). null이면 1.0 weight
 let baseSales = DEFAULT_BASE_SALES;  // 매출대비 하루사용량 기준 매출(만)
-let viewMode = 'input';
+let gridSortMode = 'input';
+let lastGridFocus = null;
+const gridPerf = { fullRenders: 0, keyedRowPatches: 0, deferredRuns: 0, scheduledFrames: 0 };
 let saveLogs = [];
 let debugLogs = [];
 let outputOrder = [];
@@ -875,9 +907,11 @@ let lastSfaCompareStatusKey = '';
 let lastSfaCompareData = null;
 let lastSfaResultAppliedAt = 0;
 let skipStockRenderOnceId = null;
+let stockFlowEpoch = 0;
 let pendingSnoozeName = null;
 let usageHistory = {};
 let usageAnalysis = {};
+let aiUsageAdvisory = {};
 let sfaActualHistory = {};
 let sfaAnalysisHistory = { records: [] };
 let stateRevision = 0;
@@ -1034,6 +1068,8 @@ function sfaAnalysisDateKey(data, savedAt = Date.now()) {
 }
 
 function sfaAnalysisRunId(data, source = 'excel') {
+  const explicit = data?.runId || data?.run_id || data?.analysisRunId || data?.analysis_run_id || data?.requestId || data?.request_id;
+  if (explicit) return String(explicit).replace(/[|#]/g, '_').slice(0, 360);
   const savedAt = timestampMs(data?.savedAt || data?.last_analyzed_at || data?.updated_at || Date.now());
   const dateKey = sfaAnalysisDateKey(data, savedAt);
   const fileName = sfaAnalysisFileName(data);
@@ -1042,22 +1078,45 @@ function sfaAnalysisRunId(data, source = 'excel') {
     .join('|');
 }
 
-function sanitizeSfaAnalysisHistoryItem(item = {}, fallbackDateKey = '', fallbackSource = 'excel') {
+function sfaLedgerEventId(runId, item = {}, fallbackIndex = 0) {
+  if (item.eventId) return String(item.eventId).slice(0, 720);
+  const rowIndex = item.rowIndex ?? item.row_index ?? `position:${fallbackIndex}`;
+  const originalName = String(item.originalName || item.siteName || item.sfa_name || item.name || item.source_name || '').trim();
+  const unit = String(item.unit || item.siteUnit || item.sfa_unit || '').trim();
+  const rawIdentity = String(item.rawIdentity || item.raw_id || item.siteKey || `${originalName}\u001f${unit}`).trim();
+  return `${String(runId || 'unknown-run').slice(0, 360)}#${String(rowIndex).slice(0, 80)}#${stableIdentityHash(rawIdentity)}`;
+}
+
+function sanitizeSfaAnalysisHistoryItem(item = {}, fallbackDateKey = '', fallbackSource = 'excel', fallbackRunId = '', fallbackIndex = 0) {
   const quantity = Number(item.quantity ?? item.qty ?? item.sfa_qty ?? item.siteQty ?? item.actualQty ?? 0);
+  const actualOrderQty = Number(item.actualOrderQty ?? item.actual_order_qty ?? item.actualQty ?? item.quantity ?? item.qty ?? item.sfa_qty ?? 0);
   const amount = Number(item.amount ?? item.sfa_amount ?? item.siteAmount ?? 0);
   const score = Number(item.score ?? 0);
-  return {
+  const runId = String(item.runId || item.run_id || fallbackRunId || '').slice(0, 360);
+  const rowIndex = item.rowIndex ?? item.row_index ?? fallbackIndex;
+  const rawIdentity = String(item.rawIdentity || item.raw_id || item.siteKey || [
+    item.originalName || item.siteName || item.sfa_name || item.name || item.source_name || '',
+    item.unit || item.siteUnit || item.sfa_unit || '',
+    rowIndex
+  ].join('|')).slice(0, 520);
+  const out = {
+    runId,
     dateKey: normalizeHistoryDateKey(item.dateKey || item.orderDateKey || item.orderDate || fallbackDateKey),
     source: String(item.source || fallbackSource || 'excel').slice(0, 40),
     originalName: String(item.originalName || item.siteName || item.sfa_name || item.name || item.source_name || '').trim().slice(0, 180),
     mappedName: canonicalItemName(String(item.mappedName || item.targetName || item.expectedName || item.expected_name || '').trim()).slice(0, 180),
+    aliasName: String(item.aliasName || item.actualName || item.actual_name || '').trim().slice(0, 180),
     quantity: Number.isFinite(quantity) ? quantity : 0,
+    actualOrderQty: Number.isFinite(actualOrderQty) ? actualOrderQty : 0,
     unit: String(item.unit || item.siteUnit || item.sfa_unit || '').trim().slice(0, 40),
     amount: Number.isFinite(amount) ? amount : 0,
-    rowIndex: item.rowIndex ?? item.row_index ?? null,
+    rowIndex,
+    rawIdentity,
     status: String(item.status || 'recorded').slice(0, 40),
     score: Number.isFinite(score) ? score : 0
   };
+  out.eventId = sfaLedgerEventId(runId, out, fallbackIndex);
+  return out;
 }
 
 function sanitizeSfaAnalysisHistory(source = sfaAnalysisHistory) {
@@ -1071,25 +1130,39 @@ function sanitizeSfaAnalysisHistory(source = sfaAnalysisHistory) {
     const dateKey = normalizeHistoryDateKey(record.dateKey || record.orderDateKey || record.orderDate) || kstDateKey(savedAt);
     const sourceName = String(record.source || 'excel').slice(0, 40);
     const fileName = String(record.fileName || record.file || '').slice(0, 180);
-    const id = String(record.id || [sourceName, dateKey, fileName || 'no-file', savedAt].join('|')).slice(0, 520);
+    const id = String(record.runId || record.id || [sourceName, dateKey, fileName || 'no-file', savedAt].join('|')).slice(0, 520);
     const items = Array.isArray(record.items)
-      ? record.items.map(item => sanitizeSfaAnalysisHistoryItem(item, dateKey, sourceName))
+      ? record.items.map((item, index) => sanitizeSfaAnalysisHistoryItem(item, dateKey, sourceName, id, index))
       : [];
+    const previous = byId.get(id);
+    const itemById = new Map((previous?.items || []).map(item => [item.eventId, item]));
+    items.forEach(item => itemById.set(item.eventId, { ...(itemById.get(item.eventId) || {}), ...item }));
+    const mergedItems = Array.from(itemById.values()).sort((a, b) => String(a.rowIndex).localeCompare(String(b.rowIndex), 'en', { numeric: true }) || a.eventId.localeCompare(b.eventId));
     byId.set(id, {
       id,
+      runId: id,
       dateKey,
-      savedAt,
-      updatedAt: timestampMs(record.updatedAt || savedAt, savedAt),
+      savedAt: previous ? Math.min(previous.savedAt, savedAt) : savedAt,
+      updatedAt: Math.max(previous?.updatedAt || 0, timestampMs(record.updatedAt || savedAt, savedAt)),
       source: sourceName,
-      fileName,
-      itemCount: Number.isFinite(Number(record.itemCount)) ? Number(record.itemCount) : items.length,
-      items
+      fileName: fileName || previous?.fileName || '',
+      itemCount: mergedItems.length,
+      items: mergedItems
     });
   });
   return {
-    version: 1,
+    version: 2,
+    eventCount: Array.from(byId.values()).reduce((sum, record) => sum + record.items.length, 0),
     records: Array.from(byId.values()).sort((a, b) => (a.savedAt - b.savedAt) || a.id.localeCompare(b.id))
   };
+}
+
+function mergeSfaAnalysisHistories(...sources) {
+  const records = [];
+  sources.forEach(source => {
+    sanitizeSfaAnalysisHistory(source).records.forEach(record => records.push(record));
+  });
+  return sanitizeSfaAnalysisHistory({ records });
 }
 
 function sfaAnalysisHistoryRecords() {
@@ -1110,32 +1183,98 @@ function sfaAnalysisHistoryForPayload() {
   return sanitizeSfaAnalysisHistory(sfaAnalysisHistory);
 }
 
+function sfaActualHistoryLedgerForPayload(source = sfaActualHistory) {
+  const records = [];
+  Object.entries(source || {}).forEach(([key, value]) => {
+    if (!value || typeof value !== 'object' || key === 'ledger' || key === 'sourcePath') return;
+    const dateKey = normalizeHistoryDateKey(value.dateKey || value.orderDateKey || value.orderDate || key);
+    const rows = Array.isArray(value) ? value : (Array.isArray(value.rows) ? value.rows : (Array.isArray(value.items) ? value.items : []));
+    if (!rows.length && !dateKey) return;
+    const sourceName = String(value.source || 'sfaActualHistory').slice(0, 40);
+    const fileName = String(value.fileName || value.file || '').slice(0, 180);
+    const savedAt = timestampMs(value.savedAt || value.updatedAt || value.updated_at || (dateKey ? ledgerEventDateMs(dateKey) : Date.now()));
+    const runId = String(value.runId || value.run_id || value.analysisRunId || `sfaActualHistory|${dateKey || key}|${fileName || key}`).slice(0, 520);
+    records.push({
+      id: runId,
+      runId,
+      dateKey,
+      savedAt,
+      updatedAt: savedAt,
+      source: sourceName,
+      fileName,
+      items: rows.map((row, index) => sanitizeSfaAnalysisHistoryItem({
+        runId,
+        dateKey,
+        source: sourceName,
+        originalName: row.originalName || row.sfa_name || row.actualName || row.name || '',
+        mappedName: row.mappedName || row.expected_name || row.expectedName || row.targetName || '',
+        aliasName: row.aliasName || row.sfa_name || row.actualName || '',
+        quantity: row.quantity ?? row.sfa_qty ?? row.actualQty ?? row.qty ?? 0,
+        actualOrderQty: row.actualOrderQty ?? row.sfa_qty ?? row.actualQty ?? row.qty ?? 0,
+        unit: row.unit || row.sfa_unit || row.actualUnit || '',
+        amount: row.amount ?? row.sfa_amount ?? row.total_amount ?? 0,
+        rowIndex: row.rowIndex ?? row.row_index ?? index,
+        rawIdentity: row.rawIdentity || row.raw_id || row.eventId || `${row.sfa_name || row.name || '-'}|${row.sfa_unit || row.unit || '-'}|${row.row_index ?? index}`,
+        status: row.status || 'actual',
+        score: row.score ?? 0
+      }, dateKey, sourceName, runId, index))
+    });
+  });
+  return sanitizeSfaAnalysisHistory({ records });
+}
+
+function sfaOrderLedgerForPayload() {
+  return mergeSfaAnalysisHistories(sfaAnalysisHistoryForPayload(), sfaActualHistoryLedgerForPayload());
+}
+
 function sfaAnalysisRowsFromData(data, dateKey, source = 'excel') {
   const rows = [];
-  buildOrderSiteMatches(data).forEach(row => {
+  const runId = sfaAnalysisRunId(data, source);
+  const comp = data?.comparison || {};
+  const compareByIndex = new Map((comp.matched || []).map(row => [String(row.row_index), row]));
+  const rawRows = Array.isArray(data?.items) && data.items.length
+    ? data.items.map((row, index) => ({ ...row, _ledgerPosition: index }))
+    : [...(comp.matched || []), ...(comp.extra || [])].map((row, index) => ({ ...row, _ledgerPosition: index }));
+  rawRows.forEach((raw, index) => {
+    const siteName = siteItemName(raw);
+    const siteUnit = siteItemUnit(raw);
+    const siteKey = orderSiteItemKey(raw);
+    const compareRow = raw.row_index !== undefined && raw.row_index !== null ? compareByIndex.get(String(raw.row_index)) : null;
+    const correction = orderSiteMappings[siteKey] || orderSiteMappings[legacyOrderSiteItemKey(raw)];
+    const candidate = bestMasterCandidatesForSite(raw, 1)[0];
+    const mappedName = correction?.targetName || compareRow?.expected_name || (candidate?.score >= 0.84 ? candidate.name : '');
+    const effectiveAlias = mappedName ? effectiveOrderAliasMappingsForPayload(data)[canonicalItemName(mappedName)] : null;
     rows.push(sanitizeSfaAnalysisHistoryItem({
+      runId,
       dateKey,
       source,
-      originalName: row.siteName,
-      mappedName: row.targetName,
-      quantity: row.siteQty,
-      unit: row.siteUnit,
-      amount: row.amount,
-      rowIndex: row.compareRow?.row_index,
-      status: row.status,
-      score: row.score
-    }, dateKey, source));
+      originalName: siteName,
+      mappedName,
+      aliasName: effectiveAlias?.actualName || '',
+      quantity: resolvedSiteQty(raw, compareRow),
+      actualOrderQty: raw.actualOrderQty ?? raw.actual_order_qty ?? resolvedSiteQty(raw, compareRow),
+      unit: siteUnit || siteItemUnit(compareRow),
+      amount: resolvedSiteAmount(raw, compareRow),
+      rowIndex: raw.row_index ?? raw.rowIndex ?? index,
+      rawIdentity: raw.rawIdentity || raw.raw_id || raw.id || `${siteKey}|row:${raw.row_index ?? raw.rowIndex ?? index}`,
+      status: correction?.targetName ? 'confirmed' : (mappedName ? 'candidate' : 'unmatched'),
+      score: correction?.targetName ? 1 : Number(compareRow?.score ?? candidate?.score ?? 0)
+    }, dateKey, source, runId, index));
   });
-  expectedMissingRows(data).forEach(row => {
+  expectedMissingRows(data).forEach((row, index) => {
     rows.push(sanitizeSfaAnalysisHistoryItem({
+      runId,
       dateKey,
       source,
       originalName: '',
       mappedName: row.name,
       quantity: 0,
+      actualOrderQty: 0,
       unit: row.unit,
+      rowIndex: `missing:${index}`,
+      rawIdentity: `missing|${row.name}|${row.unit || ''}|${index}`,
       status: 'missing'
-    }, dateKey, source));
+    }, dateKey, source, runId, rawRows.length + index));
   });
   return rows;
 }
@@ -1148,6 +1287,7 @@ function sfaAnalysisRecordFromData(data, source = 'excel') {
   const items = sfaAnalysisRowsFromData(data, dateKey, sourceName);
   return {
     id: sfaAnalysisRunId(data, sourceName),
+    runId: sfaAnalysisRunId(data, sourceName),
     dateKey,
     savedAt,
     updatedAt: Date.now(),
@@ -1161,13 +1301,118 @@ function sfaAnalysisRecordFromData(data, source = 'excel') {
 function appendSfaAnalysisHistory(data, source = 'excel') {
   if (!data || typeof data !== 'object') return null;
   const record = sfaAnalysisRecordFromData(data, source);
-  const history = sanitizeSfaAnalysisHistory(sfaAnalysisHistory);
-  const idx = history.records.findIndex(row => row.id === record.id);
-  if (idx >= 0) history.records[idx] = record;
-  else history.records.push(record);
-  sfaAnalysisHistory = sanitizeSfaAnalysisHistory(history);
+  sfaAnalysisHistory = mergeSfaAnalysisHistories(sfaAnalysisHistory, { records: [record] });
   localStorage.setItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON.stringify(sfaAnalysisHistoryForPayload()));
   return record;
+}
+
+function sanitizeAiUsageAdvisory(source = aiUsageAdvisory) {
+  const rows = Array.isArray(source)
+    ? source
+    : Object.entries(source || {}).map(([name, value]) => ({ name, ...(value && typeof value === 'object' ? value : {}) }));
+  const out = {};
+  rows.forEach(row => {
+    const name = canonicalItemName(String(row?.name || row?.itemName || '').trim());
+    const suggestedUsage = Number(row?.suggestedUsage ?? row?.suggested_usage);
+    if (!name || !knownItemNameSet().has(name) || !Number.isFinite(suggestedUsage) || suggestedUsage < 0) return;
+    const confidence = Math.max(0, Math.min(1, Number(row.confidence ?? 0)));
+    out[name] = {
+      suggestedUsage,
+      confidence: Number.isFinite(confidence) ? confidence : 0,
+      reasons: (Array.isArray(row.reasons) ? row.reasons : [row.reason]).filter(Boolean).map(value => String(value).slice(0, 240)).slice(0, 8),
+      anomalies: (Array.isArray(row.anomalies) ? row.anomalies : [row.anomaly]).filter(Boolean).map(value => String(value).slice(0, 240)).slice(0, 8),
+      sourceRunIds: Array.from(new Set((row.sourceRunIds || row.source_run_ids || []).map(value => String(value).slice(0, 360)))).slice(0, 40),
+      analysisRunId: String(row.analysisRunId || row.analysis_run_id || '').slice(0, 360),
+      updatedAt: timestampMs(row.updatedAt || row.updated_at || Date.now())
+    };
+  });
+  return out;
+}
+
+function ledgerEventDateMs(dateKey) {
+  const key = normalizeHistoryDateKey(dateKey);
+  if (!/^\d{8}$/.test(key)) return NaN;
+  return Date.UTC(Number(key.slice(0, 4)), Number(key.slice(4, 6)) - 1, Number(key.slice(6, 8)));
+}
+
+function buildAiUsageEvidence(windowDays = AI_USAGE_EVIDENCE_MAX_DAYS, now = Date.now()) {
+  const safeWindow = Math.max(1, Math.min(AI_USAGE_EVIDENCE_MAX_DAYS, Number(windowDays) || AI_USAGE_EVIDENCE_MAX_DAYS));
+  const cutoff = Number(now) - safeWindow * 86400000;
+  const ledger = sfaOrderLedgerForPayload();
+  const events = [];
+  ledger.records.forEach(record => {
+    record.items.forEach(item => {
+      const eventMs = ledgerEventDateMs(item.dateKey || record.dateKey);
+      if (Number.isFinite(eventMs) && eventMs < cutoff) return;
+      events.push({
+        ...item,
+        runId: record.runId,
+        source: item.source || record.source,
+        dateKey: item.dateKey || record.dateKey,
+        fileName: record.fileName
+      });
+    });
+  });
+  events.sort((a, b) => String(a.dateKey).localeCompare(String(b.dateKey)) || a.eventId.localeCompare(b.eventId));
+  const boundedEvents = events.slice(-AI_USAGE_EVIDENCE_MAX_EVENTS);
+  const totals = {};
+  boundedEvents.forEach(event => {
+    const name = canonicalItemName(event.mappedName || '') || event.originalName || 'unmapped';
+    if (!totals[name]) totals[name] = { rowCount: 0, quantity: 0, actualOrderQty: 0, amount: 0, units: [], eventIds: [], sourceRunIds: [] };
+    const total = totals[name];
+    total.rowCount += 1;
+    total.quantity += Number(event.quantity || 0);
+    total.actualOrderQty += Number(event.actualOrderQty || 0);
+    total.amount += Number(event.amount || 0);
+    if (event.unit && !total.units.includes(event.unit)) total.units.push(event.unit);
+    total.eventIds.push(event.eventId);
+    if (event.runId && !total.sourceRunIds.includes(event.runId)) total.sourceRunIds.push(event.runId);
+  });
+  const manualUsage = {};
+  orderItemList().forEach(item => {
+    manualUsage[item.name] = {
+      value: getL(item),
+      overridden: Object.prototype.hasOwnProperty.call(overrides[item.name] || {}, 'l'),
+      manualUnitCorrection: unitCorrectionForItem(item.name),
+      inventory: displayStockTotal(item.name),
+      deterministicUsageAnalysis: usageAnalysis[item.name] || null
+    };
+  });
+  return {
+    version: 1,
+    generatedAt: Number(now),
+    windowDays: safeWindow,
+    maxEvents: AI_USAGE_EVIDENCE_MAX_EVENTS,
+    truncated: events.length > boundedEvents.length,
+    ledger: {
+      version: ledger.version,
+      runIds: Array.from(new Set(boundedEvents.map(event => event.runId).filter(Boolean))),
+      events: boundedEvents,
+      totals
+    },
+    manualUsage,
+    protection: {
+      advisoryOnly: true,
+      neverOverwrite: ['overrides/*/l', 'orderUnitCorrections', 'actualOrders'],
+      browserModelCall: false,
+      browserApiKey: false
+    },
+    workerContract: {
+      queuePath: SFA_ORDER_REQUEST_PATH,
+      consumer: 'SiteBot/main_pc SFA worker',
+      requestField: 'aiUsageAnalysis',
+      responseField: 'aiUsageAdvisory',
+      responseSchema: {
+        name: 'canonical item name',
+        suggestedUsage: 'number >= 0',
+        confidence: '0..1',
+        reasons: 'string[]',
+        anomalies: 'string[]',
+        sourceRunIds: 'ledger run id[]',
+        analysisRunId: 'worker run id'
+      }
+    }
+  };
 }
 
 function sanitizeEntries(source = entries) {
@@ -1322,6 +1567,7 @@ function migrateRuntimeItemNames() {
   orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
   orderAliasMappings = sanitizeOrderAliasMappings(orderAliasMappings);
   orderUnitCorrections = sanitizeOrderUnitCorrections(orderUnitCorrections);
+  aiUsageAdvisory = sanitizeAiUsageAdvisory(aiUsageAdvisory);
 }
 
 function storedStockForName(stocks, name) {
@@ -1347,6 +1593,7 @@ const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';
 const ORDER_MANUAL_ITEMS_STORAGE_KEY = 'bbq_order_manual_items';
 const SFA_MANUAL_ITEMS_STORAGE_KEY = 'bbq_sfa_manual_items';
 const SFA_ANALYSIS_HISTORY_STORAGE_KEY = 'bbq_sfa_analysis_history';
+const AI_USAGE_ADVISORY_STORAGE_KEY = 'bbq_ai_usage_advisory';
 const STATE_REVISION_STORAGE_KEY = 'bbq_state_revision';
 const INVENTORY_REVISION_STORAGE_KEY = 'bbq_inventory_revision';
 const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
@@ -1960,8 +2207,7 @@ function updateOutputOrderForName(name) {
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const g = calcG(item, days);
   const isNeed = g > 0;
-  document.querySelectorAll('.output-order-value[data-output-name]').forEach(output => {
-    if ((output.dataset.outputKey || itemKeyForName(output.dataset.outputName)) !== itemKey) return;
+  document.querySelectorAll(`.output-order-value[data-output-key="${itemKey}"]`).forEach(output => {
     output.textContent = isNeed ? displayOrderQty(item, days) : '';
     const qtyCell = output.closest('td.order-qty');
     if (qtyCell) qtyCell.classList.toggle('pos', isNeed);
@@ -2365,7 +2611,20 @@ function renderDailyAnalysisSpan(name) {
   const analysis = usageAnalysis[name];
   const text = analysis ? `${analysis.source === 'actual' ? '실사용' : '참고'} ${fmt(analysis.avg, 2)}` : '';
   const title = analysis ? usageAnalysisTitle(analysis) : '';
-  return `<span class="daily-analysis ${analysis ? '' : 'empty'}" data-analysis-name="${escapeHtml(name)}" title="${escapeHtml(title)}">${text}</span>`;
+  return `<span class="daily-analysis ${analysis ? '' : 'empty'}" data-analysis-key="${escapeHtml(itemKeyForName(name))}" data-analysis-name="${escapeHtml(name)}" title="${escapeHtml(title)}">${text}</span>`;
+}
+
+function renderAiUsageAdvisorySpan(name) {
+  const row = aiUsageAdvisory[canonicalItemName(name)];
+  if (!row) return '<span class="ai-usage-advisory empty"></span>';
+  const title = [
+    'AI 참고 제안이며 수동 일사용량을 자동 변경하지 않습니다.',
+    ...row.reasons,
+    ...row.anomalies.map(value => `이상치: ${value}`),
+    row.sourceRunIds.length ? `근거 run ${row.sourceRunIds.join(', ')}` : '',
+    row.analysisRunId ? `분석 run ${row.analysisRunId}` : ''
+  ].filter(Boolean).join(' · ');
+  return `<span class="ai-usage-advisory" title="${escapeHtml(title)}">AI 제안 ${escapeHtml(displayDecimal(row.suggestedUsage))} · ${Math.round(row.confidence * 100)}%</span>`;
 }
 
 function updateDailyAnalysisSpan(span) {
@@ -2382,9 +2641,8 @@ function updateAllDailyAnalysisCells() {
 }
 
 function updateDailyAnalysisForName(name) {
-  document.querySelectorAll('.daily-analysis[data-analysis-name]').forEach(span => {
-    if (span.dataset.analysisName === name) updateDailyAnalysisSpan(span);
-  });
+  const itemKey = itemKeyForName(name);
+  document.querySelectorAll(`.daily-analysis[data-analysis-key="${itemKey}"]`).forEach(updateDailyAnalysisSpan);
 }
 
 async function loadUsageHistory(silent = true) {
@@ -2404,7 +2662,7 @@ async function loadUsageHistory(silent = true) {
     recomputeUsageAnalysis();
     updateAllDailyAnalysisCells();
     if (sfaCompareVisible && sfaActiveTab === 'alias') renderSfaAnalysisTab(lastSfaCompareData);
-    if (lastSfaCompareData && (viewMode === 'output' || document.querySelector('.inline-alias-correction'))) render();
+    if (lastSfaCompareData && document.querySelector('.inline-alias-correction')) renderPreservingGridFocus();
   } catch (e) {
     console.warn('[usageAnalysis] load failed', e);
     if (!silent) toast('일사용 분석 기록 오류');
@@ -2453,6 +2711,10 @@ function buildSfaAnalysisPayloadState(data = lastSfaCompareData) {
     orderUnitCorrections,
     orderManualItems: orderManualItemsForPayload(),
     sfaAnalysisHistory: sfaAnalysisHistoryForPayload(),
+    sfaOrderLedger: sfaOrderLedgerForPayload(),
+    sfaActualHistory: { sourcePath: SFA_ACTUAL_HISTORY_PATH, ledger: sfaOrderLedgerForPayload() },
+    aiUsageEvidence: buildAiUsageEvidence(),
+    aiUsageAdvisory: sanitizeAiUsageAdvisory(),
     dailySales,
     baseSales: getBaseSales(),
     salesWeights: dailyWeights(days).map(x => Math.round(x * 1000) / 1000),
@@ -2466,6 +2728,7 @@ function refreshSfaResultViewsWithCurrentState(data = lastSfaCompareData, reason
     renderSfaComparePanel(null);
     return buildSfaAnalysisPayloadState(null);
   }
+  if (Object.prototype.hasOwnProperty.call(data, 'aiUsageAdvisory')) aiUsageAdvisory = sanitizeAiUsageAdvisory(data.aiUsageAdvisory);
   appendSfaAnalysisHistory(data, reason === 'manualInput' ? 'manual' : 'excel');
   const state = buildSfaAnalysisPayloadState(data);
   lastSfaResultAppliedAt = Date.now();
@@ -3541,9 +3804,34 @@ function inlineAliasCorrectionHtml(row) {
         <label>후보환산${inlineAliasConversionSelectHtml(row)}</label>
         <label>직접환산${inlineAliasConversionInputHtml(row)}</label>
       </div>
+      <div class="inline-alias-new-fields">
+        <input class="sfa-edit inline-alias-new-input" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="새 실발주명">
+        <input class="sfa-edit inline-alias-new-unit" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="단위">
+        <button class="inline-alias-new-button" type="button" data-alias-name="${escapeHtml(row.aliasName)}">별명 추가</button>
+      </div>
       <div class="inline-alias-meta">${escapeHtml(meta || '기본 후보를 분석 payload에 사용합니다. 선택은 확정, 숫자 입력은 직접값으로 저장됩니다.')}</div>
     </div>
   </details>`;
+}
+
+function inlineSiteMatchesHtml(itemName, rows) {
+  const linked = (rows || []).filter(row => canonicalItemName(row.targetName || '') === canonicalItemName(itemName));
+  if (!linked.length) return '';
+  const cards = linked.map(row => `<div class="inline-site-card">
+    <div><b>${escapeHtml(row.siteName)}</b> · ${escapeHtml(sfaStatusText(row.status))}${row.siteUnit ? ` · ${escapeHtml(row.siteUnit)}` : ''}</div>
+    ${masterSelectHtml(row)}
+  </div>`).join('');
+  return `<details class="inline-site-match"><summary>사이트 매칭 ${linked.length}건</summary><div class="inline-site-list">${cards}</div></details>`;
+}
+
+function inlineUnmatchedSiteRowHtml(row) {
+  const meta = [row.siteUnit, Number.isFinite(Number(row.siteQty)) ? `수량 ${fmt(row.siteQty, 1)}` : ''].filter(Boolean).join(' · ');
+  return `<tr class="inline-unmatched-row" data-site-key="${escapeHtml(row.siteKey)}">
+    <td>미매칭</td>
+    <td class="name"><div class="item-title">${escapeHtml(row.siteName)}</div><div class="inline-alias-meta">${escapeHtml(meta || 'SFA 신규 행')}</div></td>
+    <td colspan="6">${masterSelectHtml(row)}</td>
+    <td></td>
+  </tr>`;
 }
 
 function aliasMatchRowHtml(row) {
@@ -3654,7 +3942,7 @@ function updateSfaTabButtons() {
 
 function persistOrderCorrections(reason = 'correction') {
   saveLocal(reason);
-  if (viewMode === 'output' || document.querySelector('.inline-alias-correction')) render();
+  if (document.querySelector('.inline-alias-correction')) renderPreservingGridFocus();
   renderSfaAnalysisTab(lastSfaCompareData);
   flushAutoSave(reason);
 }
@@ -3903,6 +4191,35 @@ function bindInlineAliasControls() {
       setOrderAliasConversion(e.target.dataset.aliasName, e.target.value, 'manual');
     });
   });
+  document.querySelectorAll('.inline-alias-new-button').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const wrap = e.target.closest('.inline-alias-new-fields');
+      setManualOrderAlias(
+        e.target.dataset.aliasName,
+        wrap?.querySelector('.inline-alias-new-input')?.value || '',
+        wrap?.querySelector('.inline-alias-new-unit')?.value || ''
+      );
+    });
+  });
+}
+
+function bindInlineSiteControls() {
+  document.querySelectorAll('.inline-site-match .sfa-match-select, .inline-unmatched-row .sfa-match-select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      setOrderSiteMapping(e.target.dataset.siteKey, e.target.value, e.target.dataset.siteName || '', e.target.dataset.siteUnit || '');
+    });
+  });
+  document.querySelectorAll('.inline-site-match .sfa-new-item-source, .inline-unmatched-row .sfa-new-item-source').forEach(btn => {
+    btn.addEventListener('click', e => {
+      addOrderSiteManualItem(e.target.dataset.siteKey, e.target.dataset.siteName || '', e.target.dataset.siteName || '', e.target.dataset.siteUnit || '');
+    });
+  });
+  document.querySelectorAll('.inline-site-match .sfa-new-item-custom, .inline-unmatched-row .sfa-new-item-custom').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const wrap = e.target.closest('.sfa-new-item-fields');
+      addOrderSiteManualItem(e.target.dataset.siteKey, wrap?.querySelector('.sfa-new-item-input')?.value || '', e.target.dataset.siteName || '', e.target.dataset.siteUnit || '');
+    });
+  });
 }
 
 function manualSfaItemFromSource(row, idx) {
@@ -4020,6 +4337,9 @@ function sfaIoOutput(data) {
     })),
     manualItems: orderManualItemsForPayload(),
     analysisHistory: sfaAnalysisHistoryForPayload(),
+    orderLedger: sfaOrderLedgerForPayload(),
+    aiUsageEvidence: buildAiUsageEvidence(),
+    aiUsageAdvisory: sanitizeAiUsageAdvisory(),
     unitCorrections: unitRows
   }, null, 2);
 }
@@ -4300,6 +4620,14 @@ async function requestSfaOrderAnalysis() {
     orderUnitCorrections: sfaAnalysisState.orderUnitCorrections,
     orderManualItems: sfaAnalysisState.orderManualItems,
     sfaAnalysisHistory: sfaAnalysisState.sfaAnalysisHistory,
+    sfaOrderLedger: sfaAnalysisState.sfaOrderLedger,
+    sfaActualHistory: sfaAnalysisState.sfaActualHistory,
+    aiUsageAnalysis: {
+      requested: true,
+      advisoryOnly: true,
+      evidence: sfaAnalysisState.aiUsageEvidence,
+      responseContract: sfaAnalysisState.aiUsageEvidence.workerContract
+    },
     requestedAt: now,
     requestedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19)
   };
@@ -4384,9 +4712,7 @@ function renderSaveLogs() {
   const tools = document.getElementById('inputTools');
   const wrap = document.getElementById('saveLog');
   if (!tools || !wrap) return;
-  const isInput = viewMode === 'input';
-  tools.classList.toggle('hidden', !isInput);
-  if (!isInput) return;
+  tools.classList.remove('hidden');
   wrap.innerHTML = '';
   const visibleLogs = saveLogs.filter(log => !isInternalDebugMessage(log.message));
   if (visibleLogs.length === 0) {
@@ -4413,24 +4739,14 @@ function updateStickyOffsets() {
 function renderHeader() {
   const thead = document.getElementById('thead');
   if (!thead) return;
-  if (viewMode === 'output') {
-    thead.innerHTML = `
-      <th>품목명</th>
-      <th>발주</th>
-      <th>재고</th>
-      <th>여유</th>
-      <th>일사용</th>
-      <th>단위</th>
-    `;
-    return;
-  }
   thead.innerHTML = `
     <th id="thZone">구역</th>
     <th>품목명</th>
     <th>재고</th>
     <th>여유</th>
     <th>일사용</th>
-    <th>발주</th>
+    <th>필요량</th>
+    <th>추천발주 · 분석 · 금액</th>
     <th>단위</th>
     <th id="thAct"></th>
   `;
@@ -4500,11 +4816,10 @@ function currentStockFocusId() {
 }
 
 function renderAndFocusStock(nextId, source, currentId) {
-  render();
   const moved = focusStockInputById(nextId);
   const msg = `${source} current=${currentId || '-'} next=${nextId || '-'} result=${moved ? 'focused' : 'end'}`;
-  console.debug('[stock-sort]', msg);
-  pushDebugLog('정렬이동 ' + msg, moved ? 'sync' : 'warn');
+  console.debug('[stock-flow]', msg);
+  pushDebugLog('입력이동 ' + msg, moved ? 'sync' : 'warn');
   return moved;
 }
 
@@ -4516,12 +4831,6 @@ function sortStockRowsAndKeepFlow(currentId, source = 'sort') {
 
 function isStockChecked(entry) {
   return entry && entry.stock !== null && entry.stock !== '' && !Number.isNaN(Number(entry.stock));
-}
-
-function inputRowPriority(entry, hidden) {
-  if (hidden) return 2;
-  if (isStockChecked(entry)) return 1;
-  return 0;
 }
 
 function fmt(n, dp=2) {
@@ -4544,9 +4853,6 @@ function normalizedZone(zone) {
 }
 
 function compareInputRows(left, right) {
-  const pri = inputRowPriority(left.entry, left.hidden) - inputRowPriority(right.entry, right.hidden);
-  if (pri !== 0) return pri;
-
   const leftZone = normalizedZone(left.entry.zone);
   const rightZone = normalizedZone(right.entry.zone);
   if (leftZone && !rightZone) return -1;
@@ -4557,6 +4863,71 @@ function compareInputRows(left, right) {
   if (seqDiff !== 0) return seqDiff;
 
   return (left.entry.id || '').localeCompare(right.entry.id || '', 'en');
+}
+
+function compareSfaRows(left, right) {
+  const itemDiff = defaultOutputCompare(left.item, right.item);
+  if (itemDiff !== 0) return itemDiff;
+  const zoneDiff = normalizedZone(left.entry.zone).localeCompare(normalizedZone(right.entry.zone), 'ko', { numeric: true, sensitivity: 'base' });
+  if (zoneDiff !== 0) return zoneDiff;
+  return (left.entry.entryKey || left.entry.id || '').localeCompare(right.entry.entryKey || right.entry.id || '', 'en');
+}
+
+function compareGridRows(left, right, mode = gridSortMode) {
+  return mode === 'sfa' ? compareSfaRows(left, right) : compareInputRows(left, right);
+}
+
+function gridFocusSnapshot(target = document.activeElement) {
+  if (!target?.classList?.contains('cell') || !target.dataset?.field) return lastGridFocus;
+  return {
+    entryKey: target.dataset.entryKey || target.dataset.id || '',
+    id: target.dataset.id || '',
+    field: target.dataset.field,
+    selectionStart: Number.isInteger(target.selectionStart) ? target.selectionStart : null,
+    selectionEnd: Number.isInteger(target.selectionEnd) ? target.selectionEnd : null
+  };
+}
+
+function rememberGridFocus(target = document.activeElement) {
+  const snapshot = gridFocusSnapshot(target);
+  if (snapshot) lastGridFocus = snapshot;
+  return snapshot;
+}
+
+function restoreGridFocus(snapshot = lastGridFocus) {
+  if (!snapshot?.field) return false;
+  const target = Array.from(document.querySelectorAll('input.cell')).find(input => {
+    const key = input.dataset.entryKey || input.dataset.id || '';
+    return key === (snapshot.entryKey || snapshot.id) && input.dataset.field === snapshot.field;
+  });
+  if (!target) return false;
+  target.focus();
+  if (snapshot.selectionStart !== null && typeof target.setSelectionRange === 'function') {
+    const length = String(target.value || '').length;
+    target.setSelectionRange(Math.min(snapshot.selectionStart, length), Math.min(snapshot.selectionEnd ?? snapshot.selectionStart, length));
+  }
+  lastGridFocus = snapshot;
+  return true;
+}
+
+function renderPreservingGridFocus() {
+  return render({ focusSnapshot: gridFocusSnapshot() });
+}
+
+function updateGridSortButtons() {
+  document.getElementById('sortInputBtn')?.classList.toggle('active', gridSortMode === 'input');
+  document.getElementById('sortSfaBtn')?.classList.toggle('active', gridSortMode === 'sfa');
+}
+
+function setGridSortMode(mode) {
+  const nextMode = mode === 'sfa' ? 'sfa' : 'input';
+  if (nextMode === gridSortMode) return;
+  const focusSnapshot = gridFocusSnapshot();
+  stockFlowEpoch += 1;
+  flushDeferredInputWork();
+  if (localDirty || autoSaveTimer) flushAutoSave('sortSwitch');
+  gridSortMode = nextMode;
+  render({ focusSnapshot });
 }
 
 function defaultOutputCompare(a, b) {
@@ -4627,13 +4998,13 @@ function markDeferredInputDirty() {
 }
 
 function updateDerivedOrderForName(name) {
-  if (viewMode === 'output') updateOutputOrderForName(name);
-  else updateGForName(name);
+  updateGForName(name);
 }
 
 function runDeferredInputWork() {
   deferredInputWorkHandle = null;
   if (!deferredInputWork.dirty) return;
+  gridPerf.deferredRuns += 1;
   const revision = deferredInputRevision;
   const work = deferredInputWork;
   deferredInputWork = emptyDeferredInputWork();
@@ -4660,6 +5031,7 @@ function scheduleDeferredInputWork(options = {}) {
   });
   markDeferredInputDirty();
   if (deferredInputWorkHandle) return;
+  gridPerf.scheduledFrames += 1;
   const handle = scheduleFrameTask(runDeferredInputWork);
   deferredInputWorkHandle = handle;
 }
@@ -4675,7 +5047,9 @@ function flushDeferredInputWork() {
 
 function bindCellInputs() {
   document.querySelectorAll('input.cell').forEach(inp => {
+    inp.addEventListener('focus', e => rememberGridFocus(e.target));
     inp.addEventListener('input', e => {
+      rememberGridFocus(e.target);
       if (handleOutputCellInput(e.target)) return;
       const id = e.target.dataset.id;
       const f = e.target.dataset.field;
@@ -4687,6 +5061,7 @@ function bindCellInputs() {
         const stock = v === '' ? null : Number(v);
         ent.stock = stock == null || !Number.isFinite(stock) ? null : stock;
         markInventoryMutation();
+        updateDerivedOrderForName(ent.name);
         scheduleDeferredInputWork({ names: [ent.name], recomputeUsage: true });
       } else if (f === 'zone') {
         ent.zone = v;
@@ -4700,6 +5075,7 @@ function bindCellInputs() {
         if (num === null) delete overrides[n][f];
         else overrides[n][f] = num;
         if (Object.keys(overrides[n]).length === 0) delete overrides[n];
+        updateDerivedOrderForName(n);
         scheduleDeferredInputWork({ names: [n] });
       }
     });
@@ -4707,18 +5083,19 @@ function bindCellInputs() {
       if (e.target.dataset.outputField) {
         handleOutputCellInput(e.target);
         flushAutoSave('auto');
-        render();
         return;
       }
       // blur/Enter — pending autosave 즉시 flush
       if (e.target.dataset.field === 'stock') {
         logStockEvent(e, 'change');
         const currentId = e.target.dataset.id;
+        const flowEpoch = stockFlowEpoch;
         if (skipStockRenderOnceId === e.target.dataset.id) {
           skipStockRenderOnceId = null;
           return;
         }
         setTimeout(() => {
+          if (flowEpoch !== stockFlowEpoch) return;
           if (shouldFallbackAdvanceFromChange(e.target, currentId)) {
             advanceStockInput(currentId, 'change');
           } else {
@@ -4729,7 +5106,7 @@ function bindCellInputs() {
         return;
       }
       flushAutoSave();
-      if (e.target.dataset.field === 'zone') render();
+      if (e.target.dataset.field === 'zone') renderPreservingGridFocus();
     });
     inp.addEventListener('keydown', e => {
       if (e.target.dataset.outputField) {
@@ -4738,7 +5115,6 @@ function bindCellInputs() {
         handleOutputCellInput(e.target);
         e.target.blur();
         flushAutoSave('auto');
-        render();
         return;
       }
       if (e.target.dataset.field === 'stock') logStockEvent(e, 'keydown');
@@ -4759,48 +5135,25 @@ function kstDateKey(ts) {
     k.getUTCDate().toString().padStart(2,'0');
 }
 
-function render() {
-  document.body.classList.toggle('output-mode', viewMode === 'output');
+function render(options = {}) {
+  gridPerf.fullRenders += 1;
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
   renderHeader();
   renderSaveLogs();
+  updateGridSortButtons();
   const days = parseInt(document.getElementById('orderDays').value);
   recomputeUsageAnalysis();
 
   refreshNeedBadge(days);
-
-  if (viewMode === 'output') {
-    // 품목 단위 1행, G>0만. 기본은 D순, 버튼으로 출력 순서 조정 가능.
-    const list = getOutputItems(days);
-    list.forEach((item, idx) => {
-      const g = calcG(item, days);
-      const E = displayStockTotal(item.name);
-      const tr = document.createElement('tr');
-      tr.classList.add('need');
-      const safeName = item.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-      tr.innerHTML = `
-        <td class="name">${item.name}</td>
-        <td class="qty order-qty pos"><span class="order-cell">${outputOrderDisplay(item.name, displayOrderQty(item, days))}${renderOrderAnalysisSpan(item, g)}${renderOrderAmountSpan(item, g)}</span></td>
-        <td>${outputNumberInput(item.name, 'stock', displayDecimal(E))}</td>
-        <td>${outputNumberInput(item.name, 'k', displayDecimal(getK(item)))}</td>
-        <td><span class="daily-cell">${outputNumberInput(item.name, 'l', displayDecimal(getL(item)))}${renderDailyAnalysisSpan(item.name)}</span></td>
-        <td>${item.unit||''}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-    bindCellInputs();
-    updateStickyOffsets();
-    return;
-  }
-
-  // 입력 모드 — 미입력 우선 + 구역 묶음. 완료/숨김은 아래로 내려 입력 동선을 보존.
+  // 입력값과 계산 결과는 항상 한 표에 유지하고, 정렬 컨텍스트만 전환한다.
   const orderedRows = entries.map(ent => {
     const item = orderItemByName(ent.name);
     if (!item) return null;
     return { entry: ent, item, hidden: isItemHidden(item.name) };
-  }).filter(Boolean).sort(compareInputRows);
+  }).filter(Boolean).sort((left, right) => compareGridRows(left, right));
   const inlineAliasRowsByName = new Map(buildOrderAliasMatches(lastSfaCompareData).map(row => [row.aliasName, row]));
+  const inlineSiteRows = buildOrderSiteMatches(lastSfaCompareData);
 
   const shownItems = new Set();
   orderedRows.forEach(({ entry: ent, item, hidden }) => {
@@ -4811,6 +5164,8 @@ function render() {
     const isNeed = g > 0;
     const isChecked = isStockChecked(ent);
     const tr = document.createElement('tr');
+    tr.dataset.itemKey = itemKeyForName(item.name);
+    tr.dataset.entryKey = ent.entryKey || ent.id;
     if (isNeed && isFirst) tr.classList.add('need');
     if (hidden) tr.classList.add('row-hidden');
     else if (isChecked) tr.classList.add('row-checked');
@@ -4820,17 +5175,21 @@ function render() {
     const safeName = item.name.replace(/"/g, '&quot;');
     const nameDisplay = item.name;
     const inlineAliasControls = isFirst ? inlineAliasCorrectionHtml(inlineAliasRowsByName.get(item.name)) : '';
+    const inlineSiteControls = isFirst ? inlineSiteMatchesHtml(item.name, inlineSiteRows) : '';
     const daysLeft = hidden ? daysUntilReturn(item.name) : 0;
     const orderText = isNeed ? displayOrderQty(item, days) : '';
-    const gCell = isFirst
+    const needCell = hidden
+      ? `<td class="qty need-qty dup" data-item-key="${escapeHtml(itemKeyForName(item.name))}"><span class="need-output-value">${isFirst ? `💤 ${daysLeft}일 후 복귀` : ''}</span></td>`
+      : `<td class="qty need-qty ${isNeed ? 'need-output' : ''}" data-item-key="${escapeHtml(itemKeyForName(item.name))}"><span class="need-output-value">${isNeed ? displayDecimal(g) : ''}</span></td>`;
+    const orderCell = isFirst
       ? (hidden
           ? `<td class="qty order-qty dup">💤 ${daysLeft}일 후 복귀</td>`
-          : `<td class="qty order-qty ${isNeed?'pos':''}">${orderText}</td>`)
-      : `<td class="qty order-qty dup">${hidden ? '' : orderText}</td>`;
+          : `<td class="qty order-qty ${isNeed?'pos':''}"><span class="order-cell">${outputOrderDisplay(item.name, orderText)}${renderOrderAnalysisSpan(item, g)}${renderOrderAmountSpan(item, g)}</span></td>`)
+      : `<td class="qty order-qty dup">${hidden ? '' : outputOrderDisplay(item.name, orderText)}</td>`;
     const KL = isFirst
-      ? `<td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="k" value="${displayDecimal(getK(item))}"></td>
-         <td><span class="daily-cell"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-field="l" value="${displayDecimal(getL(item))}">${renderDailyAnalysisSpan(item.name)}</span></td>`
-      : `<td class="qty dup-meta">${displayDecimal(getK(item))}</td><td class="qty dup-meta"><span>${displayDecimal(getL(item))}</span>${renderDailyAnalysisSpan(item.name)}</td>`;
+      ? `<td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-entry-key="${escapeHtml(ent.entryKey || ent.id)}" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-field="k" value="${displayDecimal(getK(item))}"></td>
+         <td><span class="daily-cell"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${ent.id}" data-entry-key="${escapeHtml(ent.entryKey || ent.id)}" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-field="l" value="${displayDecimal(getL(item))}">${renderDailyAnalysisSpan(item.name)}${renderAiUsageAdvisorySpan(item.name)}</span></td>`
+      : `<td class="qty dup-meta">${displayDecimal(getK(item))}</td><td class="qty dup-meta"><span>${displayDecimal(getL(item))}</span>${renderDailyAnalysisSpan(item.name)}${renderAiUsageAdvisorySpan(item.name)}</td>`;
     const snoozeBtn = isFirst
       ? (hidden
           ? `<button tabindex="-1" onclick="unsnoozeItem('${safeName}')" title="숨김 해제">↩</button>`
@@ -4839,10 +5198,11 @@ function render() {
 
     tr.innerHTML = `
       <td><input class="cell zone" type="text" tabindex="-1" data-id="${ent.id}" data-entry-key="${escapeHtml(ent.entryKey || ent.id)}" data-item-key="${escapeHtml(ent.itemKey || itemKeyForName(item.name))}" data-field="zone" value="${(ent.zone||'').replace(/"/g,'&quot;')}"></td>
-      <td class="name" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}</td>
+      <td class="name" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}${inlineSiteControls}</td>
       <td><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${ent.id}" data-entry-key="${escapeHtml(ent.entryKey || ent.id)}" data-item-key="${escapeHtml(ent.itemKey || itemKeyForName(item.name))}" data-field="stock" value="${ent.stock==null?'':ent.stock}"></td>
       ${KL}
-      ${gCell}
+      ${needCell}
+      ${orderCell}
       <td>${item.unit||''}</td>
       <td class="actions">
         <button class="add" tabindex="-1" onclick="addRow('${ent.id}')" title="같은 품목 행 추가">+</button>
@@ -4853,9 +5213,15 @@ function render() {
     tbody.appendChild(tr);
   });
 
+  inlineSiteRows.filter(row => row.status === 'unmatched' || !row.targetName).forEach(row => {
+    tbody.insertAdjacentHTML('beforeend', inlineUnmatchedSiteRowHtml(row));
+  });
+
   bindCellInputs();
   bindInlineAliasControls();
+  bindInlineSiteControls();
   updateStickyOffsets();
+  if (options.focusSnapshot) restoreGridFocus(options.focusSnapshot);
 }
 
 function refreshNeedBadge(days = parseInt(document.getElementById('orderDays')?.value || recommendedDays())) {
@@ -4868,26 +5234,22 @@ function refreshNeedBadge(days = parseInt(document.getElementById('orderDays')?.
 function updateGForName(name) {
   const item = orderItemByName(name);
   if (!item) return;
+  gridPerf.keyedRowPatches += 1;
+  const itemKey = itemKeyForName(item.name);
   const days = parseInt(document.getElementById('orderDays').value);
   const g = calcG(item, days);
   const isNeed = g > 0;
-  // 같은 품목 모든 행의 G 셀/배경 갱신
-  document.querySelectorAll('tr').forEach(tr => {
-    const cells = tr.querySelectorAll('td.name');
-    if (!cells.length) return;
-    const txt = cells[0].dataset.itemName || cells[0].textContent.replace(/^↳\s*/, '');
-    if (txt !== name) return;
-    const gCell = tr.querySelector('td.order-qty');
-    if (gCell && !tr.classList.contains('row-hidden')) {
-      const isDuplicateCell = gCell.classList.contains('dup');
-      gCell.textContent = isNeed ? displayOrderQty(item, days) : '';
-      gCell.className = isDuplicateCell
-        ? 'qty order-qty dup'
-        : 'qty order-qty' + (isNeed ? ' pos' : '');
-    }
+  // 포커스된 input DOM은 건드리지 않고 같은 itemKey의 계산 셀만 즉시 패치한다.
+  document.querySelectorAll(`tr[data-item-key="${itemKey}"]`).forEach(tr => {
+    if (tr.classList.contains('row-hidden')) return;
+    const needCell = tr.querySelector('td.need-qty');
+    const needValue = needCell?.querySelector('.need-output-value');
+    if (needValue) needValue.textContent = isNeed ? displayDecimal(g) : '';
+    if (needCell) needCell.classList.toggle('need-output', isNeed);
     if (isNeed && !tr.classList.contains('dup-row')) tr.classList.add('need');
     else tr.classList.remove('need');
   });
+  updateOutputOrderForName(name);
   refreshNeedBadge(days);
 }
 
@@ -4912,21 +5274,6 @@ function deleteRow(id) {
   entries.splice(idx, 1);
   markInventoryMutation();
   saveLocal();
-  render();
-}
-
-function toggleMode() {
-  flushDeferredInputWork();
-  if (localDirty || autoSaveTimer) flushAutoSave('modeSwitch');
-  viewMode = (viewMode === 'input') ? 'output' : 'input';
-  const btn = document.getElementById('modeBtn');
-  if (viewMode === 'input') {
-    btn.textContent = '출력 보기';
-    btn.className = '';
-  } else {
-    btn.textContent = '입력 보기';
-    btn.className = 'green';
-  }
   render();
 }
 
@@ -4963,6 +5310,8 @@ function saveLocal(reason = 'auto') {
   localStorage.setItem(ORDER_ALIAS_MAPPING_STORAGE_KEY, JSON.stringify(orderAliasMappings));
   localStorage.setItem(ORDER_UNIT_CORRECTION_STORAGE_KEY, JSON.stringify(orderUnitCorrections));
   localStorage.setItem(ORDER_MANUAL_ITEMS_STORAGE_KEY, JSON.stringify(orderManualItemsForPayload()));
+  localStorage.setItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON.stringify(sfaAnalysisHistoryForPayload()));
+  localStorage.setItem(AI_USAGE_ADVISORY_STORAGE_KEY, JSON.stringify(sanitizeAiUsageAdvisory()));
   localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
   localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
   if (baseSales == null) localStorage.removeItem('bbq_baseSales');
@@ -5083,7 +5432,8 @@ async function saveToFB(reason = 'manual') {
   actualOrders = cleanActualOrders();
   const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(lastSfaCompareData);
   const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(lastSfaCompareData);
-  const payload = { savedAt: now, stateRevision: savingStateRevision, inventoryRevision: savingInventoryRevision, dateKey, orderDays: days, entries: sanitizeEntries(entries), inventoryByItemKey: inventoryByItemKeyForPayload(), overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
+  const ledger = sfaOrderLedgerForPayload();
+  const payload = { savedAt: now, stateRevision: savingStateRevision, inventoryRevision: savingInventoryRevision, dateKey, orderDays: days, entries: sanitizeEntries(entries), inventoryByItemKey: inventoryByItemKeyForPayload(), overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), sfaAnalysisHistory: ledger, sfaOrderLedger: ledger, sfaActualHistory: { sourcePath: SFA_ACTUAL_HISTORY_PATH, ledger }, aiUsageEvidence: buildAiUsageEvidence(), aiUsageAdvisory: sanitizeAiUsageAdvisory(), dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
@@ -5228,6 +5578,13 @@ function applyFBData(data) {
   if (Object.prototype.hasOwnProperty.call(data, 'orderSiteMappings')) orderSiteMappings = sanitizeOrderSiteMappings(data.orderSiteMappings);
   if (Object.prototype.hasOwnProperty.call(data, 'orderAliasMappings')) orderAliasMappings = sanitizeOrderAliasMappings(data.orderAliasMappings);
   if (Object.prototype.hasOwnProperty.call(data, 'orderUnitCorrections')) orderUnitCorrections = sanitizeOrderUnitCorrections(data.orderUnitCorrections);
+  const incomingLedger = Object.prototype.hasOwnProperty.call(data, 'sfaOrderLedger')
+    ? data.sfaOrderLedger
+    : (Object.prototype.hasOwnProperty.call(data, 'sfaAnalysisHistory')
+        ? data.sfaAnalysisHistory
+        : data.sfaActualHistory?.ledger);
+  if (incomingLedger) sfaAnalysisHistory = mergeSfaAnalysisHistories(sfaAnalysisHistory, incomingLedger);
+  if (Object.prototype.hasOwnProperty.call(data, 'aiUsageAdvisory')) aiUsageAdvisory = sanitizeAiUsageAdvisory(data.aiUsageAdvisory);
   if (Object.prototype.hasOwnProperty.call(data, 'dailySales')) dailySales = Array.isArray(data.dailySales) ? data.dailySales : [];
   if (Object.prototype.hasOwnProperty.call(data, 'baseSales')) {
     const n = Number(data.baseSales);
@@ -5332,6 +5689,8 @@ try {
   if (omi) orderManualItems = sanitizeOrderManualItems(JSON.parse(omi));
   const sah = localStorage.getItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY);
   if (sah) sfaAnalysisHistory = sanitizeSfaAnalysisHistory(JSON.parse(sah));
+  const aua = localStorage.getItem(AI_USAGE_ADVISORY_STORAGE_KEY);
+  if (aua) aiUsageAdvisory = sanitizeAiUsageAdvisory(JSON.parse(aua));
   const eRaw = localStorage.getItem('bbq_entries');
   if (eRaw) {
     entries = JSON.parse(eRaw);
