@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260714-02';/, 'APP_VERSION must be bumped for single-grid inventory and ledger contract');
+mustMatch(/const APP_VERSION = '20260714-03';/, 'APP_VERSION must be bumped for autosave recovery');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -263,7 +263,13 @@ mustMatch(/\$\{outputOrderDisplay\(item\.name, orderText\)\}\$\{renderOrderAnaly
 mustMatch(/document\.querySelectorAll\(`tr\[data-item-key="\$\{itemKey\}"\]`\)/, 'live calculation refresh must patch only rows with the same stable item key');
 mustMatch(/function scheduleDeferredInputWork\(options = \{\}\)/, 'input edits must use deferred calculation scheduler');
 mustMatch(/let deferredInputRevision = 0;/, 'deferred input work must track a latest revision token');
-mustMatch(/saveLocal\(work\.saveReason \|\| 'auto'\);\s*if \(revision !== deferredInputRevision\) return;/, 'deferred input work must not apply stale calculations over newer input');
+mustMatch(/localStorage\.setItem\('bbq_entries', JSON\.stringify\(entries\)\);[\s\S]*localStorage\.setItem\(PENDING_SYNC_REVISION_STORAGE_KEY, String\(stateRevision\)\);[\s\S]*scheduleAutoSave\(reason\);/, 'input events must persist a durable local draft before deferred work');
+mustMatch(/const work = deferredInputWork;\s*deferredInputWork = emptyDeferredInputWork\(\);\s*if \(revision !== deferredInputRevision\) return;/, 'deferred input work must not apply stale calculations over newer input');
+mustMatch(/const SAVE_REQUEST_TIMEOUT_MS = 20000;/, 'Firebase autosave must have a bounded request timeout');
+mustMatch(/async function putSaveTargets\(payload, dateKey, timeoutMs = SAVE_REQUEST_TIMEOUT_MS\)/, 'current/history writes need a shared abortable timeout');
+mustMatch(/controller\.abort\(\);/, 'a failed save target must abort its sibling before releasing single-flight');
+mustMatch(/function retryPendingLocalSync\(reason = 'recovery'\)/, 'durable pending autosave retry helper missing');
+mustMatch(/window\.addEventListener\('online', \(\) => retryPendingLocalSync\('online'\)\);/, 'online recovery must retry a durable pending save');
 mustMatch(/setOutputStockTotalByItemKey\(itemKey, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true \}\);/, 'output stock edits must use the same stable item key and defer usage/order refresh');
 mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\] \}\);/, 'output buffer/daily edits must defer order refresh');
 mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*updateDerivedOrderForName\(ent\.name\);\s*scheduleDeferredInputWork\(\{ names: \[ent\.name\], recomputeUsage: true \}\);/, 'stock input must patch its output immediately before deferred heavy work');
@@ -409,6 +415,7 @@ const sandbox = {
   URLSearchParams,
   TextEncoder,
   Uint8Array,
+  AbortController,
   location: { search: '', hostname: 'localhost' },
   localStorage: {
     getItem(key) { return storage.has(key) ? storage.get(key) : null; },
@@ -487,6 +494,15 @@ this.__OrderHelperApi = {
   setLocalDirtyForCheck(value) { localDirty = Boolean(value); },
   saveStatusForCheck() { return { localDirty, saveInFlight, pendingSave, stateRevision, inventoryRevision }; },
   saveToFBForCheck(reason = 'test') { return saveToFB(reason); },
+  putSaveTargets,
+  retryPendingLocalSync,
+  hasPendingLocalSync,
+  cancelAutosaveForCheck() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+    if (deferredInputWorkHandle) cancelFrameTask(deferredInputWorkHandle);
+    deferredInputWorkHandle = null;
+  },
   shouldApplyIncomingCurrent,
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
