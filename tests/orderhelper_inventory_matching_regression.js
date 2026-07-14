@@ -66,11 +66,17 @@ async function verifyConfirmedSaveRevisionFence() {
     if (options.method === 'PUT') {
       putBodies.push({ url: String(url), body: JSON.parse(options.body) });
       if (putBodies.length <= 2) {
-        return new Promise(resolve => firstPutResolvers.push(() => resolve({ ok: true, text: async () => '' })));
+        return new Promise(resolve => firstPutResolvers.push(() => resolve({ ok: true, status: 200, text: async () => '' })));
       }
-      return { ok: true, text: async () => '' };
+      return { ok: true, status: 200, text: async () => '' };
     }
-    return { ok: true, json: async () => ({}), text: async () => '' };
+    return {
+      ok: true,
+      status: 200,
+      headers: { get(name) { return String(name).toLowerCase() === 'etag' ? '"fixture"' : null; } },
+      json: async () => null,
+      text: async () => '',
+    };
   };
 
   api.resetConfirmedSaveMachineForCheck();

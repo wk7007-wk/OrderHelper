@@ -13,8 +13,14 @@ async function waitFor(predicate, label) {
   throw new Error(`timeout: ${label}`);
 }
 
-function response(ok = true, status = ok ? 200 : 500) {
-  return { ok, status, json: async () => null, text: async () => '' };
+function response(ok = true, status = ok ? 200 : 500, body = null, etag = '"fixture"') {
+  return {
+    ok,
+    status,
+    headers: { get(name) { return String(name).toLowerCase() === 'etag' ? etag : null; } },
+    json: async () => body,
+    text: async () => '',
+  };
 }
 
 function reset(stock = 10) {
@@ -71,7 +77,7 @@ async function verifyEnterPairAndExactBody() {
   const calls = [];
   sandbox.fetch = async (url, options = {}) => {
     if (options.method === 'PUT') calls.push({ url: String(url), body: options.body });
-    return response(true);
+    return response(true, 200, null);
   };
   assert.strictEqual(api.confirmCurrentSave('enter'), true, 'Enter must capture a confirmed commit');
   await waitFor(() => calls.length === 2 && !api.saveStatusForCheck().saveInFlight, 'Enter pair');
@@ -86,7 +92,7 @@ async function verifyRetryDoesNotCaptureLaterDraft() {
   const fakeTimers = installFakeTimers();
   const calls = [];
   sandbox.fetch = (url, options = {}) => {
-    if (options.method !== 'PUT') return Promise.resolve(response(true));
+    if (options.method !== 'PUT') return Promise.resolve(response(true, 200, null));
     calls.push({ url: String(url), body: options.body });
     return new Promise((_resolve, reject) => {
       options.signal.addEventListener('abort', () => {
@@ -107,7 +113,7 @@ async function verifyRetryDoesNotCaptureLaterDraft() {
 
   sandbox.fetch = async (url, options = {}) => {
     if (options.method === 'PUT') calls.push({ url: String(url), body: options.body });
-    return response(true);
+    return response(true, 200, null);
   };
   fakeTimers.runOnlyTimer();
   await waitFor(() => calls.length === 4 && !api.saveStatusForCheck().saveInFlight, 'exact retry');
@@ -122,10 +128,10 @@ async function verifySecondEnterQueuesLatest() {
   const calls = [];
   const firstPending = [];
   sandbox.fetch = (url, options = {}) => {
-    if (options.method !== 'PUT') return Promise.resolve(response(true));
+    if (options.method !== 'PUT') return Promise.resolve(response(true, 200, null));
     calls.push({ url: String(url), body: options.body });
     if (calls.length <= 2) return new Promise(resolve => firstPending.push(resolve));
-    return Promise.resolve(response(true));
+    return Promise.resolve(response(true, 200, null));
   };
   api.confirmCurrentSave('enter');
   await waitFor(() => firstPending.length === 2, 'first Enter active');
@@ -147,10 +153,10 @@ async function verifyPartialFailureRetriesBothExactTargets() {
   const calls = [];
   let failHistory = true;
   sandbox.fetch = async (url, options = {}) => {
-    if (options.method !== 'PUT') return response(true);
+    if (options.method !== 'PUT') return response(true, 200, null);
     calls.push({ url: String(url), body: options.body });
     if (failHistory && String(url).includes('/history/')) return response(false, 500);
-    return response(true);
+    return response(true, 200, null);
   };
   api.confirmCurrentSave('enter');
   await waitFor(() => !api.saveStatusForCheck().saveInFlight && fakeTimers.timers.size === 1, 'partial failure');
@@ -170,7 +176,7 @@ async function verifyRecoveryAndFailClosedStorage() {
   const calls = [];
   sandbox.fetch = async (url, options = {}) => {
     if (options.method === 'PUT') calls.push({ url: String(url), body: options.body });
-    return response(true);
+    return response(true, 200, null);
   };
   assert.strictEqual(api.retryConfirmedRemotePending('startup'), false, 'draft-only reload must not send remotely');
   assert.strictEqual(calls.length, 0, 'draft-only recovery must produce PUT 0');
@@ -202,14 +208,17 @@ async function verifyBoundedAbort() {
   reset(60);
   const commit = api.buildConfirmedSaveCommit('enter');
   let aborted = 0;
-  sandbox.fetch = async (_url, options = {}) => new Promise((_resolve, reject) => {
+  sandbox.fetch = async (_url, options = {}) => {
+    if (options.method !== 'PUT') return response(true, 200, null);
+    return new Promise((_resolve, reject) => {
     options.signal.addEventListener('abort', () => {
       aborted += 1;
       const error = new Error('aborted');
       error.name = 'AbortError';
       reject(error);
     }, { once: true });
-  });
+    });
+  };
   await assert.rejects(api.putConfirmedSaveTargets(commit, 25), error => error?.name === 'AbortError');
   assert.strictEqual(aborted, 2, 'timeout must abort both stalled targets');
 }

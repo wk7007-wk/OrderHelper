@@ -36,6 +36,7 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     origin = f"http://127.0.0.1:{server.server_address[1]}"
     remote = {"current": None, "history": None}
+    versions = {"current": 0, "history": 0}
     writes = []
     try:
         with sync_playwright() as playwright:
@@ -43,16 +44,37 @@ def main():
             page = browser.new_page()
 
             def firebase_route(route, request):
-                if request.method == "PUT":
+                cors_headers = {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, If-Match, X-Firebase-ETag",
+                    "Access-Control-Expose-Headers": "ETag",
+                }
+                kind = "current" if "/current.json" in request.url else ("history" if "/history/" in request.url else "other")
+                if request.method == "OPTIONS":
+                    route.fulfill(status=204, headers=cors_headers, body="")
+                elif request.method == "PUT":
                     body = request.post_data or ""
-                    kind = "current" if "/current.json" in request.url else "history"
+                    if kind == "other":
+                        route.fulfill(status=400, content_type="application/json", headers=cors_headers, body='{"error":"unexpected PUT"}')
+                        return
+                    expected_etag = f'"v{versions[kind]}"'
+                    if request.headers.get("if-match") != expected_etag:
+                        route.fulfill(status=412, content_type="application/json", headers=cors_headers, body='{"error":"etag mismatch"}')
+                        return
                     remote[kind] = json.loads(body)
+                    versions[kind] += 1
                     writes.append({"kind": kind, "url": request.url, "body": body})
-                    route.fulfill(status=200, content_type="application/json", body=body)
-                elif "/current.json" in request.url:
-                    route.fulfill(status=200, content_type="application/json", body=json.dumps(remote["current"]))
+                    route.fulfill(status=200, content_type="application/json", headers=cors_headers, body=body)
+                elif kind in {"current", "history"}:
+                    route.fulfill(
+                        status=200,
+                        content_type="application/json",
+                        headers={**cors_headers, "ETag": f'"v{versions[kind]}"'},
+                        body=json.dumps(remote[kind]),
+                    )
                 else:
-                    route.fulfill(status=200, content_type="application/json", body="null")
+                    route.fulfill(status=200, content_type="application/json", headers=cors_headers, body="null")
 
             page.route("**/*firebasedatabase.app/**", firebase_route)
             page.goto(origin, wait_until="domcontentloaded")
@@ -163,16 +185,56 @@ def main():
             page.evaluate("id => addRow(id)", fixture["id"])
             wait_for_puts(page, writes, before_action + 2)
 
+            before_xss_action = len(writes)
+            xss_fixture = page.evaluate(
+                """() => {
+                    window.__storedXss = 0;
+                    const maliciousId = 'row" onfocus="window.__storedXss=1';
+                    const maliciousZone = '\"><img src=x onerror="window.__storedXss=1">';
+                    const name = MASTER[0].name;
+                    entries = [{
+                        id: maliciousId,
+                        entryKey: maliciousId,
+                        itemKey: itemKeyForName(name),
+                        name,
+                        zone: maliciousZone,
+                        stock: 1,
+                    }];
+                    render();
+                    render();
+                    const addButton = document.querySelector('button[data-grid-action="add"]');
+                    const zoneInput = document.querySelector('input.cell[data-field="zone"]');
+                    const before = entries.length;
+                    addButton.click();
+                    return {
+                        maliciousId,
+                        maliciousZone,
+                        datasetId: addButton.dataset.entryId,
+                        zoneValue: zoneInput.value,
+                        imageCount: document.querySelectorAll('#tbody img').length,
+                        xss: window.__storedXss,
+                        before,
+                        after: entries.length,
+                    };
+                }"""
+            )
+            assert xss_fixture["datasetId"] == xss_fixture["maliciousId"], "escaped row id must round-trip through dataset"
+            assert xss_fixture["zoneValue"] == xss_fixture["maliciousZone"], "escaped zone text must round-trip as an input value"
+            assert xss_fixture["imageCount"] == 0 and xss_fixture["xss"] == 0, "stored row data must remain inert HTML"
+            assert xss_fixture["after"] == xss_fixture["before"] + 1, "double render must bind one delegated row-action listener"
+            wait_for_puts(page, writes, before_xss_action + 2)
+            page.wait_for_timeout(150)
+            assert len(writes) == before_xss_action + 2, "one delegated add click must produce one confirmed current/history pair"
+
             page.evaluate(
-                """id => {
-                    const input = Array.from(document.querySelectorAll('input.cell[data-field="stock"]')).find(row => row.dataset.id === id);
+                """() => {
+                    const input = document.querySelector('input.cell[data-field="stock"]');
                     input.value = '44';
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     const commit = buildConfirmedSaveCommit('enter');
                     if (!writeConfirmedSaveQueue({ v: 1, active: commit, queued: null })) throw new Error('queue fixture write failed');
                     window.__pendingBody = commit.body;
-                }""",
-                fixture["id"],
+                }"""
             )
             pending_body = page.evaluate("window.__pendingBody")
             before_reload_pending = len(writes)
