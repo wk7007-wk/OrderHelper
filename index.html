@@ -70,6 +70,10 @@
   .sfa-select, .sfa-edit, .sfa-textarea { width: 100%; background: #0f3460; color: #fff; border: 1px solid #315a8d; border-radius: 6px; padding: 7px 8px; font-size: 12px; }
   .sfa-select:focus, .sfa-edit:focus, .sfa-textarea:focus { outline: none; border-color: #e94560; }
   .sfa-alias-fields { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(74px, .65fr) minmax(62px, .45fr); gap: 5px; align-items: center; }
+  .sfa-new-item-fields { display: grid; grid-template-columns: minmax(110px, 1fr) auto auto; gap: 4px; align-items: center; }
+  .sfa-new-item-fields .sfa-select { grid-column: 1 / -1; }
+  .sfa-new-item-fields .sfa-edit { min-width: 0; }
+  .sfa-new-item-fields button { min-height: 30px; padding: 5px 8px; border-radius: 4px; border: 1px solid rgba(49, 90, 141, 0.72); background: #315a8d; color: #fff; font-size: 11px; font-weight: 800; cursor: pointer; }
   .inline-alias-correction { margin-top: 4px; max-width: 270px; color: #9aa7b7; font-size: 10px; line-height: 1.28; }
   .inline-alias-correction summary { display: flex; align-items: center; gap: 4px; min-height: 20px; cursor: pointer; list-style: none; white-space: normal; }
   .inline-alias-correction summary::-webkit-details-marker { display: none; }
@@ -206,6 +210,7 @@
     .sfa-match-row { grid-template-columns: 56px minmax(0, 1fr); }
     .desktop-access-row { grid-template-columns: 1fr; }
     .sfa-match-row .sfa-select,
+    .sfa-new-item-fields,
     .sfa-match-row .sfa-alias-fields,
     .sfa-match-row .sfa-unit-fields { grid-column: 1 / -1; }
     .sfa-alias-fields { grid-template-columns: 1fr; }
@@ -341,7 +346,7 @@
 </div>
 
 <script>
-const APP_VERSION = '20260707-10';
+const APP_VERSION = '20260710-05';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -854,6 +859,7 @@ let actualOrders = {};
 let orderSiteMappings = {};
 let orderAliasMappings = {};
 let orderUnitCorrections = {};
+let orderManualItems = [];
 let conversionAnalysis = {};
 let sfaStatusInitialized = false;
 let lastSfaStatusKey = '';
@@ -869,6 +875,7 @@ let pendingSnoozeName = null;
 let usageHistory = {};
 let usageAnalysis = {};
 let sfaActualHistory = {};
+let sfaAnalysisHistory = { records: [] };
 
 function canonicalItemName(name) {
   return ITEM_NAME_ALIASES[name] || name;
@@ -881,7 +888,254 @@ function legacyItemNames(name) {
 }
 
 function knownItemNameSet() {
+  return new Set(orderItemList().map(item => item.name));
+}
+
+function baseMasterItemNameSet() {
   return new Set(MASTER.map(item => item.name));
+}
+
+function normalizeManualOrderItemName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 160);
+}
+
+function sanitizeOrderManualItems(source = []) {
+  const baseNames = baseMasterItemNameSet();
+  const rows = Array.isArray(source) ? source : Object.values(source || {});
+  const seen = new Set();
+  const out = [];
+  rows.forEach(value => {
+    const row = value && typeof value === 'object' && !Array.isArray(value) ? value : { name: value };
+    const name = normalizeManualOrderItemName(row.name || row.targetName || row.siteName || row.actualName);
+    if (!name || baseNames.has(canonicalItemName(name)) || seen.has(name)) return;
+    seen.add(name);
+    out.push({
+      name,
+      unit: String(row.unit || row.siteUnit || row.actualUnit || '').slice(0, 40),
+      policy: String(row.policy || '여유').slice(0, 20),
+      buffer: Number.isFinite(Number(row.buffer)) ? Number(row.buffer) : 0,
+      daily: Number.isFinite(Number(row.daily)) ? Number(row.daily) : 0,
+      source: String(row.source || 'user').slice(0, 40),
+      sourceSiteName: String(row.sourceSiteName || row.siteName || '').slice(0, 160),
+      updatedAt: Number(row.updatedAt || Date.now())
+    });
+  });
+  return out;
+}
+
+function orderItemList() {
+  const manual = sanitizeOrderManualItems(orderManualItems).map((row, idx) => ({
+    sfaSeq: 10000 + idx,
+    name: row.name,
+    unit: row.unit || '',
+    policy: row.policy || '여유',
+    buffer: Number.isFinite(Number(row.buffer)) ? Number(row.buffer) : 0,
+    daily: Number.isFinite(Number(row.daily)) ? Number(row.daily) : 0,
+    manual: true
+  }));
+  return MASTER.concat(manual);
+}
+
+function orderItemByName(name) {
+  const itemName = canonicalItemName(name || '');
+  return orderItemList().find(item => item.name === itemName) || null;
+}
+
+function ensureManualOrderItem(name, unit = '', source = 'user', sourceSiteName = '') {
+  const itemName = normalizeManualOrderItemName(canonicalItemName(name || ''));
+  if (!itemName) return '';
+  if (baseMasterItemNameSet().has(itemName)) return itemName;
+  const existing = orderManualItems.find(row => row.name === itemName);
+  if (existing) {
+    if (!existing.unit && unit) existing.unit = String(unit).slice(0, 40);
+    existing.updatedAt = Date.now();
+  } else {
+    orderManualItems.push({
+      name: itemName,
+      unit: String(unit || '').slice(0, 40),
+      policy: '여유',
+      buffer: 0,
+      daily: 0,
+      source,
+      sourceSiteName: String(sourceSiteName || '').slice(0, 160),
+      updatedAt: Date.now()
+    });
+  }
+  orderManualItems = sanitizeOrderManualItems(orderManualItems);
+  return itemName;
+}
+
+function ensureEntryForOrderItem(name) {
+  const itemName = canonicalItemName(name || '');
+  if (!knownItemNameSet().has(itemName)) return;
+  if (!entries.some(entry => entry.name === itemName)) {
+    entries.push({ id: newId(), name: itemName, zone: '', stock: null });
+  }
+}
+
+function orderManualItemsForPayload() {
+  return sanitizeOrderManualItems(orderManualItems);
+}
+
+function timestampMs(value, fallback = Date.now()) {
+  const n = Number(value);
+  if (Number.isFinite(n) && n > 0) return n;
+  const parsed = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function sfaAnalysisFileName(data) {
+  if (!data) return '';
+  if (typeof data.file === 'string') return data.file.slice(0, 180);
+  return String(data.file?.name || data.fileName || '').slice(0, 180);
+}
+
+function sfaAnalysisDateKey(data, savedAt = Date.now()) {
+  return normalizeHistoryDateKey(
+    data?.historySummary?.selectedDate ||
+    data?.orderDateKey ||
+    data?.orderDate ||
+    data?.dateKey ||
+    data?.order_date ||
+    ''
+  ) || kstDateKey(savedAt);
+}
+
+function sfaAnalysisRunId(data, source = 'excel') {
+  const savedAt = timestampMs(data?.savedAt || data?.last_analyzed_at || data?.updated_at || Date.now());
+  const dateKey = sfaAnalysisDateKey(data, savedAt);
+  const fileName = sfaAnalysisFileName(data);
+  return [source || 'excel', dateKey, fileName || 'no-file', savedAt]
+    .map(part => String(part).replace(/[|#]/g, '_').slice(0, 180))
+    .join('|');
+}
+
+function sanitizeSfaAnalysisHistoryItem(item = {}, fallbackDateKey = '', fallbackSource = 'excel') {
+  const quantity = Number(item.quantity ?? item.qty ?? item.sfa_qty ?? item.siteQty ?? item.actualQty ?? 0);
+  const amount = Number(item.amount ?? item.sfa_amount ?? item.siteAmount ?? 0);
+  const score = Number(item.score ?? 0);
+  return {
+    dateKey: normalizeHistoryDateKey(item.dateKey || item.orderDateKey || item.orderDate || fallbackDateKey),
+    source: String(item.source || fallbackSource || 'excel').slice(0, 40),
+    originalName: String(item.originalName || item.siteName || item.sfa_name || item.name || item.source_name || '').trim().slice(0, 180),
+    mappedName: canonicalItemName(String(item.mappedName || item.targetName || item.expectedName || item.expected_name || '').trim()).slice(0, 180),
+    quantity: Number.isFinite(quantity) ? quantity : 0,
+    unit: String(item.unit || item.siteUnit || item.sfa_unit || '').trim().slice(0, 40),
+    amount: Number.isFinite(amount) ? amount : 0,
+    rowIndex: item.rowIndex ?? item.row_index ?? null,
+    status: String(item.status || 'recorded').slice(0, 40),
+    score: Number.isFinite(score) ? score : 0
+  };
+}
+
+function sanitizeSfaAnalysisHistory(source = sfaAnalysisHistory) {
+  const rawRecords = Array.isArray(source)
+    ? source
+    : (Array.isArray(source?.records) ? source.records : Object.values(source || {}).filter(row => row && typeof row === 'object'));
+  const byId = new Map();
+  rawRecords.forEach(record => {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return;
+    const savedAt = timestampMs(record.savedAt || record.updatedAt || Date.now());
+    const dateKey = normalizeHistoryDateKey(record.dateKey || record.orderDateKey || record.orderDate) || kstDateKey(savedAt);
+    const sourceName = String(record.source || 'excel').slice(0, 40);
+    const fileName = String(record.fileName || record.file || '').slice(0, 180);
+    const id = String(record.id || [sourceName, dateKey, fileName || 'no-file', savedAt].join('|')).slice(0, 520);
+    const items = Array.isArray(record.items)
+      ? record.items.map(item => sanitizeSfaAnalysisHistoryItem(item, dateKey, sourceName))
+      : [];
+    byId.set(id, {
+      id,
+      dateKey,
+      savedAt,
+      updatedAt: timestampMs(record.updatedAt || savedAt, savedAt),
+      source: sourceName,
+      fileName,
+      itemCount: Number.isFinite(Number(record.itemCount)) ? Number(record.itemCount) : items.length,
+      items
+    });
+  });
+  return {
+    version: 1,
+    records: Array.from(byId.values()).sort((a, b) => (a.savedAt - b.savedAt) || a.id.localeCompare(b.id))
+  };
+}
+
+function sfaAnalysisHistoryRecords() {
+  return sanitizeSfaAnalysisHistory(sfaAnalysisHistory).records;
+}
+
+function latestSfaAnalysisRecordsByDate() {
+  const byDate = new Map();
+  sfaAnalysisHistoryRecords().forEach(record => {
+    if (!record.dateKey) return;
+    const current = byDate.get(record.dateKey);
+    if (!current || record.savedAt >= current.savedAt) byDate.set(record.dateKey, record);
+  });
+  return Array.from(byDate.values()).sort((a, b) => (a.savedAt - b.savedAt) || a.id.localeCompare(b.id));
+}
+
+function sfaAnalysisHistoryForPayload() {
+  return sanitizeSfaAnalysisHistory(sfaAnalysisHistory);
+}
+
+function sfaAnalysisRowsFromData(data, dateKey, source = 'excel') {
+  const rows = [];
+  buildOrderSiteMatches(data).forEach(row => {
+    rows.push(sanitizeSfaAnalysisHistoryItem({
+      dateKey,
+      source,
+      originalName: row.siteName,
+      mappedName: row.targetName,
+      quantity: row.siteQty,
+      unit: row.siteUnit,
+      amount: row.amount,
+      rowIndex: row.compareRow?.row_index,
+      status: row.status,
+      score: row.score
+    }, dateKey, source));
+  });
+  expectedMissingRows(data).forEach(row => {
+    rows.push(sanitizeSfaAnalysisHistoryItem({
+      dateKey,
+      source,
+      originalName: '',
+      mappedName: row.name,
+      quantity: 0,
+      unit: row.unit,
+      status: 'missing'
+    }, dateKey, source));
+  });
+  return rows;
+}
+
+function sfaAnalysisRecordFromData(data, source = 'excel') {
+  const savedAt = timestampMs(data?.savedAt || data?.last_analyzed_at || data?.updated_at || Date.now());
+  const dateKey = sfaAnalysisDateKey(data, savedAt);
+  const sourceName = String(source || 'excel').slice(0, 40);
+  const fileName = sfaAnalysisFileName(data);
+  const items = sfaAnalysisRowsFromData(data, dateKey, sourceName);
+  return {
+    id: sfaAnalysisRunId(data, sourceName),
+    dateKey,
+    savedAt,
+    updatedAt: Date.now(),
+    source: sourceName,
+    fileName,
+    itemCount: items.length,
+    items
+  };
+}
+
+function appendSfaAnalysisHistory(data, source = 'excel') {
+  if (!data || typeof data !== 'object') return null;
+  const record = sfaAnalysisRecordFromData(data, source);
+  const history = sanitizeSfaAnalysisHistory(sfaAnalysisHistory);
+  const idx = history.records.findIndex(row => row.id === record.id);
+  if (idx >= 0) history.records[idx] = record;
+  else history.records.push(record);
+  sfaAnalysisHistory = sanitizeSfaAnalysisHistory(history);
+  localStorage.setItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON.stringify(sfaAnalysisHistoryForPayload()));
+  return record;
 }
 
 function migrateEntriesByName(source = entries) {
@@ -915,8 +1169,12 @@ function sanitizeOrderSiteMappings(source = {}) {
   const out = {};
   Object.entries(source || {}).forEach(([key, value]) => {
     if (!key || !value || typeof value !== 'object' || Array.isArray(value)) return;
-    const targetName = canonicalItemName(value.targetName || '');
-    if (!known.has(targetName)) return;
+    let targetName = normalizeManualOrderItemName(canonicalItemName(value.targetName || ''));
+    if (!targetName) return;
+    if (!known.has(targetName)) {
+      targetName = ensureManualOrderItem(targetName, value.targetUnit || value.siteUnit || '', 'mapping', value.siteName || '');
+    }
+    if (!knownItemNameSet().has(targetName)) return;
     out[key] = {
       targetName,
       siteName: String(value.siteName || '').slice(0, 120),
@@ -988,6 +1246,7 @@ function sanitizeOrderUnitCorrections(source = {}) {
 }
 
 function migrateRuntimeItemNames() {
+  orderManualItems = sanitizeOrderManualItems(orderManualItems);
   entries = migrateEntriesByName(entries);
   overrides = migrateNamedObject(overrides);
   outputOrder = migrateOutputOrder(outputOrder);
@@ -1017,7 +1276,9 @@ const ACTUAL_ORDER_DATE_STORAGE_KEY = 'bbq_actual_orders_date';
 const ORDER_SITE_MAPPING_STORAGE_KEY = 'bbq_order_site_mappings';
 const ORDER_ALIAS_MAPPING_STORAGE_KEY = 'bbq_order_alias_mappings';
 const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';
+const ORDER_MANUAL_ITEMS_STORAGE_KEY = 'bbq_order_manual_items';
 const SFA_MANUAL_ITEMS_STORAGE_KEY = 'bbq_sfa_manual_items';
+const SFA_ANALYSIS_HISTORY_STORAGE_KEY = 'bbq_sfa_analysis_history';
 const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
 const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';
 function newId() { return 'e' + (nextId++); }
@@ -1185,6 +1446,18 @@ function actualOrderForInterval(prev, curr, name) {
     dates.push(dateKey);
   });
   if (qty > 0) return { qty, source: 'sfa', dates };
+  latestSfaAnalysisRecordsByDate().forEach(record => {
+    const dateKey = normalizeHistoryDateKey(record.dateKey);
+    if (!dateKey || dateKey <= start || dateKey > end) return;
+    (record.items || []).forEach(row => {
+      if (canonicalItemName(row.mappedName || '') !== name) return;
+      const actual = Number(row.quantity);
+      if (!Number.isFinite(actual) || actual <= 0) return;
+      qty += actual;
+      dates.push(dateKey);
+    });
+  });
+  if (qty > 0) return { qty, source: 'sfaAnalysisHistory', dates };
   const legacy = getActualOrder(name, prev?.actualOrders || {});
   if (legacy !== null && legacy > 0) return { qty: legacy, source: 'actualOrders', dates: [start] };
   return null;
@@ -1301,7 +1574,7 @@ function buildConversionAnalysis(history, currentSnapshot) {
   const movementBuckets = {};
   const unitBuckets = {};
   records.forEach(record => {
-    MASTER.forEach(item => {
+    orderItemList().forEach(item => {
       const factor = conversionFactorFromRecord(record, item);
       if (!factor) return;
       const key = unitKeyForItem(item);
@@ -1312,7 +1585,7 @@ function buildConversionAnalysis(history, currentSnapshot) {
   for (let i = 1; i < records.length; i++) {
     const prev = records[i - 1];
     const curr = records[i];
-    MASTER.forEach(item => {
+    orderItemList().forEach(item => {
       const factor = movementConversionFactorFromRecords(prev, curr, item);
       if (!factor) return;
       const key = unitKeyForItem(item);
@@ -1328,7 +1601,7 @@ function buildConversionAnalysis(history, currentSnapshot) {
   });
 
   const result = {};
-  MASTER.forEach(item => {
+  orderItemList().forEach(item => {
     const parts = orderUnitParts(item);
     const movement = summarizeFactors(movementBuckets[item.name] || []);
     if (isUsableMovementSummary(item, movement)) {
@@ -1546,7 +1819,7 @@ function renderOrderAmountSpan(item, stockNeed) {
 }
 
 function updateOutputOrderForName(name) {
-  const item = MASTER.find(m => m.name === name);
+  const item = orderItemByName(name);
   if (!item) return;
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const g = calcG(item, days);
@@ -1572,14 +1845,10 @@ function handleOutputCellInput(target) {
   const value = target.value;
   if (field === 'stock') {
     setOutputStockTotal(name, value);
-    saveLocal();
-    recomputeUsageAnalysis();
-    updateDailyAnalysisForName(name);
-    updateOutputOrderForName(name);
+    scheduleDeferredInputWork({ names: [name], recomputeUsage: true });
   } else if (field === 'k' || field === 'l') {
     setOverrideValue(name, field, value);
-    saveLocal();
-    updateOutputOrderForName(name);
+    scheduleDeferredInputWork({ names: [name] });
   } else {
     return false;
   }
@@ -1735,7 +2004,7 @@ function normalizeHistoryRecord(key, snapshot) {
 function currentAnalysisSnapshot() {
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const calc = {};
-  MASTER.forEach(item => {
+  orderItemList().forEach(item => {
     const g = calcG(item, days, { baseDaily: true });
     if (g > 0) calc[item.name] = { qty: recommendedOrderQty(item, g), stockNeed: Math.round(g * 100) / 100, unit: item.unit, stock: totalStock(item.name) };
   });
@@ -1793,7 +2062,7 @@ function historyRecordsWithCurrent(history, currentSnapshot) {
 function orderQtyFromRecord(record, name) {
   const actual = getActualOrder(name, record?.actualOrders || {});
   if (actual !== null) {
-    const item = MASTER.find(m => m.name === name);
+    const item = orderItemByName(name);
     const orderUnitToStockFactor = item ? conversionFactorForItem(item) : null;
     const parts = item ? orderUnitParts(item) : { same: true };
     if (!orderUnitToStockFactor && !parts.same) return { qty: 0, source: 'actual_unconverted', actualQty: actual, orderUnitToStockFactor: null };
@@ -1809,7 +2078,7 @@ function orderQtyFromRecord(record, name) {
 function orderQtyForInterval(prev, curr, name) {
   const intervalActual = actualOrderForInterval(prev, curr, name);
   if (intervalActual) {
-    const item = MASTER.find(m => m.name === name);
+    const item = orderItemByName(name);
     const orderUnitToStockFactor = item ? conversionFactorForItem(item) : null;
     const parts = item ? orderUnitParts(item) : { same: true };
     if (!orderUnitToStockFactor && !parts.same) {
@@ -1839,7 +2108,7 @@ function buildUsageAnalysis(history, currentSnapshot) {
     const curr = records[i];
     const gapDays = (curr.dayMs - prev.dayMs) / 86400000;
     if (!Number.isFinite(gapDays) || gapDays <= 0) continue;
-    MASTER.forEach(item => {
+    orderItemList().forEach(item => {
       const name = item.name;
       if (!prev.stockMap.has(name) || !curr.stockMap.has(name)) return;
       const prevStock = prev.stockMap.get(name);
@@ -2012,7 +2281,7 @@ function currentOrderDaysValue() {
 
 function currentCalcSnapshot(days = currentOrderDaysValue()) {
   const calc = {};
-  MASTER.forEach(item => {
+  orderItemList().forEach(item => {
     const g = calcG(item, days);
     if (g > 0) {
       calc[item.name] = {
@@ -2042,6 +2311,8 @@ function buildSfaAnalysisPayloadState(data = lastSfaCompareData) {
     orderAliasMappingDrafts,
     effectiveOrderAliasMappings,
     orderUnitCorrections,
+    orderManualItems: orderManualItemsForPayload(),
+    sfaAnalysisHistory: sfaAnalysisHistoryForPayload(),
     dailySales,
     baseSales: getBaseSales(),
     salesWeights: dailyWeights(days).map(x => Math.round(x * 1000) / 1000),
@@ -2055,6 +2326,7 @@ function refreshSfaResultViewsWithCurrentState(data = lastSfaCompareData, reason
     renderSfaComparePanel(null);
     return buildSfaAnalysisPayloadState(null);
   }
+  appendSfaAnalysisHistory(data, reason === 'manualInput' ? 'manual' : 'excel');
   const state = buildSfaAnalysisPayloadState(data);
   lastSfaResultAppliedAt = Date.now();
   renderSfaComparePanel(data);
@@ -2082,6 +2354,7 @@ function waitForSaveIdle(timeoutMs = 10000) {
 }
 
 async function flushCurrentBeforeSfaAnalysisRequest() {
+  flushDeferredInputWork();
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer);
     autoSaveTimer = null;
@@ -2335,13 +2608,13 @@ function comparisonRowLookup(data) {
 }
 
 function bestMasterCandidatesForSite(row, limit = 3) {
-  return MASTER.map(item => ({
+  return orderItemList().map(item => ({
     name: item.name,
     unit: item.unit || '',
     score: scoreSiteToMaster(siteItemName(row), item.name)
   }))
     .filter(item => item.score >= 0.55)
-    .sort((a, b) => b.score - a.score || defaultOutputCompare({ name: a.name, sfaSeq: MASTER.find(m => m.name === a.name)?.sfaSeq }, { name: b.name, sfaSeq: MASTER.find(m => m.name === b.name)?.sfaSeq }))
+    .sort((a, b) => b.score - a.score || defaultOutputCompare(orderItemByName(a.name) || a, orderItemByName(b.name) || b))
     .slice(0, limit);
 }
 
@@ -2421,6 +2694,20 @@ function collectActualOrderCandidates(data = lastSfaCompareData) {
       qty,
       unit: ''
     }, '실발주키', { expectedName: name, dateKey }));
+  });
+  sfaAnalysisHistoryRecords().forEach(record => {
+    (record.items || []).forEach(row => addActualOrderCandidate(map, {
+      name: row.originalName,
+      qty: row.quantity,
+      unit: row.unit,
+      amount: row.amount,
+      expected_name: row.mappedName,
+      orderDateKey: row.dateKey || record.dateKey
+    }, '분석누적', {
+      expectedName: row.mappedName,
+      score: row.score,
+      dateKey: row.dateKey || record.dateKey
+    }));
   });
   return Array.from(map.values()).map(row => ({
     ...row,
@@ -2551,6 +2838,18 @@ function actualOrderQtyForUsageDate(dateKey, item, actualNameKeys, data = lastSf
       if (canonicalItemName(name) !== item.name && (!actualKey || !actualNameKeys.has(actualKey))) return;
       acceptsRow({ name, qty: value, expected_name: item.name, orderDateKey: recordDate }, '실발주키', recordDate);
     });
+  });
+
+  latestSfaAnalysisRecordsByDate().forEach(record => {
+    const recordDate = normalizeHistoryDateKey(record.dateKey);
+    if (recordDate !== targetDate) return;
+    (record.items || []).forEach(row => acceptsRow({
+      name: row.originalName,
+      qty: row.quantity,
+      unit: row.unit,
+      expected_name: row.mappedName,
+      orderDateKey: recordDate
+    }, '분석누적', recordDate));
   });
 
   const dataDate = normalizeHistoryDateKey(data?.historySummary?.selectedDate);
@@ -2745,7 +3044,7 @@ function conversionCandidatePayload(candidate) {
 function buildOrderAliasMatches(data = lastSfaCompareData) {
   const actualCandidates = collectActualOrderCandidates(data);
   const usageRecords = historyRecordsWithCurrent(usageHistory, currentAnalysisSnapshot());
-  const rows = MASTER.slice().sort(defaultOutputCompare).map(item => {
+  const rows = orderItemList().slice().sort(defaultOutputCompare).map(item => {
     const aliasName = item.name;
     const saved = orderAliasMappings[aliasName];
     const candidates = bestActualCandidatesForAlias(aliasName, actualCandidates);
@@ -2906,7 +3205,7 @@ function buildOrderSiteMatches(data = lastSfaCompareData) {
       siteQty: siteItemQty(row) || siteItemQty(compareRow),
       amount: siteItemAmount(row) || siteItemAmount(compareRow),
       targetName,
-      targetUnit: MASTER.find(item => item.name === targetName)?.unit || '',
+      targetUnit: orderItemByName(targetName)?.unit || '',
       score,
       source,
       status,
@@ -2945,11 +3244,16 @@ function conversionStatusText(status) {
 }
 
 function masterSelectHtml(row) {
-  const options = ['<option value="">선택</option>'].concat(MASTER.slice().sort(defaultOutputCompare).map(item => {
+  const options = ['<option value="">선택</option>'].concat(orderItemList().slice().sort(defaultOutputCompare).map(item => {
     const selected = item.name === row.targetName ? ' selected' : '';
     return `<option value="${escapeHtml(item.name)}"${selected}>${escapeHtml(item.name)}</option>`;
   }));
-  return `<select class="sfa-select sfa-match-select" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">${options.join('')}</select>`;
+  return `<div class="sfa-new-item-fields">
+    <select class="sfa-select sfa-match-select" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">${options.join('')}</select>
+    <input class="sfa-edit sfa-new-item-input" type="text" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}" placeholder="새 항목명">
+    <button class="sfa-new-item-custom" type="button" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">추가</button>
+    <button class="sfa-new-item-source" type="button" data-site-key="${escapeHtml(row.siteKey)}" data-site-name="${escapeHtml(row.siteName)}" data-site-unit="${escapeHtml(row.siteUnit)}">원명</button>
+  </div>`;
 }
 
 function sfaMatchRowHtml(row) {
@@ -3109,7 +3413,7 @@ function expectedMissingRows(data) {
 
 function unitCorrectionRows(data = lastSfaCompareData) {
   const names = new Set();
-  MASTER.forEach(item => {
+  orderItemList().forEach(item => {
     const parts = orderUnitParts(item);
     const analysis = conversionAnalysis[item.name];
     if (!parts.same || hasManualUnitCorrection(item.name) || (analysis && analysis.source !== 'same')) names.add(item.name);
@@ -3118,7 +3422,7 @@ function unitCorrectionRows(data = lastSfaCompareData) {
     const name = canonicalItemName(row.expected_name || '');
     if (name && knownItemNameSet().has(name)) names.add(name);
   });
-  return MASTER.filter(item => names.has(item.name)).sort(defaultOutputCompare);
+  return orderItemList().filter(item => names.has(item.name)).sort(defaultOutputCompare);
 }
 
 function unitSourceText(item) {
@@ -3187,6 +3491,27 @@ function setOrderSiteMapping(siteKey, targetName, siteName = '', siteUnit = '') 
   }
   orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
   persistOrderCorrections('mapping');
+}
+
+function addOrderSiteManualItem(siteKey, itemName, siteName = '', siteUnit = '') {
+  if (!siteKey) return;
+  const cleanName = normalizeManualOrderItemName(itemName);
+  if (!cleanName) {
+    toast('새 항목명을 입력하세요');
+    return;
+  }
+  const nextName = ensureManualOrderItem(cleanName, siteUnit, 'sfaMapping', siteName || cleanName);
+  if (!nextName) return;
+  ensureEntryForOrderItem(nextName);
+  orderSiteMappings[siteKey] = {
+    targetName: nextName,
+    siteName: String(siteName || cleanName).slice(0, 120),
+    siteUnit: String(siteUnit || '').slice(0, 40),
+    updatedAt: Date.now()
+  };
+  orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+  persistOrderCorrections('manualItem');
+  toast('새 항목 추가됨');
 }
 
 function setOrderAliasMapping(aliasName, actualName) {
@@ -3301,6 +3626,18 @@ function bindSfaCorrectionInputs() {
   document.querySelectorAll('.sfa-match-select').forEach(sel => {
     sel.addEventListener('change', e => {
       setOrderSiteMapping(e.target.dataset.siteKey, e.target.value, e.target.dataset.siteName || '', e.target.dataset.siteUnit || '');
+    });
+  });
+  document.querySelectorAll('.sfa-new-item-source').forEach(btn => {
+    btn.addEventListener('click', e => {
+      addOrderSiteManualItem(e.target.dataset.siteKey, e.target.dataset.siteName || '', e.target.dataset.siteName || '', e.target.dataset.siteUnit || '');
+    });
+  });
+  document.querySelectorAll('.sfa-new-item-custom').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const wrap = e.target.closest('.sfa-new-item-fields');
+      const input = wrap?.querySelector('.sfa-new-item-input');
+      addOrderSiteManualItem(e.target.dataset.siteKey, input?.value || '', e.target.dataset.siteName || '', e.target.dataset.siteUnit || '');
     });
   });
   document.querySelectorAll('.sfa-alias-select').forEach(sel => {
@@ -3456,6 +3793,8 @@ function sfaIoOutput(data) {
       })),
       reason: row.reason
     })),
+    manualItems: orderManualItemsForPayload(),
+    analysisHistory: sfaAnalysisHistoryForPayload(),
     unitCorrections: unitRows
   }, null, 2);
 }
@@ -3734,6 +4073,8 @@ async function requestSfaOrderAnalysis() {
     orderAliasMappingDrafts: sfaAnalysisState.orderAliasMappingDrafts,
     effectiveOrderAliasMappings: sfaAnalysisState.effectiveOrderAliasMappings,
     orderUnitCorrections: sfaAnalysisState.orderUnitCorrections,
+    orderManualItems: sfaAnalysisState.orderManualItems,
+    sfaAnalysisHistory: sfaAnalysisState.sfaAnalysisHistory,
     requestedAt: now,
     requestedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19)
   };
@@ -4010,7 +4351,7 @@ function outputRankMap() {
 
 function getOutputItems(days) {
   outputOrder = [];
-  return MASTER.filter(item => calcG(item, days) > 0).sort(defaultOutputCompare);
+  return orderItemList().filter(item => calcG(item, days) > 0).sort(defaultOutputCompare);
 }
 
 function moveOutputItem(name, direction) {
@@ -4026,6 +4367,87 @@ function outputOrderDisplay(name, value) {
   return `<span class="output-order-value" data-output-name="${escapeHtml(name)}" data-output-field="order">${escapeHtml(value)}</span>`;
 }
 
+function emptyDeferredInputWork() {
+  return {
+    dirty: false,
+    names: new Set(),
+    allNames: false,
+    recomputeUsage: false,
+    updateSales: false,
+    saveReason: 'auto'
+  };
+}
+
+let deferredInputWork = emptyDeferredInputWork();
+let deferredInputWorkHandle = null;
+let deferredInputRevision = 0;
+
+function scheduleFrameTask(fn) {
+  if (typeof requestAnimationFrame === 'function') {
+    return { kind: 'raf', id: requestAnimationFrame(fn) };
+  }
+  return { kind: 'timer', id: setTimeout(fn, 0) };
+}
+
+function cancelFrameTask(handle) {
+  if (!handle) return;
+  if (handle.kind === 'raf' && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(handle.id);
+  else clearTimeout(handle.id);
+}
+
+function markDeferredInputDirty() {
+  if (suppressAutoSave) return;
+  localDirty = true;
+  renderSaveState('저장 대기', 'dirty');
+}
+
+function updateDerivedOrderForName(name) {
+  if (viewMode === 'output') updateOutputOrderForName(name);
+  else updateGForName(name);
+}
+
+function runDeferredInputWork() {
+  deferredInputWorkHandle = null;
+  if (!deferredInputWork.dirty) return;
+  const revision = deferredInputRevision;
+  const work = deferredInputWork;
+  deferredInputWork = emptyDeferredInputWork();
+  saveLocal(work.saveReason || 'auto');
+  if (revision !== deferredInputRevision) return;
+  if (work.updateSales) updateSalesAvg();
+  if (work.recomputeUsage) recomputeUsageAnalysis();
+  const names = work.allNames ? orderItemList().map(item => item.name) : Array.from(work.names);
+  names.forEach(name => {
+    if (work.recomputeUsage) updateDailyAnalysisForName(name);
+    updateDerivedOrderForName(name);
+  });
+}
+
+function scheduleDeferredInputWork(options = {}) {
+  deferredInputRevision += 1;
+  deferredInputWork.dirty = true;
+  deferredInputWork.saveReason = options.saveReason || deferredInputWork.saveReason || 'auto';
+  deferredInputWork.recomputeUsage = deferredInputWork.recomputeUsage || Boolean(options.recomputeUsage);
+  deferredInputWork.updateSales = deferredInputWork.updateSales || Boolean(options.updateSales);
+  deferredInputWork.allNames = deferredInputWork.allNames || Boolean(options.allNames);
+  (options.names || []).forEach(name => {
+    if (name) deferredInputWork.names.add(name);
+  });
+  markDeferredInputDirty();
+  if (deferredInputWorkHandle) return;
+  const handle = scheduleFrameTask(runDeferredInputWork);
+  deferredInputWorkHandle = handle;
+}
+
+function flushDeferredInputWork() {
+  if (!deferredInputWork.dirty) return;
+  if (deferredInputWorkHandle) {
+    cancelFrameTask(deferredInputWorkHandle);
+    deferredInputWorkHandle = null;
+  }
+  runDeferredInputWork();
+}
+
 function bindCellInputs() {
   document.querySelectorAll('input.cell').forEach(inp => {
     inp.addEventListener('input', e => {
@@ -4038,13 +4460,10 @@ function bindCellInputs() {
       if (f === 'stock') {
         logStockEvent(e, 'input');
         ent.stock = v === '' ? null : parseFloat(v);
-        saveLocal();
-        recomputeUsageAnalysis();
-        updateDailyAnalysisForName(ent.name);
-        updateGForName(ent.name);
+        scheduleDeferredInputWork({ names: [ent.name], recomputeUsage: true });
       } else if (f === 'zone') {
         ent.zone = v;
-        saveLocal();
+        scheduleDeferredInputWork({ saveReason: 'auto' });
       } else {
         // k or l (overrides per name)
         const n = ent.name;
@@ -4053,8 +4472,7 @@ function bindCellInputs() {
         if (num === null) delete overrides[n][f];
         else overrides[n][f] = num;
         if (Object.keys(overrides[n]).length === 0) delete overrides[n];
-        saveLocal();
-        updateGForName(n);
+        scheduleDeferredInputWork({ names: [n] });
       }
     });
     inp.addEventListener('change', e => {
@@ -4150,7 +4568,7 @@ function render() {
 
   // 입력 모드 — 미입력 우선 + 구역 묶음. 완료/숨김은 아래로 내려 입력 동선을 보존.
   const orderedRows = entries.map(ent => {
-    const item = MASTER.find(m => m.name === ent.name);
+    const item = orderItemByName(ent.name);
     if (!item) return null;
     return { entry: ent, item, hidden: isItemHidden(item.name) };
   }).filter(Boolean).sort(compareInputRows);
@@ -4214,13 +4632,13 @@ function render() {
 
 function refreshNeedBadge(days = parseInt(document.getElementById('orderDays')?.value || recommendedDays())) {
   let cnt = 0;
-  MASTER.forEach(it => { if (calcG(it, days) > 0) cnt++; });
+  orderItemList().forEach(it => { if (calcG(it, days) > 0) cnt++; });
   document.getElementById('badge').textContent = '발주 ' + cnt + '개';
   document.getElementById('badge').classList.toggle('zero', cnt === 0);
 }
 
 function updateGForName(name) {
-  const item = MASTER.find(m => m.name === name);
+  const item = orderItemByName(name);
   if (!item) return;
   const days = parseInt(document.getElementById('orderDays').value);
   const g = calcG(item, days);
@@ -4309,6 +4727,7 @@ function saveLocal(reason = 'auto') {
   localStorage.setItem(ORDER_SITE_MAPPING_STORAGE_KEY, JSON.stringify(orderSiteMappings));
   localStorage.setItem(ORDER_ALIAS_MAPPING_STORAGE_KEY, JSON.stringify(orderAliasMappings));
   localStorage.setItem(ORDER_UNIT_CORRECTION_STORAGE_KEY, JSON.stringify(orderUnitCorrections));
+  localStorage.setItem(ORDER_MANUAL_ITEMS_STORAGE_KEY, JSON.stringify(orderManualItemsForPayload()));
   if (baseSales == null) localStorage.removeItem('bbq_baseSales');
   else {
     localStorage.setItem('bbq_baseSales', JSON.stringify(baseSales));
@@ -4335,9 +4754,7 @@ function bindBaseSalesInput() {
     const v = e.target.value;
     const n = v === '' ? null : parseFloat(v);
     baseSales = Number.isFinite(n) && n > 0 ? n : null;
-    saveLocal();
-    updateSalesAvg();
-    MASTER.forEach(it => updateGForName(it.name));
+    scheduleDeferredInputWork({ allNames: true, updateSales: true });
   });
   inp.addEventListener('change', () => flushAutoSave());
 }
@@ -4368,10 +4785,7 @@ function renderSalesInputs() {
       const v = e.target.value;
       const num = v === '' ? null : parseFloat(v);
       dailySales[parseInt(e.target.dataset.idx)] = num;
-      saveLocal();
-      updateSalesAvg();
-      // G만 갱신 (재정렬 없이)
-      MASTER.forEach(it => updateGForName(it.name));
+      scheduleDeferredInputWork({ allNames: true, updateSales: true });
     });
     inp.addEventListener('change', () => flushAutoSave());
     block.appendChild(lbl);
@@ -4421,7 +4835,7 @@ async function saveToFB(reason = 'manual') {
   const dateKey = kstDateKey(now);
   const days = parseInt(document.getElementById('orderDays').value);
   const calc = {};
-  MASTER.forEach(item => {
+  orderItemList().forEach(item => {
     const g = calcG(item, days);
     if (g > 0) calc[item.name] = { qty: recommendedOrderQty(item, g), stockNeed: Math.round(g*100)/100, unit: item.unit, stock: totalStock(item.name) };
   });
@@ -4430,7 +4844,7 @@ async function saveToFB(reason = 'manual') {
   actualOrders = cleanActualOrders();
   const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(lastSfaCompareData);
   const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(lastSfaCompareData);
-  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
+  const payload = { savedAt: now, dateKey, orderDays: days, entries, overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   console.log('[saveToFB] PUT', FB_URL + FB_PATH + '/current.json', 'savedAt=', now, 'entries=', entries.length);
   const scheduleRetry = (label) => {
     if (saveAttempt >= SAVE_BACKOFF.length) {
@@ -4528,6 +4942,7 @@ function applyFBData(data) {
   if (!data || !data.savedAt) return;
   // FB가 source of truth: 그대로 교체. 로컬 변경 보호는 autoLoadFromFB의 localDirty 체크가 담당
   if (Object.prototype.hasOwnProperty.call(data, 'orderDays')) setOrderDaysValue(data.orderDays);
+  if (Object.prototype.hasOwnProperty.call(data, 'orderManualItems')) orderManualItems = sanitizeOrderManualItems(data.orderManualItems);
   if (Object.prototype.hasOwnProperty.call(data, 'entries')) entries = migrateEntriesByName(data.entries);
   if (Object.prototype.hasOwnProperty.call(data, 'overrides')) overrides = migrateNamedObject(data.overrides);
   if (Object.prototype.hasOwnProperty.call(data, 'outputOrder')) outputOrder = [];
@@ -4549,7 +4964,7 @@ function applyFBData(data) {
   let maxN = 0;
   entries.forEach(e => { const m = /^e(\d+)$/.exec(e.id||''); if (m) maxN = Math.max(maxN, +m[1]); });
   nextId = maxN + 1;
-  MASTER.forEach(item => {
+  orderItemList().forEach(item => {
     if (!entries.some(e => e.name === item.name)) {
       entries.push({ id: newId(), name: item.name, zone: '', stock: null });
     }
@@ -4602,6 +5017,7 @@ function scheduleAutoSave(reason = 'auto') {
   }, 1000);
 }
 function flushAutoSave(reason) {
+  flushDeferredInputWork();
   const hasPendingTimer = !!autoSaveTimer;
   const explicitRequest = reason != null;
   if (!hasPendingTimer && !explicitRequest) return;
@@ -4634,6 +5050,10 @@ document.addEventListener('keydown', e => {
 
 // 로컬 복원 (entries 우선, 없으면 옛날 stocks 마이그레이션, 없으면 빈 entries)
 try {
+  const omi = localStorage.getItem(ORDER_MANUAL_ITEMS_STORAGE_KEY);
+  if (omi) orderManualItems = sanitizeOrderManualItems(JSON.parse(omi));
+  const sah = localStorage.getItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY);
+  if (sah) sfaAnalysisHistory = sanitizeSfaAnalysisHistory(JSON.parse(sah));
   const eRaw = localStorage.getItem('bbq_entries');
   if (eRaw) {
     entries = JSON.parse(eRaw);
@@ -4645,7 +5065,7 @@ try {
     const sRaw = localStorage.getItem('bbq_stocks');
     let oldStocks = {};
     if (sRaw) try { oldStocks = JSON.parse(sRaw); } catch {}
-    entries = MASTER.map(item => ({
+    entries = orderItemList().map(item => ({
       id: newId(),
       name: item.name,
       zone: '',
@@ -4690,8 +5110,8 @@ function startOrderHelperApp() {
   migrateRuntimeItemNames();
   actualOrders = cleanActualOrders();
 
-  // MASTER에 있는데 entries에 없는 품목 보충 (마스터 갱신 대비)
-  MASTER.forEach(item => {
+  // 기본/사용자 항목 목록에는 있는데 entries에 없는 품목 보충
+  orderItemList().forEach(item => {
     if (!entries.some(e => e.name === item.name)) {
       entries.push({ id: newId(), name: item.name, zone: '', stock: null });
     }

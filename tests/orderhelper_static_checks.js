@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '20260707-10';/, 'APP_VERSION must be bumped for SFA result current-state refresh');
+mustMatch(/const APP_VERSION = '20260710-05';/, 'APP_VERSION must be bumped for cumulative SFA analysis history');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -51,6 +51,11 @@ mustMatch(/function logStockEvent\(e, phase\)/, 'stock key event logger missing'
 mustMatch(/let usageHistory = \{\};/, 'usage history state missing');
 mustMatch(/let usageAnalysis = \{\};/, 'usage analysis state missing');
 mustMatch(/let sfaActualHistory = \{\};/, 'SFA actual history state missing');
+mustMatch(/let sfaAnalysisHistory = \{ records: \[\] \};/, 'SFA analysis cumulative history state missing');
+mustMatch(/const SFA_ANALYSIS_HISTORY_STORAGE_KEY = 'bbq_sfa_analysis_history';/, 'SFA analysis cumulative history localStorage key missing');
+mustMatch(/function appendSfaAnalysisHistory\(data, source = 'excel'\)/, 'SFA analysis results must be append-or-merge persisted');
+mustMatch(/localStorage\.setItem\(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON\.stringify\(sfaAnalysisHistoryForPayload\(\)\)\)/, 'SFA analysis cumulative history must persist locally');
+mustMatch(/appendSfaAnalysisHistory\(data, reason === 'manualInput' \? 'manual' : 'excel'\);/, 'fresh SFA/manual analysis results must update cumulative history before rendering');
 mustMatch(/function buildUsageAnalysis\(history, currentSnapshot\)/, 'usage analysis builder missing');
 mustMatch(/USAGE_ANALYSIS_MAX_DAYS \* 86400000/, 'usage analysis must limit old history records');
 mustMatch(/const usage = order\.source === 'actual'[\s\S]*prevStock \+ \(Number\(order\.actualQty \|\| 0\) \* Number\(order\.orderUnitToStockFactor \|\| 1\)\) - currStock[\s\S]*: prevStock \+ orderQty - currStock;/, 'usage analysis must convert actual SFA orders back into stock units before inferring usage');
@@ -113,7 +118,7 @@ mustMatch(/완료 \$\{sfaCompareTime\(data\.savedAt\)\}` : ''\}\$\{appliedText\}
 mustMatch(/setInterval\(\(\) => loadSfaOrderStatus\(false\), 10000\);/, 'SFA status must refresh every 10 seconds');
 mustMatch(/mode: 'scan_pc_downloads'/, 'SFA request must target the PC download folder flow');
 mustMatch(/const currentSaved = await flushCurrentBeforeSfaAnalysisRequest\(\);[\s\S]*const sfaAnalysisState = buildSfaAnalysisPayloadState\(lastSfaCompareData\);/, 'SFA request must save current state before building effective alias payload');
-mustMatch(/orderDays: sfaAnalysisState\.orderDays,[\s\S]*entries: sfaAnalysisState\.entries,[\s\S]*overrides: sfaAnalysisState\.overrides,[\s\S]*orderAliasMappings: sfaAnalysisState\.orderAliasMappings,[\s\S]*orderAliasMappingDrafts: sfaAnalysisState\.orderAliasMappingDrafts,[\s\S]*effectiveOrderAliasMappings: sfaAnalysisState\.effectiveOrderAliasMappings,/, 'SFA request payload must carry latest current state and rebuilt alias read models');
+mustMatch(/orderDays: sfaAnalysisState\.orderDays,[\s\S]*entries: sfaAnalysisState\.entries,[\s\S]*overrides: sfaAnalysisState\.overrides,[\s\S]*orderAliasMappings: sfaAnalysisState\.orderAliasMappings,[\s\S]*orderAliasMappingDrafts: sfaAnalysisState\.orderAliasMappingDrafts,[\s\S]*effectiveOrderAliasMappings: sfaAnalysisState\.effectiveOrderAliasMappings,[\s\S]*orderManualItems: sfaAnalysisState\.orderManualItems,[\s\S]*sfaAnalysisHistory: sfaAnalysisState\.sfaAnalysisHistory,/, 'SFA request payload must carry latest current state, manual items, cumulative history, and rebuilt alias read models');
 mustMatch(/PC 다운로드 폴더 분석 요청함/, 'SFA request must give user feedback');
 mustMatch(/renderSfaStatus\(\{ state: 'requested'/, 'SFA request must update visible status immediately');
 mustMatch(/수동 일사용\/발주값 자동변경 없음/, 'SFA compare panel must disclose that analysis does not edit manual daily/order values');
@@ -129,9 +134,13 @@ mustMatch(/function recommendedOrderQty\(item, stockNeed\)/, 'recommended order 
 mustMatch(/let orderSiteMappings = \{\};/, 'order-site mapping correction state missing');
 mustMatch(/let orderAliasMappings = \{\};/, 'order alias mapping correction state missing');
 mustMatch(/let orderUnitCorrections = \{\};/, 'order-unit correction state missing');
+mustMatch(/let orderManualItems = \[\];/, 'manual order item state missing');
 mustMatch(/const ORDER_SITE_MAPPING_STORAGE_KEY = 'bbq_order_site_mappings';/, 'order-site mapping local storage key missing');
 mustMatch(/const ORDER_ALIAS_MAPPING_STORAGE_KEY = 'bbq_order_alias_mappings';/, 'order alias mapping local storage key missing');
 mustMatch(/const ORDER_UNIT_CORRECTION_STORAGE_KEY = 'bbq_order_unit_corrections';/, 'order-unit correction local storage key missing');
+mustMatch(/const ORDER_MANUAL_ITEMS_STORAGE_KEY = 'bbq_order_manual_items';/, 'manual item local storage key missing');
+mustMatch(/function orderItemList\(\)/, 'dynamic order item list helper missing');
+mustMatch(/function ensureManualOrderItem\(name, unit = '', source = 'user', sourceSiteName = ''\)/, 'manual order item creator missing');
 mustMatch(/function normalizeSiteItemName\(text\)/, 'site item normalizer missing');
 mustMatch(/function scoreSiteToMaster\(siteName, masterName\)/, 'site/master score helper missing');
 mustMatch(/function buildOrderSiteMatches\(data = lastSfaCompareData\)/, 'order-site matching builder missing');
@@ -146,6 +155,14 @@ mustMatch(/function effectiveOrderAliasMappingsForPayload\(data = lastSfaCompare
 mustMatch(/function buildOrderAliasMatches\(data = lastSfaCompareData\)/, 'order alias matching builder missing');
 mustMatch(/const usageRecords = historyRecordsWithCurrent\(usageHistory, currentAnalysisSnapshot\(\)\);/, 'alias matching should build usage conversion records once');
 mustMatch(/function setOrderSiteMapping\(siteKey, targetName, siteName = '', siteUnit = ''\)/, 'order-site mapping setter missing');
+mustMatch(/function addOrderSiteManualItem\(siteKey, itemName, siteName = '', siteUnit = ''\)/, 'manual SFA item add handler missing');
+mustMatch(/class="sfa-new-item-custom"/, 'manual SFA custom item add button missing');
+mustMatch(/class="sfa-new-item-source"/, 'manual SFA source-name item add button missing');
+mustMatch(/localStorage\.setItem\(ORDER_MANUAL_ITEMS_STORAGE_KEY, JSON\.stringify\(orderManualItemsForPayload\(\)\)\)/, 'manual items must persist locally');
+mustMatch(/manualItems: orderManualItemsForPayload\(\)/, 'analysis IO export must include manual items');
+mustMatch(/analysisHistory: sfaAnalysisHistoryForPayload\(\)/, 'analysis IO export must include cumulative analysis history');
+mustMatch(/sfaAnalysisHistoryRecords\(\)\.forEach\(record =>/, 'actual order candidates must read cumulative SFA analysis history');
+mustMatch(/latestSfaAnalysisRecordsByDate\(\)\.forEach\(record =>/, 'usage calculations must read latest cumulative SFA analysis record per date');
 mustMatch(/function setOrderAliasMapping\(aliasName, actualName\)/, 'order alias mapping setter missing');
 mustMatch(/function setOrderAliasConversion\(aliasName, value, mode = 'candidate'\)/, 'order alias conversion setter missing');
 mustMatch(/function inlineAliasCorrectionHtml\(row\)/, 'input row inline alias correction renderer missing');
@@ -217,11 +234,17 @@ mustMatch(/outputNumberInput\(item\.name, 'l', displayDecimal\(getL\(item\)\)\)/
 mustMatch(/const orderText = isNeed \? displayOrderQty\(item, days\) : '';/, 'input order view must show the same order-unit quantity as output view');
 mustMatch(/gCell\.textContent = isNeed \? displayOrderQty\(item, days\) : '';/, 'live input order refresh must use the same output quantity');
 mustMatch(/const isDuplicateCell = gCell\.classList\.contains\('dup'\);/, 'duplicate input rows must keep the same order quantity while preserving duplicate styling');
-mustMatch(/updateDailyAnalysisForName\(name\);\s*updateOutputOrderForName\(name\);/, 'output stock edits must refresh order quantity');
-mustMatch(/setOverrideValue\(name, field, value\);\s*saveLocal\(\);\s*updateOutputOrderForName\(name\);/, 'output buffer/daily edits must refresh order quantity');
+mustMatch(/function scheduleDeferredInputWork\(options = \{\}\)/, 'input edits must use deferred calculation scheduler');
+mustMatch(/let deferredInputRevision = 0;/, 'deferred input work must track a latest revision token');
+mustMatch(/saveLocal\(work\.saveReason \|\| 'auto'\);\s*if \(revision !== deferredInputRevision\) return;/, 'deferred input work must not apply stale calculations over newer input');
+mustMatch(/setOutputStockTotal\(name, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true \}\);/, 'output stock edits must defer usage and order refresh');
+mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\] \}\);/, 'output buffer/daily edits must defer order refresh');
+mustMatch(/ent\.stock = v === '' \? null : parseFloat\(v\);\s*scheduleDeferredInputWork\(\{ names: \[ent\.name\], recomputeUsage: true \}\);/, 'stock input must not synchronously recalculate while typing');
+mustMatch(/flushDeferredInputWork\(\);\s*const hasPendingTimer = !!autoSaveTimer;/, 'flushAutoSave must persist any scheduled input work first');
+mustMatch(/async function flushCurrentBeforeSfaAnalysisRequest\(\) \{\s*flushDeferredInputWork\(\);/, 'SFA request save gate must flush pending input work first');
 mustMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l changes must save');
 mustMatch(/actualOrders = cleanActualOrders\(\);/, 'actual orders must be sanitized before save');
-mustMatch(/actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include actual orders and corrections');
+mustMatch(/actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload\(\), dailySales/, 'Firebase payload must include actual orders, corrections, and manual items');
 mustMatch(/const actual = getActualOrder\(name, record\?\.actualOrders \|\| \{\}\);/, 'usage analysis must prefer actual order from history');
 mustMatch(/const convertedActual = orderUnitToStockFactor \? actual \* orderUnitToStockFactor : actual;/, 'usage analysis must convert actual SFA order quantity back to stock-check units');
 mustMatch(/orderUnitToStockFactor direction: one order unit contains this many stock\/check units\./, 'orderUnitToStockFactor direction comment missing');
@@ -244,9 +267,9 @@ mustMatch(/const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';/, 'output order 
 mustMatch(/const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';/, 'order day recommendation rule version missing');
 mustMatch(/function getOutputItems\(days\)/, 'output item sort helper missing');
 mustMatch(/function moveOutputItem\(name, direction\)/, 'output move helper missing');
-mustMatch(/return MASTER\.filter\(item => calcG\(item, days\) > 0\)\.sort\(defaultOutputCompare\);/, 'output view must use the initial default order');
+mustMatch(/return orderItemList\(\)\.filter\(item => calcG\(item, days\) > 0\)\.sort\(defaultOutputCompare\);/, 'output view must use default order plus user-created items');
 mustMatch(/localStorage\.removeItem\(OUTPUT_ORDER_STORAGE_KEY\)/, 'stored custom output order must be cleared locally');
-mustMatch(/outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, dailySales/, 'Firebase payload must include output, actual order, and corrections');
+mustMatch(/outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload\(\), dailySales/, 'Firebase payload must include output, actual order, corrections, and manual items');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'outputOrder'\)\) outputOrder = \[\];/, 'Firebase sync must ignore saved custom output order');
 mustNotMatch(/outputOrder = visibleNames\.concat\(remaining\);/, 'output move must not persist custom order');
 mustNotMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(outputOrder\)\)/, 'custom output order must not be stored locally');
@@ -289,6 +312,7 @@ mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'overrides'\)\) o
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderSiteMappings'\)\) orderSiteMappings = sanitizeOrderSiteMappings\(data\.orderSiteMappings\);/, 'Firebase sync must apply order-site mapping corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderAliasMappings'\)\) orderAliasMappings = sanitizeOrderAliasMappings\(data\.orderAliasMappings\);/, 'Firebase sync must apply order alias mapping corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderUnitCorrections'\)\) orderUnitCorrections = sanitizeOrderUnitCorrections\(data\.orderUnitCorrections\);/, 'Firebase sync must apply order-unit corrections');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderManualItems'\)\) orderManualItems = sanitizeOrderManualItems\(data\.orderManualItems\);/, 'Firebase sync must apply manual order items');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
@@ -393,6 +417,7 @@ vm.createContext(sandbox);
 vm.runInContext(`${scripts}
 this.__OrderHelperApi = {
   MASTER,
+  orderItemList,
   normalizeSiteItemName,
   scoreSiteToMaster,
   buildOrderSiteMatches,
@@ -405,9 +430,21 @@ this.__OrderHelperApi = {
   siteItemAmount,
   recommendedOrderQty,
   conversionFactorForItem,
+  orderManualItemsForPayload,
+  sfaAnalysisHistoryForPayload,
+  appendSfaAnalysisHistory,
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
   setAliasMappingsForCheck(value) { orderAliasMappings = sanitizeOrderAliasMappings(value); },
+  setManualItemsForCheck(value) { orderManualItems = sanitizeOrderManualItems(value); },
+  setSfaAnalysisHistoryForCheck(value) { sfaAnalysisHistory = sanitizeSfaAnalysisHistory(value); },
+  addManualSiteMappingForCheck(siteKey, itemName, siteName, siteUnit) {
+    const nextName = ensureManualOrderItem(itemName, siteUnit, 'test', siteName);
+    ensureEntryForOrderItem(nextName);
+    orderSiteMappings[siteKey] = { targetName: nextName, siteName, siteUnit, updatedAt: Date.now() };
+    orderSiteMappings = sanitizeOrderSiteMappings(orderSiteMappings);
+  },
+  getSiteMappingsForCheck() { return orderSiteMappings; },
   setUsageHistoryForCheck(value) { usageHistory = value || {}; },
   setSfaActualHistoryForCheck(value) { sfaActualHistory = value || {}; },
 };`, sandbox);
@@ -426,6 +463,25 @@ assert.strictEqual(matches[0].targetName, '냉동-치즈볼-BBQ치즈볼(크림)
 api.setSiteMappingsForCheck({ [matches[0].siteKey]: { targetName: '냉동-치즈볼-BBQ황금알치즈볼', siteName: 'BBQ치즈볼', siteUnit: 'BOX' } });
 matches = api.buildOrderSiteMatches(siteData);
 assert.strictEqual(matches[0].targetName, '냉동-치즈볼-BBQ황금알치즈볼', 'user mapping should override local candidate');
+api.setManualItemsForCheck([]);
+api.setSiteMappingsForCheck({});
+api.addManualSiteMappingForCheck('원재료A|box', '원재료A', '원재료A', 'BOX');
+let manualMatches = api.buildOrderSiteMatches({
+  ok: true,
+  items: [{ name: '원재료A', qty: 1, unit: 'BOX', row_index: 2 }],
+  comparison: { matched: [], missing: [], extra: [] },
+});
+assert.strictEqual(manualMatches[0].targetName, '원재료A', 'source-name manual item should become reusable site mapping target');
+assert(api.orderItemList().some(item => item.name === '원재료A'), 'source-name manual item should join selectable order items');
+assert(api.orderManualItemsForPayload().some(row => row.name === '원재료A' && row.unit === 'BOX'), 'source-name manual item should persist in payload form');
+api.addManualSiteMappingForCheck('임의품목|ea', '사용자 임의명', '임의품목', 'EA');
+manualMatches = api.buildOrderSiteMatches({
+  ok: true,
+  items: [{ name: '임의품목', qty: 3, unit: 'EA', row_index: 3 }],
+  comparison: { matched: [], missing: [], extra: [] },
+});
+assert.strictEqual(manualMatches[0].targetName, '사용자 임의명', 'custom manual item name should become reusable site mapping target');
+assert.strictEqual(api.getSiteMappingsForCheck()['임의품목|ea'].siteName, '임의품목', 'manual mapping must preserve the raw SFA site name');
 const freshMeat = api.MASTER.find(item => item.name === '신선육(10호)-뼈한마리');
 api.setUnitCorrectionsForCheck({ [freshMeat.name]: { factor: 10, orderMultiple: 2, minOrderQty: 2 } });
 assert.strictEqual(api.conversionFactorForItem(freshMeat), 10, 'manual factor should override inferred conversion');
@@ -481,6 +537,27 @@ api.setSfaActualHistoryForCheck({
 });
 const historyCandidates = api.collectActualOrderCandidates(null);
 assert(historyCandidates.some(row => row.actualName === 'BBQ황금알치즈볼'), 'actual order candidates should include SFA actual history rows');
+api.setSfaActualHistoryForCheck({});
+api.setSfaAnalysisHistoryForCheck({ records: [] });
+api.appendSfaAnalysisHistory({
+  ok: true,
+  savedAt: Date.UTC(2026, 6, 4),
+  file: { name: '누적.xlsx' },
+  historySummary: { selectedDate: '20260704' },
+  items: [],
+  comparison: {
+    matched: [{ row_index: 10, sfa_name: 'BBQ치즈볼누적', sfa_qty: 4, sfa_unit: 'BOX', expected_name: '냉동-치즈볼-BBQ치즈볼(크림)', expected_stock_need: 8, score: 0.97 }],
+    missing: [],
+    extra: [{ row_index: 11, name: '0수량품목', qty: 0, unit: 'EA' }]
+  }
+}, 'excel');
+const cumulativeHistory = api.sfaAnalysisHistoryForPayload();
+assert.strictEqual(cumulativeHistory.records.length, 1, 'SFA analysis history should append analysis runs');
+assert.strictEqual(cumulativeHistory.records[0].dateKey, '20260704', 'SFA analysis history should preserve the analysis date');
+assert(cumulativeHistory.records[0].items.some(row => row.originalName === '0수량품목' && row.quantity === 0), 'SFA analysis history must preserve zero-quantity rows');
+assert(storage.has('bbq_sfa_analysis_history'), 'SFA analysis history should be durable in localStorage');
+const cumulativeCandidates = api.collectActualOrderCandidates(null);
+assert(cumulativeCandidates.some(row => row.actualName === 'BBQ치즈볼누적' && row.sources.includes('분석누적')), 'actual order candidates should include cumulative local SFA analysis rows');
 api.setUsageHistoryForCheck({
   '20260701': {
     savedAt: Date.UTC(2026, 6, 1),
@@ -501,6 +578,20 @@ api.setUsageHistoryForCheck({
     calc: { '냉동-치즈볼-BBQ치즈볼(크림)': { stockNeed: 8, stock: 6 } }
   }
 });
+api.setSfaActualHistoryForCheck({});
+api.setSfaAnalysisHistoryForCheck({
+  records: [
+    { id: 'local-20260701', dateKey: '20260701', source: 'excel', savedAt: Date.UTC(2026, 6, 1), items: [{ originalName: 'BBQ치즈볼', mappedName: '냉동-치즈볼-BBQ치즈볼(크림)', quantity: 5, unit: 'BOX', dateKey: '20260701' }] },
+    { id: 'local-20260702', dateKey: '20260702', source: 'excel', savedAt: Date.UTC(2026, 6, 2), items: [{ originalName: 'BBQ치즈볼', mappedName: '냉동-치즈볼-BBQ치즈볼(크림)', quantity: 6, unit: 'BOX', dateKey: '20260702' }] },
+    { id: 'local-20260703', dateKey: '20260703', source: 'excel', savedAt: Date.UTC(2026, 6, 3), items: [{ originalName: 'BBQ치즈볼', mappedName: '냉동-치즈볼-BBQ치즈볼(크림)', quantity: 4, unit: 'BOX', dateKey: '20260703' }] }
+  ]
+});
+aliasRows = api.buildOrderAliasMatches({ comparison: { matched: [], missing: [], extra: [] } });
+cheeseAlias = aliasRows.find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+const localUsageConversion = cheeseAlias.conversionCandidates.find(row => row.source === 'usage');
+assert(localUsageConversion, 'usage-based conversion candidate should be generated from cumulative local SFA analysis history');
+assert.strictEqual(localUsageConversion.factor, 2, 'local cumulative SFA analysis history should feed usageEstimate / actual SFA qty conversion');
+api.setSfaAnalysisHistoryForCheck({ records: [] });
 api.setSfaActualHistoryForCheck({
   '20260701': {
     rows: [{ expected_name: '냉동-치즈볼-BBQ치즈볼(크림)', sfa_name: 'BBQ치즈볼', sfa_qty: 5, sfa_unit: 'BOX', score: 0.97 }]
