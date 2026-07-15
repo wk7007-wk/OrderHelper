@@ -234,6 +234,17 @@ const noIndexPriceEvidence = plain(api.priceEvidenceForActualAliases([], { versi
 }, item.name));
 assert.strictEqual(noIndexPriceEvidence.unitPrice, 2400, 'row_index-free raw and comparison rows must join by exact site name+unit for price fallback');
 
+const wrongIndexPriceEvidence = plain(api.priceEvidenceForActualAliases([], { version: 2, records: [] }, now, {
+  ...exactMappedCompare,
+  items: [{ row_index: 101, name: '같은 원명', qty: null, amount: ' ', unit: 'BOX', mappedName: item.name }],
+  comparison: {
+    matched: [{ row_index: 202, sfa_name: '같은 원명', sfa_qty: 5, sfa_amount: 12000, sfa_unit: 'BOX', expected_name: api.MASTER.find(row => row.name !== item.name).name }],
+    missing: [],
+    extra: [],
+  },
+}, item.name));
+assert.strictEqual(wrongIndexPriceEvidence.unitPrice, null, 'different present row_index values must never site-key join another item price');
+
 api.setAliasMappingsForCheck({
   [item.name]: {
     aliasName: item.name,
@@ -276,5 +287,41 @@ api.setSfaAnalysisHistoryForCheck({ records: [] });
 result = targetRow();
 assert.strictEqual(result.row.matchStatus, 'ITEM_UNMATCHED', 'no explicit alias or candidate must resolve one unmatched status');
 assert(result.row.issues.some(issue => issue.code === 'ITEM_UNMATCHED'), 'true unmatched row must expose the exact reason code');
+
+const secondConflictItem = api.MASTER.find(row => row.name !== item.name);
+const sharedActualAlias = '두 품목에 중복된 실발주 별명';
+api.setEntriesForCheck([
+  { id: 'alias-conflict-a', entryKey: 'alias-conflict-a', name: item.name, zone: 'A', stock: 0 },
+  { id: 'alias-conflict-b', entryKey: 'alias-conflict-b', name: secondConflictItem.name, zone: 'B', stock: 0 },
+]);
+api.setOverridesForCheck({
+  [item.name]: { l: 5, k: 0 },
+  [secondConflictItem.name]: { l: 5, k: 0 },
+});
+api.setUnitCorrectionsForCheck({});
+api.setSiteMappingsForCheck({});
+api.setAliasMappingsForCheck({
+  [item.name]: { aliasName: item.name, actualName: sharedActualAlias, actualUnit: 'BOX', status: 'confirmed', conversionFactor: 1, conversionStatus: 'confirmed' },
+  [secondConflictItem.name]: { aliasName: secondConflictItem.name, actualName: sharedActualAlias, actualUnit: 'BOX', status: 'confirmed', conversionFactor: 1, conversionStatus: 'confirmed' },
+});
+const aliasConflictData = {
+  ok: true,
+  runId: 'alias-conflict-price',
+  savedAt: now,
+  items: [{ row_index: 301, name: sharedActualAlias, qty: 5, amount: 12000, unit: 'BOX', mappedName: item.name }],
+  comparison: { matched: [], missing: [], extra: [] },
+};
+const aliasConflictRows = plain(api.resolveUnifiedOrderRows(aliasConflictData, { version: 2, records: [] }, 2, now))
+  .filter(row => [item.name, secondConflictItem.name].includes(row.internalName));
+assert.strictEqual(aliasConflictRows.length, 2);
+aliasConflictRows.forEach(row => {
+  assert.strictEqual(row.matchStatus, 'ALIAS_CONFLICT');
+  assert.strictEqual(row.unitPrice, 2400, 'conflict rows may retain visible price evidence');
+  assert.strictEqual(row.expectedAmount, null, 'conflict rows must never calculate an amount');
+  assert(api.renderOrderAmountSpan(api.MASTER.find(candidate => candidate.name === row.internalName), row.stockNeed, row).includes('같은 실발주 별명이 여러 내부 품목에 중복 확정됐습니다.'), 'conflict row must show the Korean alias-conflict reason');
+});
+const aliasConflictSummary = plain(api.summarizeUnifiedOrderAmounts(aliasConflictRows));
+assert.strictEqual(aliasConflictSummary.validAmountCount, 0, 'duplicate alias price must contribute zero valid amount rows');
+assert.strictEqual(aliasConflictSummary.total, 0, 'duplicate alias price must never be double-counted');
 
 console.log('OrderHelper unified order row contract regression OK');

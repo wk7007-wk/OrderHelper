@@ -103,7 +103,7 @@ def main():
             show_alias_review(page)
 
             resolver_probe = page.evaluate(
-                """() => {
+                """async () => {
                     const target = MASTER.find(item => item.name === '물티슈(500)') || MASTER[0];
                     const originalResolver = resolveUnifiedOrderRows;
                     let resolverCalls = 0;
@@ -152,6 +152,21 @@ def main():
                     const noIndexRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
                     const noIndexAmountText = noIndexRow?.querySelector('.order-amount')?.textContent || '';
                     const staleAliasPreserved = orderAliasMappings[target.name]?.actualName || '';
+                    resolverCalls = 0;
+                    const stockInput = noIndexRow?.querySelector('input.cell[data-field="stock"]');
+                    for (let index = 0; index < 150; index += 1) {
+                        stockInput.value = index === 149 ? '0' : String(index % 2);
+                        stockInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    const days = parseInt(document.getElementById('orderDays').value);
+                    const expectedNeed = calcG(target, days);
+                    const expectedOrder = expectedNeed > 0 ? displayOrderQty(target, days) : '';
+                    const burstRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
+                    const immediateNeed = burstRow?.querySelector('.need-output-value')?.textContent || '';
+                    const immediateOrder = burstRow?.querySelector('.output-order-value')?.textContent || '';
+                    const burstResolverCallsBeforeFrame = resolverCalls;
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                    const burstResolverCallsAfterFrame = resolverCalls;
                     orderAliasMappings = {};
                     resolveUnifiedOrderRows = originalResolver;
                     return {
@@ -163,6 +178,12 @@ def main():
                         noIndexAmountText,
                         staleAliasPreserved,
                         afterCandidateAliasCount,
+                        burstResolverCallsBeforeFrame,
+                        burstResolverCallsAfterFrame,
+                        immediateNeed,
+                        immediateOrder,
+                        expectedNeedText: expectedNeed > 0 ? displayDecimal(expectedNeed) : '',
+                        expectedOrder,
                     };
                 }"""
             )
@@ -173,6 +194,10 @@ def main():
             assert "단가 2,400원" in resolver_probe["noIndexAmountText"] and "가격 미해결" not in resolver_probe["noIndexAmountText"], resolver_probe
             assert resolver_probe["afterCandidateAliasCount"] == 0, "exact mappedName price evidence must not save an alias"
             assert resolver_probe["staleAliasPreserved"] == "브라우저 과거 저장 별명", "stale saved alias must remain user-owned while mappedName recovers price"
+            assert resolver_probe["burstResolverCallsBeforeFrame"] == 0, f"150 stock inputs must not run price resolver synchronously: {resolver_probe}"
+            assert resolver_probe["burstResolverCallsAfterFrame"] == 1, f"150 stock inputs must share one frame-batched price resolver: {resolver_probe}"
+            assert resolver_probe["immediateNeed"] == resolver_probe["expectedNeedText"], f"need must patch immediately: {resolver_probe}"
+            assert resolver_probe["immediateOrder"] == resolver_probe["expectedOrder"], f"order quantity must patch immediately: {resolver_probe}"
             show_alias_review(page)
 
             fixture = page.evaluate(

@@ -106,6 +106,7 @@ mustMatch(/function parseMoney\(value\)/, 'money parser missing');
 mustMatch(/function formatWon\(value\)/, 'won formatter missing');
 mustMatch(/function sfaUnitPriceFromRow\(row\)/, 'SFA unit price resolver missing');
 mustMatch(/function expectedOrderAmountForItem\(item, stockNeed, resolvedRow = undefined\)/, 'expected order amount helper missing');
+mustMatch(/row\.matchStatus === UNIFIED_ORDER_MATCH_STATUSES\.ALIAS_CONFLICT/, 'amount display helper must also fail closed on alias conflicts');
 mustMatch(/function resolveUnifiedOrderRows\(data = lastSfaCompareData, ledgerSource = null, days = currentOrderDaysValue\(\), now = Date\.now\(\)\)/, 'single canonical order-row resolver missing');
 mustMatch(/function unifiedOrderRowsByItemKey\(data = lastSfaCompareData, ledgerSource = null, days = currentOrderDaysValue\(\), now = Date\.now\(\)\)/, 'resolved rows need one reusable itemKey map');
 mustMatch(/const resolvedOrderRows = resolveUnifiedOrderRows\(lastSfaCompareData, null, days\);\s*const resolvedOrderRowsByItemKey = new Map\(resolvedOrderRows\.map\(row => \[row\.itemKey, row\]\)\);/, 'one full render must resolve deterministic rows once before reusing the itemKey map');
@@ -113,10 +114,11 @@ mustMatch(/provenance: mappedNameCandidate \? 'EXACT_MAPPED_NAME_CURRENT_EXCEL' 
 mustMatch(/nonStoredCandidate: mappedNameCandidate/, 'mappedName candidate evidence must be marked non-stored');
 mustMatch(/numericEvidenceNode\(amount \/ qty, 'actualUnitPrice', context, 'amount \/ actualOrderQty'/, 'actual unit price must be Excel line amount divided by actual SFA order quantity');
 mustMatch(/numericEvidenceNode\(orderQty \* priceEvidence\.unitPrice, 'expectedAmount',[\s\S]*'orderQty \* actualUnitPrice', \['orderQty', 'actualUnitPrice'\]/, 'today expected amount must multiply recommended order-unit quantity by actual order-unit price exactly once');
+mustMatch(/const canCalculateAmount = !aliasConflict && hasResolvedPrice && Number\.isFinite\(orderQty\);/, 'an alias conflict must block expected amount calculation even when price evidence exists');
 mustMatch(/if \(aliasState\.aliases\.length && !hasResolvedPrice && !issues\.some\(issue => issue\.code === 'DATA_CONFLICT'\)\) issues\.push\(unifiedOrderIssue\('PRICE_JOIN_BUG'\)\);/, 'an explicitly matched alias without joined ledger price must fail as PRICE_JOIN_BUG');
 mustMatch(/return Math\.ceil\(\(n - 1e-9\) \* 10\) \/ 10;/, 'order quantity must round up to one decimal instead of whole units');
 mustMatch(/return fmt\(outputOrderQty\(item, days\), 1\);/, 'order quantity display must preserve one decimal digit');
-mustMatch(/function updateOutputOrderForName\(name\)/, 'output stock/k/l edits must immediately refresh the visible order quantity');
+mustMatch(/function updateOutputOrderForName\(name, resolvedRowsByItemKey = null\)/, 'output stock/k/l edits must immediately refresh quantity while reusing batched price evidence');
 mustMatch(/function bindCellInputs\(\)/, 'single-grid cell event binding missing');
 mustMatch(/function bindGridRowActions\(tbody = document\.getElementById\('tbody'\)\)/, 'stored row actions need one delegated listener');
 mustMatch(/tbody\.dataset\.gridActionsBound === '1'/, 're-rendered rows must not duplicate the delegated action listener');
@@ -303,6 +305,7 @@ mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show con
 mustMatch(/function renderOrderAmountSpan\(item, stockNeed, resolvedRow = undefined\)/, 'output order amount renderer missing');
 mustMatch(/실발주 \$\{fmt\(actualQty, 2\)\}\$\{actualUnit\}/, 'each order row must disclose actual SFA order quantity');
 mustMatch(/가격 미해결: \$\{reason\}/, 'unresolved prices must show a Korean reason instead of an empty or zero amount');
+mustMatch(/const priority = \['ALIAS_CONFLICT', 'DATA_CONFLICT'/, 'alias-conflict Korean reason must take priority over price evidence');
 mustMatch(/단가 \$\{formatWon\(estimate\.unit_price\)\} · 예상 \$\{formatWon\(estimate\.expected_order_amount\)\} · 가격출처/, 'resolved rows must show unit price, expected amount, and source');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g, resolvedOrderRow\)\}/, 'unit conversion and mapped resolver evidence must share the same row');
 mustMatch(/예상 발주금액 \$\{formatWon\(estimate\.expected_order_amount\)\}/, 'amount chip title must disclose expected order amount');
@@ -316,6 +319,7 @@ mustMatch(/<span class="need-output-value">\$\{isNeed \? displayDecimal\(g\) : '
 mustMatch(/\$\{outputOrderDisplay\(item\.name, orderText\)\}\$\{renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g, resolvedOrderRow\)\}/, 'same row must show recommended order, analysis, and mapped amount evidence');
 mustMatch(/document\.querySelectorAll\(`tr\[data-item-key="\$\{itemKey\}"\]`\)/, 'live calculation refresh must patch only rows with the same stable item key');
 mustMatch(/function scheduleDeferredInputWork\(options = \{\}\)/, 'input edits must use deferred calculation scheduler');
+mustMatch(/const resolvedRows = resolveUnifiedOrderRows\(lastSfaCompareData, null, days\);\s*const resolvedRowsByItemKey = new Map\(resolvedRows\.map\(row => \[row\.itemKey, row\]\)\);\s*names\.forEach\(name => updateDerivedOrderForName\(name, resolvedRowsByItemKey\)\);\s*renderOrderAmountSummary\(resolvedRows\);/, 'one deferred frame must share one resolver map across all dirty names and the total');
 mustMatch(/let deferredInputRevision = 0;/, 'deferred input work must track a latest revision token');
 mustMatch(/localStorage\.setItem\('bbq_entries', JSON\.stringify\(entries\)\);[\s\S]*localStorage\.setItem\(PENDING_SYNC_REVISION_STORAGE_KEY, String\(stateRevision\)\);/, 'input events must persist a durable local draft before deferred work');
 mustNotMatch(/markDeferredInputDirty\([\s\S]*?scheduleAutoSave\(reason\)/, 'draft input must not schedule a remote save');
@@ -684,6 +688,7 @@ this.__OrderHelperApi = {
     gridPerf.keyedRowPatches = 0;
     gridPerf.deferredRuns = 0;
     gridPerf.scheduledFrames = 0;
+    gridPerf.resolverRuns = 0;
   },
   gridPerfForCheck() { return { ...gridPerf, deferredRevision: deferredInputRevision }; },
   scheduleGridInputForCheck(name) {

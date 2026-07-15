@@ -49,6 +49,9 @@ sandbox.document.querySelectorAll = originalQuerySelectorAll;
 sandbox.document.getElementById('orderDays').value = '3';
 api.resetGridPerfForCheck();
 for (let index = 0; index < 150; index += 1) api.scheduleGridInputForCheck(firstSfa.name);
+const immediatePerf = plain(api.gridPerfForCheck());
+assert.strictEqual(immediatePerf.keyedRowPatches, 150, 'each burst edit must still patch need/order quantity immediately');
+assert.strictEqual(immediatePerf.resolverRuns, 0, 'price resolver must not run synchronously for any of 150 input events');
 api.flushGridInputForCheck();
 const perf = plain(api.gridPerfForCheck());
 assert.strictEqual(perf.fullRenders, 0, '150 keyed edits must not full-render the table');
@@ -56,6 +59,7 @@ assert.strictEqual(perf.scheduledFrames, 1, '150 edits in one burst must share o
 assert.strictEqual(perf.deferredRuns, 1, '150 edits in one burst must run one deferred batch');
 assert.strictEqual(perf.deferredRevision, 150, 'deferred work must retain the latest input revision');
 assert.strictEqual(perf.keyedRowPatches, 151, 'each edit patches immediately and the one deferred batch patches the latest value once');
+assert.strictEqual(perf.resolverRuns, 1, '150 edits must share exactly one price resolver/map refresh in the deferred frame');
 
 const targetName = firstSfa.name;
 const targetUnit = firstSfa.unit || 'EA';

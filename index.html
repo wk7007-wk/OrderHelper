@@ -910,7 +910,7 @@ let dailySales = [];  // [number?] 길이 = days, 매출(만). null이면 1.0 we
 let baseSales = DEFAULT_BASE_SALES;  // 매출대비 하루사용량 기준 매출(만)
 let gridSortMode = 'input';
 let lastGridFocus = null;
-const gridPerf = { fullRenders: 0, keyedRowPatches: 0, deferredRuns: 0, scheduledFrames: 0 };
+const gridPerf = { fullRenders: 0, keyedRowPatches: 0, deferredRuns: 0, scheduledFrames: 0, resolverRuns: 0 };
 let saveLogs = [];
 let debugLogs = [];
 let outputOrder = [];
@@ -2895,7 +2895,12 @@ function currentExcelOrderLineCandidates(actualAliases, data = lastSfaCompareDat
   const matchedByIndex = new Map(compareRows
     .filter(row => row.row_index !== undefined && row.row_index !== null)
     .map(row => [String(row.row_index), row]));
-  const matchedBySiteKey = new Map(compareRows.map(row => [orderSiteItemKey(row), row]));
+  const matchedBySiteKey = new Map();
+  compareRows.forEach(row => {
+    const siteKey = orderSiteItemKey(row);
+    if (!matchedBySiteKey.has(siteKey)) matchedBySiteKey.set(siteKey, []);
+    matchedBySiteKey.get(siteKey).push(row);
+  });
   const rawRows = Array.isArray(data.items) ? data.items.slice() : [];
   const rawRowIds = new Set(rawRows.map(row => row.row_index !== undefined && row.row_index !== null
     ? `row:${row.row_index}`
@@ -2909,9 +2914,24 @@ function currentExcelOrderLineCandidates(actualAliases, data = lastSfaCompareDat
   const eventAt = timestampMs(data.savedAt || data.updatedAt || data.last_analyzed_at || 0, 0);
   const runId = sfaAnalysisRunId(data, 'excel');
   return rawRows.map((row, index) => {
-    const compareRow = (row.row_index !== undefined && row.row_index !== null
+    const rowHasIndex = row.row_index !== undefined && row.row_index !== null;
+    let compareRow = (rowHasIndex
       ? matchedByIndex.get(String(row.row_index))
-      : null) || matchedBySiteKey.get(orderSiteItemKey(row)) || null;
+      : null) || null;
+    if (!compareRow) {
+      const siteCandidates = matchedBySiteKey.get(orderSiteItemKey(row)) || [];
+      if (siteCandidates.length === 1) {
+        const candidate = siteCandidates[0];
+        const candidateHasIndex = candidate.row_index !== undefined && candidate.row_index !== null;
+        const rawMappedName = currentExcelMappedName(row);
+        const candidateMappedName = currentExcelMappedName(candidate);
+        if (
+          (!rowHasIndex || !candidateHasIndex) &&
+          rawMappedName &&
+          rawMappedName === candidateMappedName
+        ) compareRow = candidate;
+      }
+    }
     const actualName = siteItemName(row) || siteItemName(compareRow);
     const mappedName = currentExcelMappedName(row, compareRow);
     const aliasMatched = aliasKeys.has(normalizedActualNameKey(actualName));
@@ -3006,6 +3026,7 @@ function priceEvidenceForActualAliases(actualAliases, ledger = sfaOrderLedgerFor
 }
 
 function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null, days = currentOrderDaysValue(), now = Date.now()) {
+  gridPerf.resolverRuns += 1;
   const ledger = ledgerSource || sfaOrderLedgerForPayload();
   const conflictKeys = explicitAliasConflictKeys();
   return orderItemList().map(item => {
@@ -3050,7 +3071,7 @@ function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null,
       provenance: 'DETERMINISTIC_DERIVATION',
       asOf: now
     }, factor === 1 && orderUnitParts(item).same ? 'roundUpDecimal(stockNeed)' : 'ceilDiscrete(stockNeed / factor)', ['stockNeed', 'factor']) : null;
-    const canCalculateAmount = hasResolvedPrice && Number.isFinite(orderQty);
+    const canCalculateAmount = !aliasConflict && hasResolvedPrice && Number.isFinite(orderQty);
     const expectedAmountEvidence = canCalculateAmount ? numericEvidenceNode(orderQty * priceEvidence.unitPrice, 'expectedAmount', {
       provenance: 'DETERMINISTIC_DERIVATION',
       sourceRunId: priceEvidence.sourceRunId,
@@ -3097,7 +3118,7 @@ function unifiedOrderRowsByItemKey(data = lastSfaCompareData, ledgerSource = nul
 
 function expectedOrderAmountForItem(item, stockNeed, resolvedRow = undefined) {
   const row = resolvedRow === undefined ? unifiedOrderRowForItem(item.name) : resolvedRow;
-  if (!row?.priceEvidence || !Number.isFinite(row.unitPrice)) return null;
+  if (!row?.priceEvidence || !Number.isFinite(row.unitPrice) || row.matchStatus === UNIFIED_ORDER_MATCH_STATUSES.ALIAS_CONFLICT) return null;
   const recommendedQty = orderQtyForUnifiedRow(item, stockNeed, row.factor);
   if (!Number.isFinite(recommendedQty)) return null;
   return {
@@ -3187,7 +3208,7 @@ function priceEvidenceSourceText(evidence) {
 
 function orderPriceMissingReason(row) {
   if (!row) return '가격 계산 행을 만들지 못했습니다.';
-  const priority = ['DATA_CONFLICT', 'PRICE_JOIN_BUG', 'PRICE_SOURCE_MISSING', 'ITEM_UNMATCHED', 'UNIT_UNCONFIRMED', 'DERIVATION_BUG'];
+  const priority = ['ALIAS_CONFLICT', 'DATA_CONFLICT', 'PRICE_JOIN_BUG', 'PRICE_SOURCE_MISSING', 'ITEM_UNMATCHED', 'UNIT_UNCONFIRMED', 'DERIVATION_BUG'];
   for (const code of priority) {
     const issue = (row.issues || []).find(candidate => candidate.code === code);
     if (issue) return issue.message;
@@ -3250,16 +3271,14 @@ function renderOrderAmountSummary(rows = []) {
   return summary;
 }
 
-function updateOutputOrderForName(name) {
+function updateOutputOrderForName(name, resolvedRowsByItemKey = null) {
   const item = orderItemByName(name);
   if (!item) return;
   const itemKey = itemKeyForName(item.name);
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const g = calcG(item, days);
   const isNeed = g > 0;
-  const resolvedRows = resolveUnifiedOrderRows(lastSfaCompareData, null, days);
-  const resolvedRowsByItemKey = new Map(resolvedRows.map(row => [row.itemKey, row]));
-  const resolvedRow = resolvedRowsByItemKey.get(itemKey) || null;
+  const resolvedRow = resolvedRowsByItemKey?.get?.(itemKey) || null;
   document.querySelectorAll(`.output-order-value[data-output-key="${itemKey}"]`).forEach(output => {
     output.textContent = isNeed ? displayOrderQty(item, days) : '';
     const qtyCell = output.closest('td.order-qty');
@@ -3268,9 +3287,8 @@ function updateOutputOrderForName(name) {
     const marker = wrap?.querySelector('.order-analysis');
     if (marker) marker.outerHTML = renderOrderAnalysisSpan(item, g);
     const amount = wrap?.querySelector('.order-amount');
-    if (amount) amount.outerHTML = renderOrderAmountSpan(item, g, resolvedRow);
+    if (amount && resolvedRowsByItemKey) amount.outerHTML = renderOrderAmountSpan(item, g, resolvedRow);
   });
-  renderOrderAmountSummary(resolvedRows);
   refreshNeedBadge(days);
 }
 
@@ -6281,8 +6299,8 @@ function markDeferredInputDirty(reason = 'auto') {
   renderSaveState('로컬 입력됨 · Enter 저장', 'dirty');
 }
 
-function updateDerivedOrderForName(name) {
-  updateGForName(name);
+function updateDerivedOrderForName(name, resolvedRowsByItemKey = null) {
+  updateGForName(name, resolvedRowsByItemKey);
 }
 
 function runDeferredInputWork() {
@@ -6296,10 +6314,13 @@ function runDeferredInputWork() {
   if (work.updateSales) updateSalesAvg();
   if (work.recomputeUsage) recomputeUsageAnalysis();
   const names = work.allNames ? orderItemList().map(item => item.name) : Array.from(work.names);
-  names.forEach(name => {
-    if (work.recomputeUsage) updateDailyAnalysisForName(name);
-    updateDerivedOrderForName(name);
-  });
+  if (work.recomputeUsage) names.forEach(name => updateDailyAnalysisForName(name));
+  if (!names.length) return;
+  const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
+  const resolvedRows = resolveUnifiedOrderRows(lastSfaCompareData, null, days);
+  const resolvedRowsByItemKey = new Map(resolvedRows.map(row => [row.itemKey, row]));
+  names.forEach(name => updateDerivedOrderForName(name, resolvedRowsByItemKey));
+  renderOrderAmountSummary(resolvedRows);
 }
 
 function scheduleDeferredInputWork(options = {}) {
@@ -6541,7 +6562,7 @@ function refreshNeedBadge(days = parseInt(document.getElementById('orderDays')?.
   document.getElementById('badge').classList.toggle('zero', cnt === 0);
 }
 
-function updateGForName(name) {
+function updateGForName(name, resolvedRowsByItemKey = null) {
   const item = orderItemByName(name);
   if (!item) return;
   gridPerf.keyedRowPatches += 1;
@@ -6559,8 +6580,7 @@ function updateGForName(name) {
     if (isNeed && !tr.classList.contains('dup-row')) tr.classList.add('need');
     else tr.classList.remove('need');
   });
-  updateOutputOrderForName(name);
-  refreshNeedBadge(days);
+  updateOutputOrderForName(name, resolvedRowsByItemKey);
 }
 
 function addRow(fromId) {
