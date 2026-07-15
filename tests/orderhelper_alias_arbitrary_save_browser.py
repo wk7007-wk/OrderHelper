@@ -56,6 +56,7 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     origin = f"http://127.0.0.1:{server.server_address[1]}"
     remote = {"current": None, "history": None}
+    versions = {"current": 0, "history": 0}
     writes = []
     try:
         with sync_playwright() as playwright:
@@ -63,21 +64,140 @@ def main():
             page = browser.new_page(viewport={"width": 390, "height": 844})
 
             def firebase_route(route, request):
-                if request.method == "PUT":
+                cors_headers = {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, If-Match, X-Firebase-ETag",
+                    "Access-Control-Expose-Headers": "ETag",
+                }
+                kind = "current" if "/current.json" in request.url else ("history" if "/history/" in request.url else "other")
+                if request.method == "OPTIONS":
+                    route.fulfill(status=204, headers=cors_headers, body="")
+                elif request.method == "PUT":
                     body = request.post_data or ""
-                    kind = "current" if "/current.json" in request.url else "history"
+                    if kind == "other":
+                        route.fulfill(status=400, content_type="application/json", headers=cors_headers, body='{"error":"unexpected PUT"}')
+                        return
+                    expected_etag = f'"v{versions[kind]}"'
+                    if request.headers.get("if-match") != expected_etag:
+                        route.fulfill(status=412, content_type="application/json", headers=cors_headers, body='{"error":"etag mismatch"}')
+                        return
                     remote[kind] = json.loads(body)
-                    writes.append({"kind": kind, "url": request.url, "body": body})
-                    route.fulfill(status=200, content_type="application/json", body=body)
-                elif "/current.json" in request.url:
-                    route.fulfill(status=200, content_type="application/json", body=json.dumps(remote["current"]))
+                    versions[kind] += 1
+                    writes.append({"kind": kind, "url": request.url, "body": body, "if_match": request.headers.get("if-match")})
+                    route.fulfill(status=200, content_type="application/json", headers=cors_headers, body=body)
+                elif kind in {"current", "history"}:
+                    route.fulfill(
+                        status=200,
+                        content_type="application/json",
+                        headers={**cors_headers, "ETag": f'"v{versions[kind]}"'},
+                        body=json.dumps(remote[kind]),
+                    )
                 else:
-                    route.fulfill(status=200, content_type="application/json", body="null")
+                    route.fulfill(status=200, content_type="application/json", headers=cors_headers, body="null")
 
             page.route("**/*firebasedatabase.app/**", firebase_route)
             page.goto(origin, wait_until="domcontentloaded")
             show_alias_review(page)
             page.wait_for_timeout(1200)
+            show_alias_review(page)
+
+            resolver_probe = page.evaluate(
+                """async () => {
+                    const target = MASTER.find(item => item.name === '물티슈(500)') || MASTER[0];
+                    const originalResolver = resolveUnifiedOrderRows;
+                    let resolverCalls = 0;
+                    resolveUnifiedOrderRows = (...args) => {
+                        resolverCalls += 1;
+                        return originalResolver(...args);
+                    };
+                    orderAliasMappings = {};
+                    orderSiteMappings = {};
+                    const unrelated = MASTER.find(item => item.name !== target.name) || target;
+                    lastSfaCompareData = {
+                        ok: true,
+                        runId: 'browser-exact-mapped-name',
+                        savedAt: Date.now(),
+                        items: [{ row_index: 99, name: '브라우저 관계없는 원명', qty: 1, amount: 100, unit: 'EA', mappedName: unrelated.name }],
+                        comparison: { matched: [{ row_index: 71, sfa_name: '브라우저 실발주 원명', sfa_qty: 5, sfa_amount: 12000, sfa_unit: 'BOX', expected_name: target.name }], missing: [], extra: [] },
+                    };
+                    render();
+                    const firstRenderCalls = resolverCalls;
+                    const candidateRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
+                    const candidateAmountText = candidateRow?.querySelector('.order-amount')?.textContent || '';
+                    const afterCandidateAliasCount = Object.keys(orderAliasMappings).length;
+                    orderAliasMappings = {
+                        [target.name]: {
+                            aliasName: target.name,
+                            actualName: '브라우저 과거 저장 별명',
+                            actualUnit: 'BOX',
+                            status: 'confirmed',
+                            source: 'user',
+                        },
+                    };
+                    render();
+                    const secondRenderCalls = resolverCalls - firstRenderCalls;
+                    const staleRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
+                    const staleAmountText = staleRow?.querySelector('.order-amount')?.textContent || '';
+                    const beforeNoIndexRender = resolverCalls;
+                    lastSfaCompareData = {
+                        ok: true,
+                        runId: 'browser-no-row-index',
+                        savedAt: Date.now(),
+                        items: [{ name: '브라우저 row index 없는 원명', qty: null, amount: ' ', unit: 'BOX', mappedName: target.name }],
+                        comparison: { matched: [{ sfa_name: '브라우저 row index 없는 원명', sfa_qty: 5, sfa_amount: 12000, sfa_unit: 'BOX', expected_name: target.name }], missing: [], extra: [] },
+                    };
+                    render();
+                    const noIndexRenderCalls = resolverCalls - beforeNoIndexRender;
+                    const noIndexRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
+                    const noIndexAmountText = noIndexRow?.querySelector('.order-amount')?.textContent || '';
+                    const staleAliasPreserved = orderAliasMappings[target.name]?.actualName || '';
+                    resolverCalls = 0;
+                    const stockInput = noIndexRow?.querySelector('input.cell[data-field="stock"]');
+                    for (let index = 0; index < 150; index += 1) {
+                        stockInput.value = index === 149 ? '0' : String(index % 2);
+                        stockInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    const days = parseInt(document.getElementById('orderDays').value);
+                    const expectedNeed = calcG(target, days);
+                    const expectedOrder = expectedNeed > 0 ? displayOrderQty(target, days) : '';
+                    const burstRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
+                    const immediateNeed = burstRow?.querySelector('.need-output-value')?.textContent || '';
+                    const immediateOrder = burstRow?.querySelector('.output-order-value')?.textContent || '';
+                    const burstResolverCallsBeforeFrame = resolverCalls;
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                    const burstResolverCallsAfterFrame = resolverCalls;
+                    orderAliasMappings = {};
+                    resolveUnifiedOrderRows = originalResolver;
+                    return {
+                        firstRenderCalls,
+                        secondRenderCalls,
+                        candidateAmountText,
+                        staleAmountText,
+                        noIndexRenderCalls,
+                        noIndexAmountText,
+                        staleAliasPreserved,
+                        afterCandidateAliasCount,
+                        burstResolverCallsBeforeFrame,
+                        burstResolverCallsAfterFrame,
+                        immediateNeed,
+                        immediateOrder,
+                        expectedNeedText: expectedNeed > 0 ? displayDecimal(expectedNeed) : '',
+                        expectedOrder,
+                    };
+                }"""
+            )
+            assert resolver_probe["firstRenderCalls"] == 1 and resolver_probe["secondRenderCalls"] == 1, f"each render must call the full resolver once: {resolver_probe}"
+            assert resolver_probe["noIndexRenderCalls"] == 1, f"row-index-free browser render must still resolve once: {resolver_probe}"
+            assert "가격출처 최신 엑셀 정확매칭 후보(미저장)" in resolver_probe["candidateAmountText"], resolver_probe
+            assert "가격출처 최신 엑셀 정확매칭 후보(미저장)" in resolver_probe["staleAmountText"], resolver_probe
+            assert "단가 2,400원" in resolver_probe["noIndexAmountText"] and "가격 미해결" not in resolver_probe["noIndexAmountText"], resolver_probe
+            assert resolver_probe["afterCandidateAliasCount"] == 0, "exact mappedName price evidence must not save an alias"
+            assert resolver_probe["staleAliasPreserved"] == "브라우저 과거 저장 별명", "stale saved alias must remain user-owned while mappedName recovers price"
+            assert resolver_probe["burstResolverCallsBeforeFrame"] == 0, f"150 stock inputs must not run price resolver synchronously: {resolver_probe}"
+            assert resolver_probe["burstResolverCallsAfterFrame"] == 1, f"150 stock inputs must share one frame-batched price resolver: {resolver_probe}"
+            assert resolver_probe["immediateNeed"] == resolver_probe["expectedNeedText"], f"need must patch immediately: {resolver_probe}"
+            assert resolver_probe["immediateOrder"] == resolver_probe["expectedOrder"], f"order quantity must patch immediately: {resolver_probe}"
             show_alias_review(page)
 
             fixture = page.evaluate(
@@ -110,6 +230,7 @@ def main():
             wait_for_writes(page, writes, 2)
             assert {row["kind"] for row in writes[:2]} == {"current", "history"}
             assert writes[0]["body"] == writes[1]["body"]
+            assert {row["if_match"] for row in writes[:2]} == {'"v0"'}, "alias pair must use the ETag returned by each target read"
             payload = json.loads(writes[0]["body"])
             saved = payload["orderAliasMappings"][fixture["aliasName"]]
             assert saved["actualName"] == "임의 별명 브라우저 테스트"
@@ -142,6 +263,7 @@ def main():
             wait_for_writes(page, writes, before_enter + 2)
             enter_pair = writes[before_enter : before_enter + 2]
             assert enter_pair[0]["body"] == enter_pair[1]["body"]
+            assert {row["if_match"] for row in enter_pair} == {'"v1"'}, "second alias pair must advance the target ETags"
             enter_payload = json.loads(enter_pair[0]["body"])
             assert enter_payload["orderAliasMappings"][second]["actualName"] == "두번째 임의 별명 Enter"
             assert enter_payload["orderAliasMappings"][second]["status"] == "manual"
