@@ -139,6 +139,18 @@ def main():
                     const secondRenderCalls = resolverCalls - firstRenderCalls;
                     const staleRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
                     const staleAmountText = staleRow?.querySelector('.order-amount')?.textContent || '';
+                    const beforeNoIndexRender = resolverCalls;
+                    lastSfaCompareData = {
+                        ok: true,
+                        runId: 'browser-no-row-index',
+                        savedAt: Date.now(),
+                        items: [{ name: '브라우저 row index 없는 원명', qty: null, amount: ' ', unit: 'BOX', mappedName: target.name }],
+                        comparison: { matched: [{ sfa_name: '브라우저 row index 없는 원명', sfa_qty: 5, sfa_amount: 12000, sfa_unit: 'BOX', expected_name: target.name }], missing: [], extra: [] },
+                    };
+                    render();
+                    const noIndexRenderCalls = resolverCalls - beforeNoIndexRender;
+                    const noIndexRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
+                    const noIndexAmountText = noIndexRow?.querySelector('.order-amount')?.textContent || '';
                     const staleAliasPreserved = orderAliasMappings[target.name]?.actualName || '';
                     orderAliasMappings = {};
                     resolveUnifiedOrderRows = originalResolver;
@@ -147,14 +159,18 @@ def main():
                         secondRenderCalls,
                         candidateAmountText,
                         staleAmountText,
+                        noIndexRenderCalls,
+                        noIndexAmountText,
                         staleAliasPreserved,
                         afterCandidateAliasCount,
                     };
                 }"""
             )
             assert resolver_probe["firstRenderCalls"] == 1 and resolver_probe["secondRenderCalls"] == 1, f"each render must call the full resolver once: {resolver_probe}"
+            assert resolver_probe["noIndexRenderCalls"] == 1, f"row-index-free browser render must still resolve once: {resolver_probe}"
             assert "가격출처 최신 엑셀 정확매칭 후보(미저장)" in resolver_probe["candidateAmountText"], resolver_probe
             assert "가격출처 최신 엑셀 정확매칭 후보(미저장)" in resolver_probe["staleAmountText"], resolver_probe
+            assert "단가 2,400원" in resolver_probe["noIndexAmountText"] and "가격 미해결" not in resolver_probe["noIndexAmountText"], resolver_probe
             assert resolver_probe["afterCandidateAliasCount"] == 0, "exact mappedName price evidence must not save an alias"
             assert resolver_probe["staleAliasPreserved"] == "브라우저 과거 저장 별명", "stale saved alias must remain user-owned while mappedName recovers price"
             show_alias_review(page)

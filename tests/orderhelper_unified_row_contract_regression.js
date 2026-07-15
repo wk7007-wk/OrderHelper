@@ -223,6 +223,17 @@ const nullRawPriceEvidence = plain(api.priceEvidenceForActualAliases([], { versi
 }, item.name));
 assert.strictEqual(nullRawPriceEvidence.unitPrice, 2400, 'null/blank raw fields must fall back to the priced comparison row while preserving explicit zero elsewhere');
 
+const noIndexPriceEvidence = plain(api.priceEvidenceForActualAliases([], { version: 2, records: [] }, now, {
+  ...exactMappedCompare,
+  items: [{ name: 'row index 없는 실발주명', qty: null, amount: ' ', unit: 'BOX', mappedName: item.name }],
+  comparison: {
+    matched: [{ sfa_name: 'row index 없는 실발주명', sfa_qty: 5, sfa_amount: 12000, sfa_unit: 'BOX', expected_name: item.name }],
+    missing: [],
+    extra: [],
+  },
+}, item.name));
+assert.strictEqual(noIndexPriceEvidence.unitPrice, 2400, 'row_index-free raw and comparison rows must join by exact site name+unit for price fallback');
+
 api.setAliasMappingsForCheck({
   [item.name]: {
     aliasName: item.name,

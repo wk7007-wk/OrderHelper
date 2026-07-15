@@ -2892,7 +2892,10 @@ function currentExcelOrderLineCandidates(actualAliases, data = lastSfaCompareDat
   const aliasKeys = new Set((actualAliases || []).map(normalizedActualNameKey).filter(Boolean));
   if (!aliasKeys.size && !internalName) return [];
   const compareRows = data.comparison?.matched || [];
-  const matchedByIndex = new Map(compareRows.map(row => [String(row.row_index), row]));
+  const matchedByIndex = new Map(compareRows
+    .filter(row => row.row_index !== undefined && row.row_index !== null)
+    .map(row => [String(row.row_index), row]));
+  const matchedBySiteKey = new Map(compareRows.map(row => [orderSiteItemKey(row), row]));
   const rawRows = Array.isArray(data.items) ? data.items.slice() : [];
   const rawRowIds = new Set(rawRows.map(row => row.row_index !== undefined && row.row_index !== null
     ? `row:${row.row_index}`
@@ -2906,7 +2909,9 @@ function currentExcelOrderLineCandidates(actualAliases, data = lastSfaCompareDat
   const eventAt = timestampMs(data.savedAt || data.updatedAt || data.last_analyzed_at || 0, 0);
   const runId = sfaAnalysisRunId(data, 'excel');
   return rawRows.map((row, index) => {
-    const compareRow = row.row_index !== undefined && row.row_index !== null ? matchedByIndex.get(String(row.row_index)) : null;
+    const compareRow = (row.row_index !== undefined && row.row_index !== null
+      ? matchedByIndex.get(String(row.row_index))
+      : null) || matchedBySiteKey.get(orderSiteItemKey(row)) || null;
     const actualName = siteItemName(row) || siteItemName(compareRow);
     const mappedName = currentExcelMappedName(row, compareRow);
     const aliasMatched = aliasKeys.has(normalizedActualNameKey(actualName));
