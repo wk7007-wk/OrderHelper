@@ -181,6 +181,86 @@ assert(result.row.issues.some(issue => issue.code === 'PRICE_JOIN_BUG' && issue.
 
 api.setAliasMappingsForCheck({});
 api.setSiteMappingsForCheck({});
+const exactMappedCompare = {
+  ok: true,
+  runId: 'latest-exact-mapped-name',
+  savedAt: now,
+  items: [{
+    row_index: 99,
+    name: '관계없는 원문',
+    qty: 1,
+    amount: 100,
+    unit: 'EA',
+    mappedName: api.MASTER.find(row => row.name !== item.name).name,
+  }],
+  comparison: {
+    matched: [{
+      row_index: 7,
+      sfa_name: '아직 저장하지 않은 실발주명',
+      sfa_qty: 5,
+      sfa_amount: 12000,
+      sfa_unit: 'BOX',
+      expected_name: item.name,
+    }],
+    missing: [],
+    extra: [],
+  },
+};
+const exactMappedRows = plain(api.resolveUnifiedOrderRows(exactMappedCompare, { version: 2, records: [] }, 2, now));
+const exactMappedRow = exactMappedRows.find(row => row.itemKey === api.itemKeyForName(item.name));
+assert.strictEqual(exactMappedRow.matchStatus, 'CANDIDATE', 'exact mappedName evidence without a saved alias must remain candidate-only');
+assert.strictEqual(exactMappedRow.priceCandidateOnly, true, 'exact mappedName evidence must never pretend to be a stored alias');
+assert.strictEqual(exactMappedRow.priceEvidence.provenance, 'EXACT_MAPPED_NAME_CURRENT_EXCEL');
+assert.strictEqual(exactMappedRow.unitPrice, 2400, 'latest exact mappedName amount/qty must resolve a candidate unit price');
+assert.strictEqual(Object.keys(plain(api.getAliasMappingsForCheck())).length, 0, 'candidate price evidence must not persist an alias');
+const exactMappedHtml = api.renderOrderAmountSpan(item, exactMappedRow.stockNeed, exactMappedRow);
+assert(exactMappedHtml.includes('실발주 5BOX'), 'row evidence must visibly show actual order quantity');
+assert(exactMappedHtml.includes('단가 2,400원') && exactMappedHtml.includes('가격출처 최신 엑셀 정확매칭 후보(미저장)'), 'row evidence must visibly show unit price and non-stored source');
+
+const nullRawPriceEvidence = plain(api.priceEvidenceForActualAliases([], { version: 2, records: [] }, now, {
+  ...exactMappedCompare,
+  items: [{ row_index: 7, name: '아직 저장하지 않은 실발주명', qty: null, amount: ' ', unit: 'BOX', mappedName: item.name }],
+}, item.name));
+assert.strictEqual(nullRawPriceEvidence.unitPrice, 2400, 'null/blank raw fields must fall back to the priced comparison row while preserving explicit zero elsewhere');
+
+api.setAliasMappingsForCheck({
+  [item.name]: {
+    aliasName: item.name,
+    actualName: '과거에 저장된 다른 실발주명',
+    actualUnit: 'BOX',
+    status: 'confirmed',
+    source: 'user',
+    conversionFactor: 10,
+    conversionStatus: 'confirmed',
+  },
+});
+const staleAliasRows = plain(api.resolveUnifiedOrderRows(exactMappedCompare, { version: 2, records: [] }, 2, now));
+const staleAliasRow = staleAliasRows.find(row => row.itemKey === api.itemKeyForName(item.name));
+assert.strictEqual(staleAliasRow.matchStatus, 'MATCHED', 'a saved alias remains explicit match state');
+assert.strictEqual(staleAliasRow.priceEvidence.provenance, 'EXACT_MAPPED_NAME_CURRENT_EXCEL', 'current exact mappedName must recover price when the saved actual alias is stale');
+assert.strictEqual(staleAliasRow.priceCandidateOnly, true, 'stale-alias recovery price remains non-stored candidate evidence');
+assert.strictEqual(staleAliasRow.unitPrice, 2400, 'stale saved alias must not hide the exact current Excel price');
+assert(!staleAliasRow.issues.some(issue => issue.code === 'PRICE_JOIN_BUG'), 'stale alias plus exact mappedName must not raise the legacy price join bug');
+assert.strictEqual(plain(api.getAliasMappingsForCheck())[item.name].actualName, '과거에 저장된 다른 실발주명', 'price fallback must not rewrite the user-owned alias');
+
+assert.strictEqual(api.formatWon(null), '', 'a missing price must never be formatted as zero won');
+assert.strictEqual(api.formatWon(0), '0원', 'an explicit valid zero remains distinguishable from missing');
+const amountSummary = plain(api.summarizeUnifiedOrderAmounts([
+  { stockNeed: 2, unitPrice: 1000, expectedAmount: 2000 },
+  { stockNeed: 1, unitPrice: null, expectedAmount: null },
+  { stockNeed: 3, unitPrice: 500, expectedAmount: null },
+  { stockNeed: 0, unitPrice: null, expectedAmount: null },
+]));
+assert.deepStrictEqual(amountSummary, {
+  needCount: 3,
+  validAmountCount: 1,
+  total: 2000,
+  unresolvedPriceCount: 1,
+  unresolvedAmountCount: 1,
+}, 'today summary must total valid amounts only and distinguish price versus unit gaps');
+
+api.setAliasMappingsForCheck({});
+api.setSiteMappingsForCheck({});
 api.setSfaAnalysisHistoryForCheck({ records: [] });
 result = targetRow();
 assert.strictEqual(result.row.matchStatus, 'ITEM_UNMATCHED', 'no explicit alias or candidate must resolve one unmatched status');

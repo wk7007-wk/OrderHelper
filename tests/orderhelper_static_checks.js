@@ -105,8 +105,12 @@ mustMatch(/function displayDecimal\(value\)/, 'decimal display helper missing');
 mustMatch(/function parseMoney\(value\)/, 'money parser missing');
 mustMatch(/function formatWon\(value\)/, 'won formatter missing');
 mustMatch(/function sfaUnitPriceFromRow\(row\)/, 'SFA unit price resolver missing');
-mustMatch(/function expectedOrderAmountForItem\(item, stockNeed\)/, 'expected order amount helper missing');
+mustMatch(/function expectedOrderAmountForItem\(item, stockNeed, resolvedRow = undefined\)/, 'expected order amount helper missing');
 mustMatch(/function resolveUnifiedOrderRows\(data = lastSfaCompareData, ledgerSource = null, days = currentOrderDaysValue\(\), now = Date\.now\(\)\)/, 'single canonical order-row resolver missing');
+mustMatch(/function unifiedOrderRowsByItemKey\(data = lastSfaCompareData, ledgerSource = null, days = currentOrderDaysValue\(\), now = Date\.now\(\)\)/, 'resolved rows need one reusable itemKey map');
+mustMatch(/const resolvedOrderRows = resolveUnifiedOrderRows\(lastSfaCompareData, null, days\);\s*const resolvedOrderRowsByItemKey = new Map\(resolvedOrderRows\.map\(row => \[row\.itemKey, row\]\)\);/, 'one full render must resolve deterministic rows once before reusing the itemKey map');
+mustMatch(/provenance: mappedNameCandidate \? 'EXACT_MAPPED_NAME_CURRENT_EXCEL' : 'EXACT_CURRENT_EXCEL'/, 'latest Excel exact mappedName must be usable as non-persisted price evidence');
+mustMatch(/nonStoredCandidate: mappedNameCandidate/, 'mappedName candidate evidence must be marked non-stored');
 mustMatch(/numericEvidenceNode\(amount \/ qty, 'actualUnitPrice', context, 'amount \/ actualOrderQty'/, 'actual unit price must be Excel line amount divided by actual SFA order quantity');
 mustMatch(/numericEvidenceNode\(orderQty \* priceEvidence\.unitPrice, 'expectedAmount',[\s\S]*'orderQty \* actualUnitPrice', \['orderQty', 'actualUnitPrice'\]/, 'today expected amount must multiply recommended order-unit quantity by actual order-unit price exactly once');
 mustMatch(/if \(aliasState\.aliases\.length && !hasResolvedPrice && !issues\.some\(issue => issue\.code === 'DATA_CONFLICT'\)\) issues\.push\(unifiedOrderIssue\('PRICE_JOIN_BUG'\)\);/, 'an explicitly matched alias without joined ledger price must fail as PRICE_JOIN_BUG');
@@ -296,17 +300,20 @@ mustMatch(/같은 단위 기록 \$\{analysis\.samples\}건 기준/, 'unit-pair c
 mustMatch(/단위환산 분석: orderUnitToStockFactor \$\{fmt\(analysis\.factor, 2\)\}\. \$\{conversionDirectionText\(analysis\.factor, parts\.orderUnit \|\| '발주단위', parts\.checkUnit \|\| '재고단위'\)\} \(재고 변동 \$\{analysis\.samples\}건\)\. 예: 1발주 = 재고\/사용량 10개이면 필요 25개는 3발주\./, 'movement-derived unit conversion must disclose fixed factor direction');
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
-mustMatch(/function renderOrderAmountSpan\(item, stockNeed\)/, 'output order amount renderer missing');
-mustMatch(/<span class="order-amount" title="\$\{escapeHtml\(title\)\}">예상 \$\{escapeHtml\(formatWon\(estimate\.expected_order_amount\)\)\}<\/span>/, 'output order cell must show expected amount from SFA amount data');
-mustMatch(/renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g\)\}/, 'unit conversion analysis and amount estimate must render as separate chips');
+mustMatch(/function renderOrderAmountSpan\(item, stockNeed, resolvedRow = undefined\)/, 'output order amount renderer missing');
+mustMatch(/실발주 \$\{fmt\(actualQty, 2\)\}\$\{actualUnit\}/, 'each order row must disclose actual SFA order quantity');
+mustMatch(/가격 미해결: \$\{reason\}/, 'unresolved prices must show a Korean reason instead of an empty or zero amount');
+mustMatch(/단가 \$\{formatWon\(estimate\.unit_price\)\} · 예상 \$\{formatWon\(estimate\.expected_order_amount\)\} · 가격출처/, 'resolved rows must show unit price, expected amount, and source');
+mustMatch(/renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g, resolvedOrderRow\)\}/, 'unit conversion and mapped resolver evidence must share the same row');
 mustMatch(/예상 발주금액 \$\{formatWon\(estimate\.expected_order_amount\)\}/, 'amount chip title must disclose expected order amount');
-mustMatch(/단가 \$\{formatWon\(estimate\.unit_price\)\} \(\$\{estimate\.basis\}\)/, 'amount chip title must disclose unit price basis');
+mustMatch(/가격출처 \$\{priceSource \|\| '실발주 엑셀'\}/, 'amount chip must disclose the Korean price source');
+mustMatch(/오늘 발주 예상 총액 \$\{totalText\} · 가격 미해결 \$\{summary\.unresolvedPriceCount\}건/, 'top summary must total only valid amounts and count unresolved prices');
 mustMatch(/function outputOrderDisplay\(name, value\)/, 'output order must be read-only display');
 mustMatch(/class="output-order-value" data-output-key="\$\{escapeHtml\(itemKeyForName\(name\)\)\}" data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="order"/, 'output order display marker missing');
 mustNotMatch(/outputNumberInput\(item\.name, 'order'/, 'output order must not render as an editable input');
 mustMatch(/const orderText = isNeed \? displayOrderQty\(item, days\) : '';/, 'single grid must show the recommended order-unit quantity');
 mustMatch(/<span class="need-output-value">\$\{isNeed \? displayDecimal\(g\) : ''\}<\/span>/, 'same row must show the raw stock-unit need');
-mustMatch(/\$\{outputOrderDisplay\(item\.name, orderText\)\}\$\{renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g\)\}/, 'same row must show recommended order, analysis, and amount');
+mustMatch(/\$\{outputOrderDisplay\(item\.name, orderText\)\}\$\{renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g, resolvedOrderRow\)\}/, 'same row must show recommended order, analysis, and mapped amount evidence');
 mustMatch(/document\.querySelectorAll\(`tr\[data-item-key="\$\{itemKey\}"\]`\)/, 'live calculation refresh must patch only rows with the same stable item key');
 mustMatch(/function scheduleDeferredInputWork\(options = \{\}\)/, 'input edits must use deferred calculation scheduler');
 mustMatch(/let deferredInputRevision = 0;/, 'deferred input work must track a latest revision token');
@@ -554,6 +561,7 @@ this.__OrderHelperApi = {
   acceptAiUsageCandidate,
   renderAiUsageAdvisorySpan,
   resolveUnifiedOrderRows,
+  unifiedOrderRowsByItemKey,
   unifiedOrderRowForItem,
   priceEvidenceForActualAliases,
   solveOrderLineEquation,
@@ -562,6 +570,9 @@ this.__OrderHelperApi = {
   movementFactorEvidenceFromRecords,
   summarizeMovementFactorEvidence,
   expectedOrderAmountForItem,
+  summarizeUnifiedOrderAmounts,
+  renderOrderAmountSpan,
+  formatWon,
   firebasePayloadIsNewer,
   compareGridRows,
   gridFocusSnapshot,

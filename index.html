@@ -15,6 +15,8 @@
   .top h1 { font-size: 16px; margin: 0; }
   .badge { background: #e94560; color: #fff; padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }
   .badge.zero { background: #27ae60; }
+  .order-total-summary { display: inline-flex; align-items: center; min-height: 24px; padding: 3px 9px; border-radius: 12px; border: 1px solid rgba(56, 189, 248, 0.38); background: rgba(14, 165, 233, 0.13); color: #bae6fd; font-size: 11px; font-weight: 800; }
+  .order-total-summary.unresolved { border-color: rgba(249, 115, 22, 0.45); background: rgba(249, 115, 22, 0.13); color: #fed7aa; }
   .top button { background: #0f3460; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
   .top button.primary { background: #e94560; }
   .top button.green { background: #27ae60; }
@@ -136,10 +138,11 @@
   td input.cell { background: #0f3460; color: #fff; border: 1px solid #0f3460; border-radius: 4px; padding: 4px 6px; width: 60px; text-align: right; font-size: 13px; }
   td input.cell:focus { outline: none; border-color: #e94560; }
   td input.cell.zone { width: 90px; text-align: left; }
-  .order-cell { display: inline-flex; align-items: center; gap: 5px; }
+  .order-cell { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; white-space: normal; }
   .order-analysis { display: inline-flex; align-items: center; min-height: 18px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(250, 204, 21, 0.34); background: rgba(234, 179, 8, 0.12); color: #fde68a; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
   .order-analysis.empty { display: none; }
-  .order-amount { display: inline-flex; align-items: center; min-height: 18px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.38); background: rgba(14, 165, 233, 0.13); color: #bae6fd; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
+  .order-amount { display: inline-flex; align-items: center; min-height: 18px; max-width: 390px; padding: 2px 6px; border-radius: 7px; border: 1px solid rgba(56, 189, 248, 0.38); background: rgba(14, 165, 233, 0.13); color: #bae6fd; font-size: 10px; font-weight: 700; line-height: 1.35; vertical-align: middle; white-space: normal; }
+  .order-amount.missing { border-color: rgba(249, 115, 22, 0.45); background: rgba(249, 115, 22, 0.12); color: #fed7aa; }
   .order-amount.empty { display: none; }
   .daily-cell { display: inline-flex; align-items: center; gap: 6px; }
   .daily-analysis { display: inline-flex; align-items: center; min-height: 18px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(14, 165, 233, 0.12); color: #7dd3fc; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
@@ -265,6 +268,7 @@
 <div class="top">
   <h1>BBQ 발주</h1>
   <span class="badge" id="badge">발주 0개</span>
+  <span class="order-total-summary" id="orderAmountSummary">오늘 발주 예상 총액 0원 · 가격 미해결 0건</span>
   <label style="font-size:12px;color:#aaa">발주일수
     <select id="orderDays" style="background:#0f3460;color:#fff;border:1px solid #0f3460;border-radius:4px;padding:3px 6px;font-size:13px;margin-left:4px">
       <option value="1">1</option><option value="2">2</option><option value="3">3</option>
@@ -2567,8 +2571,9 @@ function parseMoney(value) {
 }
 
 function formatWon(value) {
+  if (value === null || value === undefined || value === '') return '';
   const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return '';
+  if (!Number.isFinite(n) || n < 0) return '';
   return Math.round(n).toLocaleString('ko-KR') + '원';
 }
 
@@ -2869,33 +2874,64 @@ function orderLineEvidenceCandidate(values, context = {}) {
   };
 }
 
-function currentExcelOrderLineCandidates(actualAliases, data = lastSfaCompareData) {
+function currentExcelMappedName(row, compareRow = null) {
+  return canonicalItemName(
+    row?.mappedName || row?.mapped_name || row?.expectedName || row?.expected_name || row?.targetName || row?.target_name ||
+    compareRow?.mappedName || compareRow?.mapped_name || compareRow?.expectedName || compareRow?.expected_name || compareRow?.targetName || compareRow?.target_name ||
+    ''
+  );
+}
+
+function firstAvailableOrderEvidenceValue(...values) {
+  return values.find(value => value !== null && value !== undefined && (typeof value !== 'string' || value.trim() !== '')) ?? null;
+}
+
+function currentExcelOrderLineCandidates(actualAliases, data = lastSfaCompareData, internalItemName = '') {
+  const internalName = canonicalItemName(internalItemName);
   if (!data || typeof data !== 'object') return [];
   const aliasKeys = new Set((actualAliases || []).map(normalizedActualNameKey).filter(Boolean));
-  if (!aliasKeys.size) return [];
-  const matchedByIndex = new Map((data.comparison?.matched || []).map(row => [String(row.row_index), row]));
-  const rawRows = Array.isArray(data.items) && data.items.length ? data.items : (data.comparison?.matched || []);
+  if (!aliasKeys.size && !internalName) return [];
+  const compareRows = data.comparison?.matched || [];
+  const matchedByIndex = new Map(compareRows.map(row => [String(row.row_index), row]));
+  const rawRows = Array.isArray(data.items) ? data.items.slice() : [];
+  const rawRowIds = new Set(rawRows.map(row => row.row_index !== undefined && row.row_index !== null
+    ? `row:${row.row_index}`
+    : `site:${orderSiteItemKey(row)}`));
+  compareRows.forEach(row => {
+    const identity = row.row_index !== undefined && row.row_index !== null ? `row:${row.row_index}` : `site:${orderSiteItemKey(row)}`;
+    if (rawRowIds.has(identity)) return;
+    rawRowIds.add(identity);
+    rawRows.push(row);
+  });
   const eventAt = timestampMs(data.savedAt || data.updatedAt || data.last_analyzed_at || 0, 0);
   const runId = sfaAnalysisRunId(data, 'excel');
   return rawRows.map((row, index) => {
     const compareRow = row.row_index !== undefined && row.row_index !== null ? matchedByIndex.get(String(row.row_index)) : null;
     const actualName = siteItemName(row) || siteItemName(compareRow);
-    if (!aliasKeys.has(normalizedActualNameKey(actualName))) return null;
-    const qtyRaw = hasSiteValue(row, ['actualOrderQty', 'actual_order_qty', 'sfa_qty', 'qty', 'quantity', 'siteQty'])
-      ? (row.actualOrderQty ?? row.actual_order_qty ?? row.sfa_qty ?? row.qty ?? row.quantity ?? row.siteQty)
-      : (compareRow?.actualOrderQty ?? compareRow?.actual_order_qty ?? compareRow?.sfa_qty ?? compareRow?.qty);
-    const amountRaw = hasSiteValue(row, ['amount', 'sfa_amount', 'siteAmount', 'order_amount', 'total_amount', 'total'])
-      ? (row.amount ?? row.sfa_amount ?? row.siteAmount ?? row.order_amount ?? row.total_amount ?? row.total)
-      : (compareRow?.amount ?? compareRow?.sfa_amount ?? compareRow?.order_amount ?? compareRow?.total_amount ?? compareRow?.total);
-    const unitPriceRaw = row.actualUnitPrice ?? row.unitPrice ?? row.unit_price ?? row.sfa_unit_price ?? row.price ??
-      compareRow?.actualUnitPrice ?? compareRow?.unitPrice ?? compareRow?.unit_price ?? compareRow?.sfa_unit_price ?? compareRow?.price;
+    const mappedName = currentExcelMappedName(row, compareRow);
+    const aliasMatched = aliasKeys.has(normalizedActualNameKey(actualName));
+    const mappedNameExact = Boolean(internalName) && mappedName === internalName;
+    const mappedNameCandidate = !aliasMatched && mappedNameExact;
+    if (!aliasMatched && !mappedNameCandidate) return null;
+    const qtyRaw = firstAvailableOrderEvidenceValue(
+      row.actualOrderQty, row.actual_order_qty, row.sfa_qty, row.qty, row.quantity, row.siteQty,
+      compareRow?.actualOrderQty, compareRow?.actual_order_qty, compareRow?.sfa_qty, compareRow?.qty
+    );
+    const amountRaw = firstAvailableOrderEvidenceValue(
+      row.amount, row.sfa_amount, row.siteAmount, row.order_amount, row.total_amount, row.total,
+      compareRow?.amount, compareRow?.sfa_amount, compareRow?.order_amount, compareRow?.total_amount, compareRow?.total
+    );
+    const unitPriceRaw = firstAvailableOrderEvidenceValue(
+      row.actualUnitPrice, row.unitPrice, row.unit_price, row.sfa_unit_price, row.price,
+      compareRow?.actualUnitPrice, compareRow?.unitPrice, compareRow?.unit_price, compareRow?.sfa_unit_price, compareRow?.price
+    );
     return orderLineEvidenceCandidate({
       actualOrderQty: qtyRaw,
       amount: parseMoney(amountRaw),
       actualUnitPrice: parseMoney(unitPriceRaw)
     }, {
-      priority: 1,
-      provenance: 'EXACT_CURRENT_EXCEL',
+      priority: mappedNameCandidate ? 1.5 : 1,
+      provenance: mappedNameCandidate ? 'EXACT_MAPPED_NAME_CURRENT_EXCEL' : 'EXACT_CURRENT_EXCEL',
       runId,
       sourceRunId: runId,
       sourceRunIds: [runId],
@@ -2905,38 +2941,43 @@ function currentExcelOrderLineCandidates(actualAliases, data = lastSfaCompareDat
       dateKey: sfaAnalysisDateKey(data, eventAt),
       fileName: sfaAnalysisFileName(data),
       actualName,
-      actualUnit: siteItemUnit(row) || siteItemUnit(compareRow)
+      actualUnit: siteItemUnit(row) || siteItemUnit(compareRow),
+      mappedName,
+      nonStoredCandidate: mappedNameCandidate
     });
   }).filter(Boolean);
 }
 
-function priceEvidenceForActualAliases(actualAliases, ledger = sfaOrderLedgerForPayload(), now = Date.now(), data = lastSfaCompareData) {
+function priceEvidenceForActualAliases(actualAliases, ledger = sfaOrderLedgerForPayload(), now = Date.now(), data = lastSfaCompareData, internalItemName = '') {
+  const internalName = canonicalItemName(internalItemName);
   const aliasKeys = new Set((actualAliases || []).map(normalizedActualNameKey).filter(Boolean));
-  if (!aliasKeys.size) return null;
-  const matching = currentExcelOrderLineCandidates(actualAliases, data);
-  (ledger.records || []).forEach(record => {
-    (record.items || []).forEach(event => {
-      const eventNames = [event.originalName, event.aliasName].map(normalizedActualNameKey).filter(Boolean);
-      if (!eventNames.some(name => aliasKeys.has(name))) return;
-      matching.push(orderLineEvidenceCandidate({
-        actualOrderQty: event.actualOrderQty ?? event.quantity,
-        amount: event.amount,
-        actualUnitPrice: event.actualUnitPrice
-      }, {
-        priority: 2,
-        provenance: 'LOSSLESS_LEDGER',
-        runId: String(event.runId || record.runId || ''),
-        sourceRunId: String((event.sourceRunIds || [])[0] || event.runId || record.runId || ''),
-        sourceRunIds: stringArray(event.sourceRunIds, [event.runId || record.runId || '']),
-        eventId: String(event.eventId || ''),
-        eventAt: timestampMs(event.eventAt || record.updatedAt || record.savedAt || 0, 0),
-        dateKey: normalizeHistoryDateKey(event.dateKey || record.dateKey),
-        fileName: normalizedSfaFileName(event.fileName || record.fileName),
-        actualName: String(event.originalName || event.aliasName || ''),
-        actualUnit: String(event.unit || ''),
-      }));
+  if (!aliasKeys.size && !internalName) return null;
+  const matching = currentExcelOrderLineCandidates(actualAliases, data, internalName);
+  if (aliasKeys.size) {
+    (ledger.records || []).forEach(record => {
+      (record.items || []).forEach(event => {
+        const eventNames = [event.originalName, event.aliasName].map(normalizedActualNameKey).filter(Boolean);
+        if (!eventNames.some(name => aliasKeys.has(name))) return;
+        matching.push(orderLineEvidenceCandidate({
+          actualOrderQty: event.actualOrderQty ?? event.quantity,
+          amount: event.amount,
+          actualUnitPrice: event.actualUnitPrice
+        }, {
+          priority: 2,
+          provenance: 'LOSSLESS_LEDGER',
+          runId: String(event.runId || record.runId || ''),
+          sourceRunId: String((event.sourceRunIds || [])[0] || event.runId || record.runId || ''),
+          sourceRunIds: stringArray(event.sourceRunIds, [event.runId || record.runId || '']),
+          eventId: String(event.eventId || ''),
+          eventAt: timestampMs(event.eventAt || record.updatedAt || record.savedAt || 0, 0),
+          dateKey: normalizeHistoryDateKey(event.dateKey || record.dateKey),
+          fileName: normalizedSfaFileName(event.fileName || record.fileName),
+          actualName: String(event.originalName || event.aliasName || ''),
+          actualUnit: String(event.unit || ''),
+        }));
+      });
     });
-  });
+  }
   matching.sort((left, right) => left.priority - right.priority || right.eventAt - left.eventAt || right.eventId.localeCompare(left.eventId));
   const blockingConflict = matching.find(row => row.issues.some(issue => issue.code === 'DATA_CONFLICT'));
   if (blockingConflict && blockingConflict.priority === (matching[0]?.priority ?? blockingConflict.priority)) {
@@ -2969,18 +3010,20 @@ function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null,
     const aliasConflict = aliasState.aliases.some(alias => conflictKeys.has(normalizedActualNameKey(alias)));
     const factor = explicitOrderUnitFactorForItem(item, aliasState);
     const factorSuggestion = movementFactorSuggestionForItem(item);
+    const priceEvidence = priceEvidenceForActualAliases(aliasState.aliases, ledger, now, data, item.name);
+    const mappedNamePriceCandidate = Boolean(priceEvidence?.nonStoredCandidate);
     let matchStatus = UNIFIED_ORDER_MATCH_STATUSES.MATCHED;
     if (aliasConflict) matchStatus = UNIFIED_ORDER_MATCH_STATUSES.ALIAS_CONFLICT;
     else if (!aliasState.aliases.length) matchStatus = candidateNames.length
       ? UNIFIED_ORDER_MATCH_STATUSES.CANDIDATE
-      : UNIFIED_ORDER_MATCH_STATUSES.ITEM_UNMATCHED;
+      : (mappedNamePriceCandidate ? UNIFIED_ORDER_MATCH_STATUSES.CANDIDATE : UNIFIED_ORDER_MATCH_STATUSES.ITEM_UNMATCHED);
     else if (!factor) matchStatus = UNIFIED_ORDER_MATCH_STATUSES.UNIT_UNCONFIRMED;
     const stockNeed = calcG(item, days);
     const orderQty = orderQtyForUnifiedRow(item, stockNeed, factor);
-    const priceEvidence = priceEvidenceForActualAliases(aliasState.aliases, ledger, now, data);
     const issues = [];
     if (aliasConflict) issues.push(unifiedOrderIssue('ALIAS_CONFLICT'));
     if (matchStatus === UNIFIED_ORDER_MATCH_STATUSES.UNIT_UNCONFIRMED) issues.push(unifiedOrderIssue('UNIT_UNCONFIRMED'));
+    if (matchStatus === UNIFIED_ORDER_MATCH_STATUSES.CANDIDATE && !factor) issues.push(unifiedOrderIssue('UNIT_UNCONFIRMED'));
     if (matchStatus === UNIFIED_ORDER_MATCH_STATUSES.ITEM_UNMATCHED) issues.push(unifiedOrderIssue('ITEM_UNMATCHED'));
     if (factorSuggestion?.unitMismatchLikely) issues.push(unifiedOrderIssue('UNIT_MISMATCH_LIKELY'));
     (priceEvidence?.issues || []).forEach(issue => {
@@ -3011,8 +3054,9 @@ function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null,
     return {
       itemKey,
       internalName: item.name,
-      actualName: aliasState.primary || candidateNames[0] || '',
+      actualName: aliasState.primary || priceEvidence?.actualName || candidateNames[0] || '',
       actualAliases: aliasState.aliases,
+      priceCandidateOnly: mappedNamePriceCandidate,
       matchStatus,
       factor,
       factorEvidence,
@@ -3039,12 +3083,16 @@ function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null,
 
 function unifiedOrderRowForItem(name, data = lastSfaCompareData) {
   const itemKey = itemKeyForName(name);
-  return resolveUnifiedOrderRows(data).find(row => row.itemKey === itemKey) || null;
+  return unifiedOrderRowsByItemKey(data).get(itemKey) || null;
 }
 
-function expectedOrderAmountForItem(item, stockNeed) {
-  const row = unifiedOrderRowForItem(item.name);
-  if (!row?.priceEvidence) return null;
+function unifiedOrderRowsByItemKey(data = lastSfaCompareData, ledgerSource = null, days = currentOrderDaysValue(), now = Date.now()) {
+  return new Map(resolveUnifiedOrderRows(data, ledgerSource, days, now).map(row => [row.itemKey, row]));
+}
+
+function expectedOrderAmountForItem(item, stockNeed, resolvedRow = undefined) {
+  const row = resolvedRow === undefined ? unifiedOrderRowForItem(item.name) : resolvedRow;
+  if (!row?.priceEvidence || !Number.isFinite(row.unitPrice)) return null;
   const recommendedQty = orderQtyForUnifiedRow(item, stockNeed, row.factor);
   if (!Number.isFinite(recommendedQty)) return null;
   return {
@@ -3115,18 +3163,86 @@ function renderOrderAnalysisSpan(item, stockNeed) {
   return `<span class="order-analysis" title="${escapeHtml(orderAnalysisTitle(item, stockNeed))}">${escapeHtml(text)}</span>`;
 }
 
-function renderOrderAmountSpan(item, stockNeed) {
-  const estimate = expectedOrderAmountForItem(item, stockNeed);
-  if (!estimate) return '<span class="order-amount empty"></span>';
+function priceEvidenceBasisText(evidence) {
+  if (!evidence) return '';
+  if (evidence.basis === 'SFA_ORDER_UNIT_DIRECT_PRICE' || evidence.equation?.actualUnitPrice?.formula === 'source') return '직접단가';
+  if (evidence.basis === 'SFA_ORDER_UNIT_AMOUNT_DIV_QTY' || evidence.equation?.actualUnitPrice?.formula === 'amount / actualOrderQty') return '금액÷수량';
+  return '산식근거';
+}
+
+function priceEvidenceSourceText(evidence) {
+  if (!evidence) return '';
+  let source = '실발주 엑셀';
+  if (evidence.provenance === 'EXACT_MAPPED_NAME_CURRENT_EXCEL') source = '최신 엑셀 정확매칭 후보(미저장)';
+  else if (evidence.provenance === 'EXACT_CURRENT_EXCEL') source = '최신 엑셀 확정별명';
+  else if (evidence.provenance === 'LOSSLESS_LEDGER') source = '누적 실발주 엑셀';
+  const basis = priceEvidenceBasisText(evidence);
+  return basis ? `${source}·${basis}` : source;
+}
+
+function orderPriceMissingReason(row) {
+  if (!row) return '가격 계산 행을 만들지 못했습니다.';
+  const priority = ['DATA_CONFLICT', 'PRICE_JOIN_BUG', 'PRICE_SOURCE_MISSING', 'ITEM_UNMATCHED', 'UNIT_UNCONFIRMED', 'DERIVATION_BUG'];
+  for (const code of priority) {
+    const issue = (row.issues || []).find(candidate => candidate.code === code);
+    if (issue) return issue.message;
+  }
+  if (!Number.isFinite(row.unitPrice)) return '엑셀에서 수량과 금액 또는 직접단가를 찾지 못했습니다.';
+  if (!Number.isFinite(row.expectedAmount)) return '발주단위 환산값이 없어 예상 금액을 계산하지 못했습니다.';
+  return '';
+}
+
+function renderOrderAmountSpan(item, stockNeed, resolvedRow = undefined) {
+  if (!Number.isFinite(Number(stockNeed)) || Number(stockNeed) <= 0) return '<span class="order-amount empty"></span>';
+  const row = resolvedRow === undefined ? unifiedOrderRowForItem(item.name) : resolvedRow;
+  const estimate = expectedOrderAmountForItem(item, stockNeed, row);
+  const actualQty = Number.isFinite(row?.actualOrderQty) ? row.actualOrderQty : null;
+  const actualUnit = String(row?.priceEvidence?.actualUnit || orderUnitParts(item).orderUnit || '발주').trim();
+  const actualText = actualQty === null ? '실발주 수량 미확인' : `실발주 ${fmt(actualQty, 2)}${actualUnit}`;
+  const priceSource = priceEvidenceSourceText(row?.priceEvidence);
+  if (!estimate) {
+    const reason = orderPriceMissingReason(row);
+    const text = [actualText, `가격 미해결: ${reason}`, priceSource ? `가격출처 ${priceSource}` : '가격출처 없음'].join(' · ');
+    return `<span class="order-amount missing" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+  }
   const title = [
     `예상 발주금액 ${formatWon(estimate.expected_order_amount)}`,
     `오늘 계산 발주량 ${fmt(estimate.recommended_order_qty, 1)}${orderUnitParts(item).orderUnit || '발주'}`,
-    `단가 ${formatWon(estimate.unit_price)} (${estimate.basis})`,
+    actualText,
+    `단가 ${formatWon(estimate.unit_price)}`,
+    `가격출처 ${priceSource || '실발주 엑셀'}`,
     estimate.source_date ? `엑셀 ${estimate.source_date}` : '',
     estimate.source_file ? `파일 ${estimate.source_file}` : '',
-    estimate.source_qty && estimate.source_amount ? `근거 qty ${fmt(estimate.source_qty, 2)} / amount ${formatWon(estimate.source_amount)}` : ''
+    Number.isFinite(estimate.source_qty) && Number.isFinite(estimate.source_amount) ? `근거 수량 ${fmt(estimate.source_qty, 2)} / 금액 ${formatWon(estimate.source_amount)}` : ''
   ].filter(Boolean).join(' · ');
-  return `<span class="order-amount" title="${escapeHtml(title)}">예상 ${escapeHtml(formatWon(estimate.expected_order_amount))}</span>`;
+  const text = `${actualText} · 단가 ${formatWon(estimate.unit_price)} · 예상 ${formatWon(estimate.expected_order_amount)} · 가격출처 ${priceSource || '실발주 엑셀'}`;
+  return `<span class="order-amount" title="${escapeHtml(title)}">${escapeHtml(text)}</span>`;
+}
+
+function summarizeUnifiedOrderAmounts(rows = []) {
+  const needRows = rows.filter(row => Number(row?.stockNeed) > 0);
+  const validAmountRows = needRows.filter(row => Number.isFinite(row?.expectedAmount));
+  const unresolvedPriceCount = needRows.filter(row => !Number.isFinite(row?.unitPrice)).length;
+  const unresolvedAmountCount = needRows.filter(row => Number.isFinite(row?.unitPrice) && !Number.isFinite(row?.expectedAmount)).length;
+  return {
+    needCount: needRows.length,
+    validAmountCount: validAmountRows.length,
+    total: validAmountRows.reduce((sum, row) => sum + row.expectedAmount, 0),
+    unresolvedPriceCount,
+    unresolvedAmountCount
+  };
+}
+
+function renderOrderAmountSummary(rows = []) {
+  const summary = summarizeUnifiedOrderAmounts(rows);
+  const el = document.getElementById('orderAmountSummary');
+  if (!el) return summary;
+  const totalText = summary.validAmountCount > 0 || summary.needCount === 0 ? formatWon(summary.total) : '미계산';
+  const amountGapText = summary.unresolvedAmountCount ? ` · 단위 미확정 ${summary.unresolvedAmountCount}건` : '';
+  el.textContent = `오늘 발주 예상 총액 ${totalText} · 가격 미해결 ${summary.unresolvedPriceCount}건${amountGapText}`;
+  el.classList.toggle('unresolved', summary.unresolvedPriceCount > 0 || summary.unresolvedAmountCount > 0);
+  el.title = `유효 금액 ${summary.validAmountCount}/${summary.needCount}건만 합산`;
+  return summary;
 }
 
 function updateOutputOrderForName(name) {
@@ -3136,6 +3252,9 @@ function updateOutputOrderForName(name) {
   const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const g = calcG(item, days);
   const isNeed = g > 0;
+  const resolvedRows = resolveUnifiedOrderRows(lastSfaCompareData, null, days);
+  const resolvedRowsByItemKey = new Map(resolvedRows.map(row => [row.itemKey, row]));
+  const resolvedRow = resolvedRowsByItemKey.get(itemKey) || null;
   document.querySelectorAll(`.output-order-value[data-output-key="${itemKey}"]`).forEach(output => {
     output.textContent = isNeed ? displayOrderQty(item, days) : '';
     const qtyCell = output.closest('td.order-qty');
@@ -3144,8 +3263,9 @@ function updateOutputOrderForName(name) {
     const marker = wrap?.querySelector('.order-analysis');
     if (marker) marker.outerHTML = renderOrderAnalysisSpan(item, g);
     const amount = wrap?.querySelector('.order-amount');
-    if (amount) amount.outerHTML = renderOrderAmountSpan(item, g);
+    if (amount) amount.outerHTML = renderOrderAmountSpan(item, g, resolvedRow);
   });
+  renderOrderAmountSummary(resolvedRows);
   refreshNeedBadge(days);
 }
 
@@ -6322,6 +6442,11 @@ function render(options = {}) {
   recomputeUsageAnalysis();
 
   refreshNeedBadge(days);
+  // 한 번의 전체 render에서는 deterministic resolver를 정확히 한 번만 실행하고
+  // itemKey map을 행·총액 표시가 함께 사용한다.
+  const resolvedOrderRows = resolveUnifiedOrderRows(lastSfaCompareData, null, days);
+  const resolvedOrderRowsByItemKey = new Map(resolvedOrderRows.map(row => [row.itemKey, row]));
+  renderOrderAmountSummary(resolvedOrderRows);
   // 입력값과 계산 결과는 항상 한 표에 유지하고, 정렬 컨텍스트만 전환한다.
   const orderedRows = entries.map((ent, inputIndex) => {
     const item = orderItemByName(ent.name);
@@ -6356,13 +6481,14 @@ function render(options = {}) {
     const inlineSiteControls = isFirst ? inlineSiteMatchesHtml(item.name, inlineSiteRows) : '';
     const daysLeft = hidden ? daysUntilReturn(item.name) : 0;
     const orderText = isNeed ? displayOrderQty(item, days) : '';
+    const resolvedOrderRow = resolvedOrderRowsByItemKey.get(itemKeyForName(item.name)) || null;
     const needCell = hidden
       ? `<td class="qty need-qty dup" data-item-key="${escapeHtml(itemKeyForName(item.name))}"><span class="need-output-value">${isFirst ? `💤 ${daysLeft}일 후 복귀` : ''}</span></td>`
       : `<td class="qty need-qty ${isNeed ? 'need-output' : ''}" data-item-key="${escapeHtml(itemKeyForName(item.name))}"><span class="need-output-value">${isNeed ? displayDecimal(g) : ''}</span></td>`;
     const orderCell = isFirst
       ? (hidden
           ? `<td class="qty order-qty dup">💤 ${daysLeft}일 후 복귀</td>`
-          : `<td class="qty order-qty ${isNeed?'pos':''}"><span class="order-cell">${outputOrderDisplay(item.name, orderText)}${renderOrderAnalysisSpan(item, g)}${renderOrderAmountSpan(item, g)}</span></td>`)
+          : `<td class="qty order-qty ${isNeed?'pos':''}"><span class="order-cell">${outputOrderDisplay(item.name, orderText)}${renderOrderAnalysisSpan(item, g)}${renderOrderAmountSpan(item, g, resolvedOrderRow)}</span></td>`)
       : `<td class="qty order-qty dup">${hidden ? '' : outputOrderDisplay(item.name, orderText)}</td>`;
     const KL = isFirst
       ? `<td><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-field="k" value="${escapeHtml(displayDecimal(getK(item)))}"></td>
