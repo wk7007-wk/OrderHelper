@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0342';/, 'APP_VERSION must match the KST input-latency release time');
+mustMatch(/const APP_VERSION = '0717.0434';/, 'APP_VERSION must match the KST in-app-browser trust release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -42,7 +42,8 @@ mustMatch(/const DESKTOP_ACCESS_PATH = `\$\{FB_PATH\}\/desktopAccess`;/, 'deskto
 mustMatch(/const DESKTOP_GRACE_MS = 24 \* 60 \* 60 \* 1000;/, 'desktop grace window must be explicitly 24 hours');
 mustMatch(/radiusM: 700/, 'GPS auth radius must be temporarily 700m');
 mustMatch(/매장 GPS 700m/, 'auth UI must disclose the temporary 700m GPS radius');
-mustMatch(/const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object\.freeze\(\[[\s\S]*20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491[\s\S]*b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6[\s\S]*\]\);/, 'passwordless access must be limited to the two freshly verified token hashes');
+mustMatch(/const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object\.freeze\(\[[\s\S]*20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491[\s\S]*b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6[\s\S]*3478b8091ca76988cdc84079f963c4c224b1d440d2748439bf9ca0a61952c6d3[\s\S]*\]\);/, 'passwordless access must be limited to the three freshly verified token hashes');
+mustMatch(/"3478b8091ca76988cdc84079f963c4c224b1d440d2748439bf9ca0a61952c6d3":\{"enabled":true,"label":"factory-pc-codex-in-app","source":"verified_registration_window","registeredAt":1784230390832\}/, 'Codex in-app browser trust metadata must remain tied to the verified exact hash');
 mustNotMatch(/d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08|c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c|8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635/, 'stale personal, main-PC, and unverified factory hashes must be removed');
 mustMatch(/function isPasswordlessTrustedDeviceHash\(hash\)/, 'exact static trusted-device hash predicate missing');
 mustMatch(/if \(isPasswordlessTrustedDeviceHash\(id\)\) \{[\s\S]*unlockOrderHelper\(\);[\s\S]*return true;/, 'trusted restore must unlock before PIN, network, or GPS factors');
