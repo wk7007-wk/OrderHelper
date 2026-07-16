@@ -259,7 +259,7 @@
 
 <div class="pin-overlay" id="pinOverlay">
   <h2>BBQ 발주</h2>
-  <div class="pin-note">PIN + 허용 단말, 승인 데스크탑, 임시 개방, 또는 매장 GPS 700m로 접근합니다.</div>
+  <div class="pin-note">등록된 개인폰·메인PC·공장PC는 자동 진입합니다. 다른 단말은 PIN + 승인 데스크탑, 임시 개방, 또는 매장 GPS 700m가 필요합니다.</div>
   <input type="password" inputmode="numeric" pattern="[0-9]*" id="pinInput" maxlength="4" placeholder="PIN" autocomplete="off">
   <input class="device-name" type="text" id="deviceNameInput" maxlength="32" placeholder="단말명" autocomplete="off">
   <button onclick="checkPin()">확인</button>
@@ -425,13 +425,18 @@ const CONFIRMED_SAVE_QUEUE_STORAGE_KEY = 'bbq_confirmed_save_queue_v1';
 
 // PIN 잠금. PIN 변경 시 새 PIN의 SHA-256 해시로 교체.
 const PIN_HASH = '38083c7ee9121e17401883566a148aa5c2e2d55dc53bc4a94a026517dbff3c6b';
-// 0510 보안 강화 — 5회 시도 후 30초 lock. 단말 token은 CLI allowlist 등록 전에는 factor가 아니며 PIN은 항상 필요.
+// 0510 보안 강화 — 5회 시도 후 30초 lock. 아래 exact token hash 세 대만 passwordless이며 이름/DB 후보는 신뢰하지 않는다.
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30000;
 const DESKTOP_GRACE_MS = 24 * 60 * 60 * 1000;
 const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
-const AUTH_GEO = { storeLat: 37.2528352, storeLng: 127.4900516, radiusM: 700, deviceKey: 'bbq_desk_auth_device_v1', allowedDeviceHashes: ['d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08','c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c'],
-      allowedDevices:{"d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08":{"enabled":true,"label":"사장","updatedAt":"2026-06-26T18:39:12+00:00"},"c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c":{"enabled":true,"label":"메인피시","updatedAt":"2026-06-27T11:30:18+00:00","phoneLast4":"0000"}}, ipFactorReserved: true };
+const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object.freeze([
+  'd21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08',
+  'c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c',
+  '8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635'
+]);
+const AUTH_GEO = { storeLat: 37.2528352, storeLng: 127.4900516, radiusM: 700, deviceKey: 'bbq_desk_auth_device_v1', allowedDeviceHashes: PASSWORDLESS_TRUSTED_DEVICE_HASHES,
+      allowedDevices:{"d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08":{"enabled":true,"label":"사장","updatedAt":"2026-06-26T18:39:12+00:00"},"c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c":{"enabled":true,"label":"메인피시","updatedAt":"2026-06-27T11:30:18+00:00","phoneLast4":"0000"},"8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635":{"enabled":true,"label":"factory-pc","source":"user_explicit_static_allowlist"}}, ipFactorReserved: true };
 let pinAttempts = 0;
 let pinLockUntil = 0;
 let orderHelperStarted = false;
@@ -467,10 +472,12 @@ function ensureAuthDevice() {
 async function deviceHashText(device) {
   try { return await hashPin(device.token); } catch { return '생성됨'; }
 }
+function isPasswordlessTrustedDeviceHash(hash) {
+  return PASSWORDLESS_TRUSTED_DEVICE_HASHES.includes(String(hash || '').toLowerCase());
+}
 async function hasAllowedAuthDevice(device) {
-  const hashes = AUTH_GEO.allowedDeviceHashes || [];
-  if (!device?.token || !hashes.length) return false;
-  return hashes.includes(await hashPin(device.token));
+  if (!device?.token) return false;
+  try { return isPasswordlessTrustedDeviceHash(await hashPin(device.token)); } catch { return false; }
 }
 function isLikelyDesktopClient() {
   const nav = navigator || {};
@@ -810,9 +817,15 @@ async function restoreAuthIfPossible() {
   sessionStorage.removeItem('bbq_desk_auth');
   const device = ensureAuthDevice();
   const id = await deviceHashText(device);
+  if (isPasswordlessTrustedDeviceHash(id)) {
+    setPinMessage(`등록 단말 자동 인증됨 · 단말ID ${id.slice(0, 12)}`, true);
+    unlockOrderHelper();
+    return true;
+  }
   if (AUTH_DEBUG) setPinMessage(`개발 검증 모드: PIN은 필요, GPS만 우회. 단말ID ${id}`, true);
-  else setPinMessage(`PIN + 허용 단말/승인 데스크탑/매장 GPS 700m. 단말ID ${id}`);
+  else setPinMessage(`미등록 단말: PIN + 승인 데스크탑/매장 GPS 700m 필요. 단말ID ${id}`);
   document.getElementById('pinInput').focus();
+  return false;
 }
 restoreAuthIfPossible();
 document.getElementById('pinInput').addEventListener('keypress', e => {

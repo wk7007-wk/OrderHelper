@@ -42,6 +42,11 @@ mustMatch(/const DESKTOP_ACCESS_PATH = `\$\{FB_PATH\}\/desktopAccess`;/, 'deskto
 mustMatch(/const DESKTOP_GRACE_MS = 24 \* 60 \* 60 \* 1000;/, 'desktop grace window must be explicitly 24 hours');
 mustMatch(/radiusM: 700/, 'GPS auth radius must be temporarily 700m');
 mustMatch(/매장 GPS 700m/, 'auth UI must disclose the temporary 700m GPS radius');
+mustMatch(/const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object\.freeze\(\[[\s\S]*d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08[\s\S]*c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c[\s\S]*8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635[\s\S]*\]\);/, 'passwordless access must be limited to the three explicit token hashes');
+mustMatch(/function isPasswordlessTrustedDeviceHash\(hash\)/, 'exact static trusted-device hash predicate missing');
+mustMatch(/if \(isPasswordlessTrustedDeviceHash\(id\)\) \{[\s\S]*unlockOrderHelper\(\);[\s\S]*return true;/, 'trusted restore must unlock before PIN, network, or GPS factors');
+mustMatch(/미등록 단말: PIN \+ 승인 데스크탑\/매장 GPS 700m 필요/, 'unknown-device PIN and factor fallback must remain visible');
+mustNotMatch(/device\.name[\s\S]{0,120}isPasswordlessTrustedDeviceHash/, 'device labels must never authorize passwordless entry');
 mustMatchPy(/--validate-local-sfa-history/, 'local SFA history mapping validation flag missing');
 mustMatchPy(/local_sfa_backfill_low_confidence_rows/, 'local SFA mapping validation must expose low-confidence row count');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');

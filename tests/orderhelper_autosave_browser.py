@@ -517,6 +517,57 @@ def main():
             assert focus_race["duplicate"]["uniqueNodes"] == 2, focus_race
             mobile_page.close()
 
+            auth_page = browser.new_page(viewport={"width": 390, "height": 844})
+            auth_page.route("**/*firebasedatabase.app/**", lambda route: route.abort())
+            auth_page.goto(origin, wait_until="domcontentloaded")
+            auth_page.wait_for_timeout(50)
+            trusted_auth = auth_page.evaluate(
+                """async factoryHash => {
+                    const hashes = Array.from(PASSWORDLESS_TRUSTED_DEVICE_HASHES);
+                    localStorage.setItem(AUTH_GEO.deviceKey, JSON.stringify({ token: 'trusted-fixture', name: 'factory-pc' }));
+                    hashPin = async () => factoryHash;
+                    window.__gpsCalls = 0;
+                    getPosition = () => { window.__gpsCalls += 1; return Promise.reject(new Error('offline GPS')); };
+                    document.body.classList.add('auth-locked');
+                    document.getElementById('pinOverlay').classList.remove('authed');
+                    const restored = await restoreAuthIfPossible();
+                    return {
+                        restored,
+                        locked: document.body.classList.contains('auth-locked'),
+                        pinValue: document.getElementById('pinInput').value,
+                        gpsCalls: window.__gpsCalls,
+                        hashes,
+                        exactPredicates: hashes.map(isPasswordlessTrustedDeviceHash),
+                    };
+                }""",
+                "8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635",
+            )
+            assert trusted_auth["restored"] is True and trusted_auth["locked"] is False, trusted_auth
+            assert trusted_auth["pinValue"] == "" and trusted_auth["gpsCalls"] == 0, trusted_auth
+            assert len(trusted_auth["hashes"]) == 3 and all(trusted_auth["exactPredicates"]), trusted_auth
+
+            unknown_auth = auth_page.evaluate(
+                """async () => {
+                    localStorage.setItem(AUTH_GEO.deviceKey, JSON.stringify({ token: 'unknown-fixture', name: 'factory-pc' }));
+                    hashPin = async () => 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
+                    window.__gpsCalls = 0;
+                    document.body.classList.add('auth-locked');
+                    document.getElementById('pinOverlay').classList.remove('authed');
+                    const restored = await restoreAuthIfPossible();
+                    return {
+                        restored,
+                        locked: document.body.classList.contains('auth-locked'),
+                        activeId: document.activeElement?.id || '',
+                        gpsCalls: window.__gpsCalls,
+                        message: document.getElementById('pinError').textContent,
+                    };
+                }"""
+            )
+            assert unknown_auth["restored"] is False and unknown_auth["locked"] is True, unknown_auth
+            assert unknown_auth["activeId"] == "pinInput" and unknown_auth["gpsCalls"] == 0, unknown_auth
+            assert "미등록 단말" in unknown_auth["message"], unknown_auth
+            auth_page.close()
+
             browser.close()
     finally:
         server.shutdown()
