@@ -75,7 +75,7 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 코드 기준: `20260717-05` / exact-hash trusted 3-device passwordless restore + `20260717-04` 입력 DOM/모바일 header 보호. 라이브 기준은 배포 전까지 `20260717-03` / `0717.0129`다. Unknown PIN+factor, Excel 가격·원문·pair CAS와 기존 stable key·revision·수동값 보호는 유지한다.
+- 최신 배포판 기준: `20260717-05` / `0717.0225` / exact-hash trusted 3-device passwordless restore + `20260717-04` 입력 DOM/모바일 header 보호. Unknown PIN+factor, Excel 가격·원문·pair CAS와 기존 stable key·revision·수동값 보호는 유지한다.
 - 완료 포인터: `20260717-05 Passwordless exact-hash trusted devices`; 이전 포인터 `20260717-04 Preserve stock-edit DOM and mobile headers`, `20260717-01 Stock Next autosave + lossless SFA price history`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, `node tests/orderhelper_single_grid_ledger_regression.js`, `node tests/orderhelper_p1_review_regression.js`, `node tests/orderhelper_autosave_regression.js`, `python3 tests/orderhelper_autosave_browser.py`, inline JS syntax, `git diff --check`. 로컬 Playwright는 Firebase를 interception해 ETag pair-CAS, IME/change/Enter, stored-XSS, delegated listener를 검증한다. 실제 공장 PC/SiteBot worker·live 배포 검증은 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
