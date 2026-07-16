@@ -187,15 +187,6 @@
   .input-tools { padding: 8px 14px 10px; background: #16213e; border-bottom: 1px solid #0f3460; display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
   .input-tools.hidden { display: none; }
   .input-tools button { background: #6b2d5c; color: #fff; border: none; border-radius: 6px; padding: 7px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
-  .save-log-wrap { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 220px; }
-  .save-log-title { font-size: 11px; color: #888; }
-  .save-log { display: flex; gap: 6px; flex-wrap: wrap; }
-  .save-chip { background: rgba(15, 52, 96, 0.9); color: #cfd8e3; border: 1px solid #214268; border-radius: 999px; padding: 4px 9px; font-size: 11px; }
-  .save-chip.success { border-color: #2d6a4f; color: #d8f3dc; }
-  .save-chip.warn { border-color: #b08900; color: #ffe8a3; }
-  .save-chip.error { border-color: #9d0208; color: #ffd6d6; }
-  .save-chip.sync { border-color: #1d4ed8; color: #dbeafe; }
-  .save-chip.muted { color: #9aa7b7; }
   .snooze-overlay { position: fixed; inset: 0; z-index: 500; background: rgba(5, 10, 20, 0.72); display: flex; align-items: center; justify-content: center; padding: 18px; }
   .snooze-overlay.hidden { display: none; }
   .snooze-panel { width: min(320px, 100%); background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.38); }
@@ -234,7 +225,6 @@
     td.actions button { padding: 8px 10px; margin-right: 3px; font-size: 14px; min-width: 32px; }
     .input-tools { padding: 8px; }
     .input-tools button { width: 100%; padding: 10px 12px; font-size: 13px; }
-    .save-log-wrap { min-width: 100%; }
     .sfa-panel { padding: 8px; }
     .sfa-panel-actions { width: 100%; margin-left: 0; }
     .sfa-panel-actions button { flex: 1; padding: 8px 9px; }
@@ -347,10 +337,6 @@
 
 <div class="input-tools" id="inputTools">
   <button type="button" onclick="resetStocks()">재고 리셋</button>
-  <div class="save-log-wrap">
-    <span class="save-log-title">저장 기록</span>
-    <div class="save-log" id="saveLog"></div>
-  </div>
 </div>
 
 <div class="table-wrap">
@@ -390,7 +376,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0505';
+const APP_VERSION = '0717.0514';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -6438,35 +6424,8 @@ function pushDebugLog(message, tone = 'debug', ts = Date.now()) {
   localStorage.setItem(DEBUG_LOG_STORAGE_KEY, JSON.stringify(debugLogs));
 }
 
-function saveLogTime(ts) {
-  return new Date(ts).toLocaleTimeString('ko-KR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  });
-}
-
 function renderSaveLogs() {
-  const tools = document.getElementById('inputTools');
-  const wrap = document.getElementById('saveLog');
-  if (!tools || !wrap) return;
-  tools.classList.remove('hidden');
-  wrap.innerHTML = '';
-  const visibleLogs = saveLogs.filter(log => !isInternalDebugMessage(log.message));
-  if (visibleLogs.length === 0) {
-    const chip = document.createElement('span');
-    chip.className = 'save-chip muted';
-    chip.textContent = '기록 없음';
-    wrap.appendChild(chip);
-    return;
-  }
-  visibleLogs.forEach(log => {
-    const chip = document.createElement('span');
-    chip.className = 'save-chip ' + (log.tone || '');
-    chip.textContent = `${saveLogTime(log.ts)} ${log.message}`;
-    wrap.appendChild(chip);
-  });
+  document.getElementById('inputTools')?.classList.remove('hidden');
 }
 
 function updateStickyOffsets() {

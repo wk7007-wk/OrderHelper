@@ -94,6 +94,29 @@ def main():
             page.goto(origin, wait_until="domcontentloaded")
             page.evaluate("startOrderHelperApp()")
 
+            compact_save_ui = page.evaluate(
+                """() => {
+                    for (let i = 0; i < 30; i += 1) pushSaveLog(`회귀 로그 ${i}`);
+                    const saveState = document.getElementById('saveState');
+                    return {
+                        storedCount: JSON.parse(localStorage.getItem(SAVE_LOG_STORAGE_KEY) || '[]').length,
+                        saveLogExists: Boolean(document.getElementById('saveLog')),
+                        saveLogWrapExists: Boolean(document.querySelector('.save-log-wrap')),
+                        toolsText: document.getElementById('inputTools').innerText.trim(),
+                        saveStateText: saveState.textContent,
+                        saveStateDisplay: getComputedStyle(saveState).display,
+                    };
+                }"""
+            )
+            assert compact_save_ui == {
+                "storedCount": 8,
+                "saveLogExists": False,
+                "saveLogWrapExists": False,
+                "toolsText": "재고 리셋",
+                "saveStateText": "동기화됨",
+                "saveStateDisplay": "flex",
+            }, compact_save_ui
+
             page.evaluate(
                 """() => {
                     lastSfaCompareData = {
@@ -717,7 +740,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0505"
+            assert active_patch["body"]["appVersion"] == "0717.0514"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])

@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0505';/, 'APP_VERSION must match the KST hidden-registration-badge release time');
+mustMatch(/const APP_VERSION = '0717.0514';/, 'APP_VERSION must match the KST compact-save-status release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -48,6 +48,9 @@ mustMatch(/catch \(e\) \{\s*setPinMessage\(authUserMessage\(e\)\);/, 'raw auth e
 mustMatch(/id="desktopAccessBtn"[^>]*hidden aria-hidden="true"/, 'employee UI must hide the desktop-access diagnostics button');
 mustMatch(/id="desktopAccessPanel" hidden aria-hidden="true"/, 'employee UI must hide the desktop-access diagnostics panel');
 mustMatch(/#registrationAccessStatus\[hidden\] \{ display: none !important; \}/, 'inactive registration access badge must remain visually hidden');
+mustNotMatch(/<span class="save-log-title">저장 기록<\/span>|id="saveLog"/, 'employee UI must not render accumulating save-history records');
+mustMatch(/id="saveState">동기화됨<\/span>[\s\S]*id="lastSaved"/, 'employee UI must retain one-line save state and time');
+mustMatch(/function renderSaveLogs\(\) \{\s*document\.getElementById\('inputTools'\)\?\.classList\.remove\('hidden'\);\s*\}/, 'save logs must remain internal instead of rendering employee chips');
 mustMatch(/function renderDesktopAccessPanel\(\)[\s\S]*if \(!AUTH_DEBUG\) \{[\s\S]*body\.replaceChildren\(\);/, 'live employee DOM must not render desktop-access records');
 mustMatch(/async function toggleDesktopAccessPanel\(\) \{\s*if \(!AUTH_DEBUG\) return;/, 'live employee UI must not open the desktop-access panel');
 mustMatch(/const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object\.freeze\(\[[\s\S]*20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491[\s\S]*b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6[\s\S]*3478b8091ca76988cdc84079f963c4c224b1d440d2748439bf9ca0a61952c6d3[\s\S]*\]\);/, 'passwordless access must be limited to the three freshly verified token hashes');
