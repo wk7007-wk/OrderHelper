@@ -152,8 +152,13 @@
   .order-cell { display: flex; width: 100%; box-sizing: border-box; align-items: center; align-content: center; justify-content: flex-start; gap: 5px; flex-wrap: wrap; white-space: normal; }
   .order-analysis { display: inline-flex; align-items: center; min-height: 18px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(250, 204, 21, 0.34); background: rgba(234, 179, 8, 0.12); color: #fde68a; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
   .order-analysis.empty { display: none; }
-  .order-amount { display: inline-flex; align-items: center; min-height: 18px; max-width: 100%; box-sizing: border-box; padding: 2px 6px; border-radius: 7px; border: 1px solid rgba(56, 189, 248, 0.38); background: rgba(14, 165, 233, 0.13); color: #bae6fd; font-size: 10px; font-weight: 700; line-height: 1.35; vertical-align: middle; white-space: normal; }
+  .order-amount { display: grid; flex: 1 0 100%; width: 100%; min-height: 18px; max-width: 100%; box-sizing: border-box; gap: 1px; padding: 4px 7px; border-radius: 7px; border: 1px solid rgba(56, 189, 248, 0.38); background: rgba(14, 165, 233, 0.13); color: #bae6fd; line-height: 1.3; vertical-align: middle; white-space: normal; }
+  .order-amount-primary { color: #e0f2fe; font-size: 11px; font-weight: 900; }
+  .order-amount-secondary { color: #9ddcf7; font-size: 9px; font-weight: 700; }
+  .order-amount-warning { color: #fde68a; font-size: 9px; font-weight: 800; }
   .order-amount.missing { border-color: rgba(249, 115, 22, 0.45); background: rgba(249, 115, 22, 0.12); color: #fed7aa; }
+  .order-amount.missing .order-amount-primary { color: #ffedd5; }
+  .order-amount.missing .order-amount-secondary { color: #fdba74; }
   .order-amount.empty { display: none; }
   .daily-cell { display: inline-flex; align-items: center; gap: 6px; }
   .daily-analysis { display: inline-flex; align-items: center; min-height: 18px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(14, 165, 233, 0.12); color: #7dd3fc; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
@@ -271,7 +276,7 @@
 <div class="top">
   <h1>BBQ 발주</h1>
   <span class="badge" id="badge">발주 0개</span>
-  <span class="order-total-summary" id="orderAmountSummary">오늘 발주 예상 총액 0원 · 가격 미해결 0건</span>
+  <span class="order-total-summary" id="orderAmountSummary">오늘 발주 예상 총액 0원 · 가격 확인 필요 0건</span>
   <label style="font-size:12px;color:#aaa">발주일수
     <select id="orderDays" style="background:#0f3460;color:#fff;border:1px solid #0f3460;border-radius:4px;padding:3px 6px;font-size:13px;margin-left:4px">
       <option value="1">1</option><option value="2">2</option><option value="3">3</option>
@@ -355,7 +360,7 @@
         <th id="thZone" data-column="zone">구역</th>
         <th data-column="name">품목명</th>
         <th data-column="need">필요량</th>
-        <th data-column="order">추천발주 · 분석 · 금액</th>
+        <th data-column="order">추천발주 · 예상금액</th>
         <th data-column="stock">재고</th>
         <th data-column="k">여유</th>
         <th data-column="l">일사용</th>
@@ -385,7 +390,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0553';
+const APP_VERSION = '0717.0611';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -3550,6 +3555,14 @@ function priceEvidenceSourceText(evidence) {
   return basis ? `${source}·${basis}` : source;
 }
 
+function priceEvidenceShortSourceText(evidence) {
+  if (!evidence) return '가격 자료 기준';
+  if (evidence.provenance === 'SFA_PRICE_HISTORY') return '최근 3개월 발주 기준';
+  if (evidence.provenance === 'EXACT_MAPPED_NAME_CURRENT_EXCEL' || evidence.provenance === 'EXACT_CURRENT_EXCEL') return '최신 엑셀 기준';
+  if (evidence.provenance === 'EXACT_MAPPED_NAME_LEDGER' || evidence.provenance === 'LOSSLESS_LEDGER') return '이전 발주이력 기준';
+  return '발주 엑셀 기준';
+}
+
 function orderPriceMissingReason(row) {
   if (!row) return '가격 계산 행을 만들지 못했습니다.';
   const priority = ['ALIAS_CONFLICT', 'DATA_CONFLICT', 'PRICE_JOIN_BUG', 'PRICE_SOURCE_MISSING', 'ITEM_UNMATCHED', 'UNIT_UNCONFIRMED', 'DERIVATION_BUG'];
@@ -3560,6 +3573,18 @@ function orderPriceMissingReason(row) {
   if (!Number.isFinite(row.unitPrice)) return '엑셀에서 수량과 금액 또는 직접단가를 찾지 못했습니다.';
   if (!Number.isFinite(row.expectedAmount)) return '발주단위 환산값이 없어 예상 금액을 계산하지 못했습니다.';
   return '';
+}
+
+function orderPriceMissingActionText(row) {
+  const codes = new Set((row?.issues || []).map(issue => issue?.code).filter(Boolean));
+  if (codes.has('ALIAS_CONFLICT')) return '발주명 중복 확인 필요';
+  if (codes.has('DATA_CONFLICT')) return '가격 근거 확인 필요';
+  if (codes.has('PRICE_JOIN_BUG') || codes.has('PRICE_SOURCE_MISSING') || codes.has('ITEM_UNMATCHED')) return '발주명·가격 연결 필요';
+  if (codes.has('UNIT_UNCONFIRMED')) return '발주 단위 확인 필요';
+  if (codes.has('DERIVATION_BUG')) return '가격 계산 확인 필요';
+  if (!Number.isFinite(row?.unitPrice)) return '가격 자료 확인 필요';
+  if (!Number.isFinite(row?.expectedAmount)) return '발주 단위 확인 필요';
+  return '가격 확인 필요';
 }
 
 function chickenPriceDetail(row) {
@@ -3574,6 +3599,15 @@ function chickenPriceDetail(row) {
   return `마리당 ${formatWon(CHICKEN_EACH_PRICE_MIN)}~${formatWon(CHICKEN_EACH_PRICE_MAX)} 기준 단위 확인 필요`;
 }
 
+function chickenPriceWarningText(row) {
+  if (!row || row.chickenPriceSanity === 'not_applicable' || row.chickenPriceSanity === 'in_range') return '';
+  const pieces = row.estimatedPiecesPerOrder;
+  if (row.chickenPriceSanity === 'pack_range_candidate' && Number(pieces?.min) > 0) {
+    return `묶음 확인: 1발주 약 ${fmt(pieces.min, 0)}~${fmt(pieces.max, 0)}마리`;
+  }
+  return '닭 발주 단위 확인 필요';
+}
+
 function renderOrderAmountSpan(item, stockNeed, resolvedRow = undefined) {
   if (!Number.isFinite(Number(stockNeed)) || Number(stockNeed) <= 0) return '<span class="order-amount empty"></span>';
   const row = resolvedRow === undefined ? unifiedOrderRowForItem(item.name) : resolvedRow;
@@ -3582,11 +3616,13 @@ function renderOrderAmountSpan(item, stockNeed, resolvedRow = undefined) {
   const actualUnit = String(row?.priceEvidence?.actualUnit || orderUnitParts(item).orderUnit || '발주').trim();
   const actualText = actualQty === null ? '실발주 수량 미확인' : `실발주 ${fmt(actualQty, 2)}${actualUnit}`;
   const priceSource = priceEvidenceSourceText(row?.priceEvidence);
+  const shortPriceSource = priceEvidenceShortSourceText(row?.priceEvidence);
   const chickenDetail = chickenPriceDetail(row);
+  const chickenWarning = chickenPriceWarningText(row);
   if (!estimate) {
     const reason = orderPriceMissingReason(row);
-    const text = [actualText, `가격 미해결: ${reason}`, priceSource ? `가격출처 ${priceSource}` : '가격출처 없음'].join(' · ');
-    return `<span class="order-amount missing" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+    const title = [actualText, `가격 미해결: ${reason}`, priceSource ? `가격출처 ${priceSource}` : '가격출처 없음'].join(' · ');
+    return `<span class="order-amount missing" title="${escapeHtml(title)}"><span class="order-amount-primary">예상금액 확인 필요</span><span class="order-amount-secondary">${escapeHtml(orderPriceMissingActionText(row))}</span></span>`;
   }
   const title = [
     `예상 발주금액 ${formatWon(estimate.expected_order_amount)}`,
@@ -3599,8 +3635,7 @@ function renderOrderAmountSpan(item, stockNeed, resolvedRow = undefined) {
     estimate.source_file ? `파일 ${estimate.source_file}` : '',
     Number.isFinite(estimate.source_qty) && Number.isFinite(estimate.source_amount) ? `근거 수량 ${fmt(estimate.source_qty, 2)} / 금액 ${formatWon(estimate.source_amount)}` : ''
   ].filter(Boolean).join(' · ');
-  const text = [actualText, `단가 ${formatWon(estimate.unit_price)}`, chickenDetail, `예상 ${formatWon(estimate.expected_order_amount)}`, `가격출처 ${priceSource || '실발주 엑셀'}`].filter(Boolean).join(' · ');
-  return `<span class="order-amount" title="${escapeHtml(title)}">${escapeHtml(text)}</span>`;
+  return `<span class="order-amount" title="${escapeHtml(title)}"><span class="order-amount-primary">예상 ${escapeHtml(formatWon(estimate.expected_order_amount))}</span><span class="order-amount-secondary">단가 ${escapeHtml(formatWon(estimate.unit_price))} · ${escapeHtml(shortPriceSource)}</span>${chickenWarning ? `<span class="order-amount-warning">${escapeHtml(chickenWarning)}</span>` : ''}</span>`;
 }
 
 function summarizeUnifiedOrderAmounts(rows = []) {
@@ -3622,8 +3657,8 @@ function renderOrderAmountSummary(rows = []) {
   const el = document.getElementById('orderAmountSummary');
   if (!el) return summary;
   const totalText = summary.validAmountCount > 0 || summary.needCount === 0 ? formatWon(summary.total) : '미계산';
-  const amountGapText = summary.unresolvedAmountCount ? ` · 단위 미확정 ${summary.unresolvedAmountCount}건` : '';
-  el.textContent = `오늘 발주 예상 총액 ${totalText} · 가격 미해결 ${summary.unresolvedPriceCount}건${amountGapText}`;
+  const amountGapText = summary.unresolvedAmountCount ? ` · 단위 확인 필요 ${summary.unresolvedAmountCount}건` : '';
+  el.textContent = `오늘 발주 예상 총액 ${totalText} · 가격 확인 필요 ${summary.unresolvedPriceCount}건${amountGapText}`;
   el.classList.toggle('unresolved', summary.unresolvedPriceCount > 0 || summary.unresolvedAmountCount > 0);
   el.title = `유효 금액 ${summary.validAmountCount}/${summary.needCount}건만 합산`;
   return summary;
@@ -6501,7 +6536,7 @@ function renderHeader() {
     <th id="thZone" data-column="zone">구역</th>
     <th data-column="name">품목명</th>
     <th data-column="need">필요량</th>
-    <th data-column="order">추천발주 · 분석 · 금액</th>
+    <th data-column="order">추천발주 · 예상금액</th>
     <th data-column="stock">재고</th>
     <th data-column="k">여유</th>
     <th data-column="l">일사용</th>

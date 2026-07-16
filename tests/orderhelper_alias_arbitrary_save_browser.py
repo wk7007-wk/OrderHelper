@@ -124,7 +124,9 @@ def main():
                     render();
                     const firstRenderCalls = resolverCalls;
                     const candidateRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
-                    const candidateAmountText = candidateRow?.querySelector('.order-amount')?.textContent || '';
+                    const candidateAmount = candidateRow?.querySelector('.order-amount');
+                    const candidateAmountText = candidateAmount?.textContent || '';
+                    const candidateAmountTitle = candidateAmount?.title || '';
                     const afterCandidateAliasCount = Object.keys(orderAliasMappings).length;
                     orderAliasMappings = {
                         [target.name]: {
@@ -138,7 +140,9 @@ def main():
                     render();
                     const secondRenderCalls = resolverCalls - firstRenderCalls;
                     const staleRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
-                    const staleAmountText = staleRow?.querySelector('.order-amount')?.textContent || '';
+                    const staleAmount = staleRow?.querySelector('.order-amount');
+                    const staleAmountText = staleAmount?.textContent || '';
+                    const staleAmountTitle = staleAmount?.title || '';
                     const beforeNoIndexRender = resolverCalls;
                     lastSfaCompareData = {
                         ok: true,
@@ -150,7 +154,9 @@ def main():
                     render();
                     const noIndexRenderCalls = resolverCalls - beforeNoIndexRender;
                     const noIndexRow = Array.from(document.querySelectorAll('tr[data-item-key]')).find(tr => tr.dataset.itemKey === itemKeyForName(target.name));
-                    const noIndexAmountText = noIndexRow?.querySelector('.order-amount')?.textContent || '';
+                    const noIndexAmount = noIndexRow?.querySelector('.order-amount');
+                    const noIndexAmountText = noIndexAmount?.textContent || '';
+                    const noIndexAmountTitle = noIndexAmount?.title || '';
                     const staleAliasPreserved = orderAliasMappings[target.name]?.actualName || '';
                     resolverCalls = 0;
                     const stockInput = noIndexRow?.querySelector('input.cell[data-field="stock"]');
@@ -173,9 +179,12 @@ def main():
                         firstRenderCalls,
                         secondRenderCalls,
                         candidateAmountText,
+                        candidateAmountTitle,
                         staleAmountText,
+                        staleAmountTitle,
                         noIndexRenderCalls,
                         noIndexAmountText,
+                        noIndexAmountTitle,
                         staleAliasPreserved,
                         afterCandidateAliasCount,
                         burstResolverCallsBeforeFrame,
@@ -189,9 +198,12 @@ def main():
             )
             assert resolver_probe["firstRenderCalls"] == 1 and resolver_probe["secondRenderCalls"] == 1, f"each render must call the full resolver once: {resolver_probe}"
             assert resolver_probe["noIndexRenderCalls"] == 1, f"row-index-free browser render must still resolve once: {resolver_probe}"
-            assert "가격출처 최신 엑셀 정확매칭 후보(미저장)" in resolver_probe["candidateAmountText"], resolver_probe
-            assert "가격출처 최신 엑셀 정확매칭 후보(미저장)" in resolver_probe["staleAmountText"], resolver_probe
-            assert "단가 2,400원" in resolver_probe["noIndexAmountText"] and "가격 미해결" not in resolver_probe["noIndexAmountText"], resolver_probe
+            for field in ("candidateAmountText", "staleAmountText", "noIndexAmountText"):
+                assert "단가 2,400원" in resolver_probe[field] and "최신 엑셀 기준" in resolver_probe[field], resolver_probe
+                assert all(term not in resolver_probe[field] for term in ("실발주", "가격출처", "미저장", "금액÷수량", "가격 미해결")), resolver_probe
+            for field in ("candidateAmountTitle", "staleAmountTitle", "noIndexAmountTitle"):
+                assert "실발주 5BOX" in resolver_probe[field], resolver_probe
+                assert "가격출처 최신 엑셀 정확매칭 후보(미저장)·금액÷수량" in resolver_probe[field], resolver_probe
             assert resolver_probe["afterCandidateAliasCount"] == 0, "exact mappedName price evidence must not save an alias"
             assert resolver_probe["staleAliasPreserved"] == "브라우저 과거 저장 별명", "stale saved alias must remain user-owned while mappedName recovers price"
             assert resolver_probe["burstResolverCallsBeforeFrame"] == 0, f"150 stock inputs must not run price resolver synchronously: {resolver_probe}"

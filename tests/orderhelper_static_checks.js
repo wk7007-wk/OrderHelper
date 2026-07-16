@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0553';/, 'APP_VERSION must match the KST simplified order-name release time');
+mustMatch(/const APP_VERSION = '0717.0611';/, 'APP_VERSION must match the KST simplified amount-card release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -165,7 +165,7 @@ mustMatch(/tbody\.dataset\.gridActionsBound === '1'/, 're-rendered rows must not
 mustMatch(/data-grid-action="add" data-entry-id="\$\{safeEntryId\}"/, 'row actions must carry escaped data instead of dynamic inline handlers');
 mustNotMatch(/onclick="addRow\(|onclick="deleteRow\(/, 'stored row ids must never be interpolated into inline JavaScript');
 mustMatch(/value="\$\{escapeHtml\(ent\.zone \|\| ''\)\}"/, 'stored zone text must be escaped before HTML rendering');
-const orderFirstHeader = /<th id="thZone" data-column="zone">구역<\/th>\s*<th data-column="name">품목명<\/th>\s*<th data-column="need">필요량<\/th>\s*<th data-column="order">추천발주 · 분석 · 금액<\/th>\s*<th data-column="stock">재고<\/th>\s*<th data-column="k">여유<\/th>\s*<th data-column="l">일사용<\/th>\s*<th data-column="unit">단위<\/th>\s*<th id="thAct" data-column="actions"><\/th>/g;
+const orderFirstHeader = /<th id="thZone" data-column="zone">구역<\/th>\s*<th data-column="name">품목명<\/th>\s*<th data-column="need">필요량<\/th>\s*<th data-column="order">추천발주 · 예상금액<\/th>\s*<th data-column="stock">재고<\/th>\s*<th data-column="k">여유<\/th>\s*<th data-column="l">일사용<\/th>\s*<th data-column="unit">단위<\/th>\s*<th id="thAct" data-column="actions"><\/th>/g;
 assert.strictEqual((html.match(orderFirstHeader) || []).length, 2, 'static and dynamic headers must share the order-first column contract');
 mustMatch(/\$\{needCell\}\s*\$\{orderCell\}\s*<td data-column="stock"><input class="cell"[\s\S]{0,500}data-field="stock"[\s\S]{0,200}<\/td>\s*\$\{KL\}/, 'every stored row must put need and recommended order before the stock input');
 mustMatch(/#thead th\[data-column="need"\], #tbody td\.need-qty[\s\S]*text-align: center;/, 'need header and values must align in one centered column');
@@ -366,14 +366,19 @@ mustMatch(/단위환산 분석: orderUnitToStockFactor \$\{fmt\(analysis\.factor
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
 mustMatch(/function renderOrderAmountSpan\(item, stockNeed, resolvedRow = undefined\)/, 'output order amount renderer missing');
-mustMatch(/실발주 \$\{fmt\(actualQty, 2\)\}\$\{actualUnit\}/, 'each order row must disclose actual SFA order quantity');
-mustMatch(/가격 미해결: \$\{reason\}/, 'unresolved prices must show a Korean reason instead of an empty or zero amount');
+mustMatch(/실발주 \$\{fmt\(actualQty, 2\)\}\$\{actualUnit\}/, 'amount-card detail must preserve actual SFA order quantity');
+mustMatch(/가격 미해결: \$\{reason\}/, 'amount-card detail must preserve the full Korean missing reason');
 mustMatch(/const priority = \['ALIAS_CONFLICT', 'DATA_CONFLICT'/, 'alias-conflict Korean reason must take priority over price evidence');
-mustMatch(/const text = \[actualText, `단가 \$\{formatWon\(estimate\.unit_price\)\}`, chickenDetail, `예상 \$\{formatWon\(estimate\.expected_order_amount\)\}`, `가격출처 \$\{priceSource \|\| '실발주 엑셀'\}`\]/, 'resolved rows must show unit price, optional chicken sanity, expected amount, and source');
+mustMatch(/function priceEvidenceShortSourceText\(evidence\)/, 'employee amount card needs a short price-source helper');
+mustMatch(/return '최신 엑셀 기준';/, 'current Excel provenance must be shortened for employees');
+mustMatch(/function orderPriceMissingActionText\(row\)/, 'missing amount cards need a short actionable reason');
+mustMatch(/order-amount-primary">예상금액 확인 필요<\/span><span class="order-amount-secondary">\$\{escapeHtml\(orderPriceMissingActionText\(row\)\)\}/, 'missing rows must show a short two-line employee card');
+mustMatch(/order-amount-primary">예상 \$\{escapeHtml\(formatWon\(estimate\.expected_order_amount\)\)\}<\/span><span class="order-amount-secondary">단가 \$\{escapeHtml\(formatWon\(estimate\.unit_price\)\)\} · \$\{escapeHtml\(shortPriceSource\)\}/, 'resolved rows must show expected amount and a short price line');
+mustMatch(/\.order-amount \{[^}]*display: grid;[^}]*flex: 1 0 100%;/, 'amount details must occupy one orderly full-width row');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g, resolvedOrderRow\)\}/, 'unit conversion and mapped resolver evidence must share the same row');
 mustMatch(/예상 발주금액 \$\{formatWon\(estimate\.expected_order_amount\)\}/, 'amount chip title must disclose expected order amount');
 mustMatch(/가격출처 \$\{priceSource \|\| '실발주 엑셀'\}/, 'amount chip must disclose the Korean price source');
-mustMatch(/오늘 발주 예상 총액 \$\{totalText\} · 가격 미해결 \$\{summary\.unresolvedPriceCount\}건/, 'top summary must total only valid amounts and count unresolved prices');
+mustMatch(/오늘 발주 예상 총액 \$\{totalText\} · 가격 확인 필요 \$\{summary\.unresolvedPriceCount\}건/, 'top summary must total only valid amounts and count prices needing review');
 mustMatch(/function outputOrderDisplay\(name, value\)/, 'output order must be read-only display');
 mustMatch(/class="output-order-value" data-output-key="\$\{escapeHtml\(itemKeyForName\(name\)\)\}" data-output-name="\$\{escapeHtml\(name\)\}" data-output-field="order"/, 'output order display marker missing');
 mustNotMatch(/outputNumberInput\(item\.name, 'order'/, 'output order must not render as an editable input');

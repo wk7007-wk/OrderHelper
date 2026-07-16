@@ -298,8 +298,11 @@ assert.strictEqual(exactMappedRow.priceEvidence.provenance, 'EXACT_MAPPED_NAME_C
 assert.strictEqual(exactMappedRow.unitPrice, 2400, 'latest exact mappedName amount/qty must resolve a candidate unit price');
 assert.strictEqual(Object.keys(plain(api.getAliasMappingsForCheck())).length, 0, 'candidate price evidence must not persist an alias');
 const exactMappedHtml = api.renderOrderAmountSpan(item, exactMappedRow.stockNeed, exactMappedRow);
-assert(exactMappedHtml.includes('실발주 5BOX'), 'row evidence must visibly show actual order quantity');
-assert(exactMappedHtml.includes('단가 2,400원') && exactMappedHtml.includes('가격출처 최신 엑셀 정확매칭 후보(미저장)'), 'row evidence must visibly show unit price and non-stored source');
+const exactMappedVisible = exactMappedHtml.replace(/<[^>]+>/g, '');
+assert(exactMappedVisible.includes('예상 7,200원'), 'employee card must lead with the expected amount');
+assert(exactMappedVisible.includes('단가 2,400원 · 최신 엑셀 기준'), 'employee card must keep only a short unit-price source');
+assert(!/실발주|가격출처|미저장|금액÷수량/.test(exactMappedVisible), 'technical price provenance must stay out of visible card text');
+assert(exactMappedHtml.includes('실발주 5BOX') && exactMappedHtml.includes('가격출처 최신 엑셀 정확매칭 후보(미저장)·금액÷수량'), 'full quantity and provenance must remain in the detail title');
 
 const nullRawPriceEvidence = plain(api.priceEvidenceForActualAliases([], { version: 2, records: [] }, now, {
   ...exactMappedCompare,
@@ -402,7 +405,10 @@ aliasConflictRows.forEach(row => {
   assert.strictEqual(row.matchStatus, 'ALIAS_CONFLICT');
   assert.strictEqual(row.unitPrice, 2400, 'conflict rows may retain visible price evidence');
   assert.strictEqual(row.expectedAmount, null, 'conflict rows must never calculate an amount');
-  assert(api.renderOrderAmountSpan(api.MASTER.find(candidate => candidate.name === row.internalName), row.stockNeed, row).includes('같은 실발주 별명이 여러 내부 품목에 중복 확정됐습니다.'), 'conflict row must show the Korean alias-conflict reason');
+  const conflictHtml = api.renderOrderAmountSpan(api.MASTER.find(candidate => candidate.name === row.internalName), row.stockNeed, row);
+  const conflictVisible = conflictHtml.replace(/<[^>]+>/g, '');
+  assert(conflictVisible.includes('예상금액 확인 필요') && conflictVisible.includes('발주명 중복 확인 필요'), 'conflict row must show a short actionable employee reason');
+  assert(conflictHtml.includes('같은 실발주 별명이 여러 내부 품목에 중복 확정됐습니다.'), 'full alias-conflict reason must remain in the detail title');
 });
 const aliasConflictSummary = plain(api.summarizeUnifiedOrderAmounts(aliasConflictRows));
 assert.strictEqual(aliasConflictSummary.validAmountCount, 0, 'duplicate alias price must contribute zero valid amount rows');

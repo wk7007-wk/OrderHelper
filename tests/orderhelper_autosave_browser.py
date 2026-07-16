@@ -595,7 +595,7 @@ def main():
                 }"""
             )
             assert mobile_header["headerKeys"] == ["zone", "name", "need", "order", "stock", "k", "l", "unit", "actions"], mobile_header
-            assert mobile_header["headerTexts"] == ["구역", "품목명", "필요량", "추천발주 · 분석 · 금액", "재고", "여유", "일사용", "단위", ""], mobile_header
+            assert mobile_header["headerTexts"] == ["구역", "품목명", "필요량", "추천발주 · 예상금액", "재고", "여유", "일사용", "단위", ""], mobile_header
             assert mobile_header["cellKeys"] == ["zone", "name", "need", "order", "stock", "k", "l", "unit", "actions"], mobile_header
             assert abs(mobile_header["headers"][0]["top"] - mobile_header["wrapTop"]) <= 1, mobile_header
             for header, cell in zip(mobile_header["headers"], mobile_header["cells"]):
@@ -857,7 +857,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0553"
+            assert active_patch["body"]["appVersion"] == "0717.0611"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])
