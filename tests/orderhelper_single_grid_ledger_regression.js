@@ -92,6 +92,44 @@ api.setSfaActualHistoryForCheck({
 const actualLedger = plain(api.sfaActualHistoryLedgerForPayload());
 assert.strictEqual(actualLedger.eventCount, 2, 'SFA actual-history payload must preserve duplicate item rows');
 assert(actualLedger.records[0].items.some(row => row.quantity === 0 && row.actualOrderQty === 0), 'SFA actual-history ledger must preserve explicit zero quantities');
+
+api.setSfaActualHistoryForCheck({
+  '20260712': {
+    rows: [{ row_index: 3, expected_name: targetName, sfa_name: '가격 누락 원본', sfa_qty: 2, sfa_unit: 'BOX' }],
+  },
+});
+const missingAmountLedger = plain(api.sfaActualHistoryLedgerForPayload());
+const missingAmountRow = missingAmountLedger.records[0].items[0];
+assert.strictEqual(missingAmountRow.hasAmount, false, 'an omitted historical amount must stay absent');
+assert.strictEqual(missingAmountRow.amount, null, 'an omitted historical amount must never become a fabricated zero');
+
+api.setSfaActualHistoryForCheck({
+  '20260711': {
+    priceEvidenceVersion: 1,
+    rows: [{ row_index: 4, expected_name: targetName, sfa_name: '명시적 무상 원본', sfa_qty: 2, sfa_unit: 'BOX', sfa_amount: 0 }],
+  },
+});
+const explicitZeroLedger = plain(api.sfaActualHistoryLedgerForPayload());
+const explicitZeroRow = explicitZeroLedger.records[0].items[0];
+assert.strictEqual(explicitZeroRow.hasAmount, true, 'a versioned explicit zero amount must remain present data');
+assert.strictEqual(explicitZeroRow.amount, 0, 'a versioned explicit zero amount must remain distinguishable from missing');
+
+const preservedPriceLedger = plain(api.dedupeSfaOrderLedgerSources({
+  version: 2,
+  records: [
+    {
+      runId: 'priced-source-run', dateKey: '20260710', savedAt: 100, updatedAt: 100, source: 'excel', fileName: '같은원본.xlsx',
+      items: [{ runId: 'priced-source-run', dateKey: '20260710', eventAt: 100, source: 'excel', originalName: '동일 원품목', mappedName: targetName, quantity: 2, actualOrderQty: 2, amount: 12000, priceEvidenceVersion: 1, unit: 'BOX', rowIndex: 5 }],
+    },
+    {
+      runId: 'legacy-newer-run', dateKey: '20260710', savedAt: 200, updatedAt: 200, source: 'sfaActualHistory', fileName: '같은원본.xlsx',
+      items: [{ runId: 'legacy-newer-run', dateKey: '20260710', eventAt: 200, source: 'sfaActualHistory', originalName: '동일 원품목', mappedName: targetName, quantity: 2, actualOrderQty: 2, unit: 'BOX', rowIndex: 5 }],
+    },
+  ],
+}));
+const preservedPriceRow = preservedPriceLedger.records[0].items[0];
+assert.strictEqual(preservedPriceRow.hasAmount, true, 'a newer mirrored row without price must not erase older real Excel evidence');
+assert.strictEqual(preservedPriceRow.amount, 12000, 'dedupe must retain the real amount from the same physical source row');
 api.setSfaActualHistoryForCheck({});
 api.setSfaAnalysisHistoryForCheck({ records: [] });
 

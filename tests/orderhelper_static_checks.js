@@ -31,12 +31,13 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0715.1053';/, 'APP_VERSION must match the KST deterministic price-total release time');
+mustMatch(/const APP_VERSION = '0717.0059';/, 'APP_VERSION must match the KST stock-save and price-retention release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
 mustMatch(/const SFA_COMPARE_PATH = `\$\{FB_PATH\}\/sfaCompare\/latest`;/, 'SFA latest comparison path missing');
 mustMatch(/const SFA_ACTUAL_HISTORY_PATH = `\$\{FB_PATH\}\/sfaActualHistory`;/, 'SFA actual order history path missing');
+mustMatch(/const SFA_PRICE_HISTORY_PATH = `\$\{FB_PATH\}\/sfaPriceHistory\/latest`;/, 'SFA durable price-history read model path missing');
 mustMatch(/const DESKTOP_ACCESS_PATH = `\$\{FB_PATH\}\/desktopAccess`;/, 'desktop access Firebase path missing');
 mustMatch(/const DESKTOP_GRACE_MS = 24 \* 60 \* 60 \* 1000;/, 'desktop grace window must be explicitly 24 hours');
 mustMatch(/radiusM: 700/, 'GPS auth radius must be temporarily 700m');
@@ -59,6 +60,10 @@ mustMatch(/function mergeSfaAnalysisHistories\(\.\.\.sources\)/, 'same-run retri
 mustMatch(/function sfaActualHistoryLedgerForPayload\(source = sfaActualHistory\)/, 'legacy SFA actual-history rows must also feed the lossless ledger');
 mustMatch(/version: 2,[\s\S]*eventCount:/, 'order ledger payload must publish its lossless event contract version');
 mustMatch(/actualOrderQty: hasActualOrderQty \? actualOrderQty : null,[\s\S]*hasActualOrderQty,[\s\S]*hasAmount/, 'ledger must distinguish explicit zero quantity\/amount from missing price evidence');
+mustMatch(/legacySyntheticZeroAmount[\s\S]*priceEvidenceVersion < 1[\s\S]*startsWith\('sfaActualHistory\|'\)/, 'legacy fabricated zero amounts must be quarantined without erasing versioned explicit zero');
+mustMatch(/function sanitizeSfaPriceHistory\(source = sfaPriceHistory\)/, 'immutable-run-backed SFA price history sanitizer missing');
+mustMatch(/function priceHistoryEvidenceForItem\(internalItemName\)/, 'durable SFA price history must feed the deterministic row resolver');
+mustMatch(/provenance: 'SFA_PRICE_HISTORY'/, 'durable SFA price history provenance missing');
 mustMatch(/rawIdentity,[\s\S]*eventId = sfaLedgerEventId/, 'ledger events must preserve raw identity and a stable event id');
 mustMatch(/const eventAt = timestampMs\(/, 'ledger rows must retain a stable event timestamp for retry ordering');
 mustMatch(/const sourceRunIds = Array\.from\(new Set\(\[/, 'mirrored physical rows must retain all source run ids');
@@ -157,7 +162,7 @@ mustMatch(/statusMs < sfaLastRequestAt/, 'SFA status must ignore stale states ol
 mustMatch(/loadSfaCompareLatest\(true, hadPendingRequest\)/, 'fresh SFA completion must load visible comparison results');
 mustMatch(/function buildSfaAnalysisPayloadState\(data = lastSfaCompareData\)/, 'SFA payload state builder missing');
 mustMatch(/function refreshSfaResultViewsWithCurrentState\(data = lastSfaCompareData, reason = 'sfaResult'\)/, 'SFA result refresh helper missing');
-mustMatch(/lastSfaCompareData = data;\s*await autoLoadFromFB\(true\);\s*await loadUsageHistory\(true\);\s*refreshSfaResultViewsWithCurrentState\(data, 'latestCompare'\);/, 'fresh SFA comparison must load latest current/history before rebuilding alias and inline views');
+mustMatch(/lastSfaCompareData = data;\s*await autoLoadFromFB\(true\);\s*await loadUsageHistory\(true\);\s*await loadSfaPriceHistory\(true\);\s*refreshSfaResultViewsWithCurrentState\(data, 'latestCompare'\);/, 'fresh SFA comparison must load latest current/history/price evidence before rebuilding alias and inline views');
 mustMatch(/if \(lastSfaCompareData && document\.querySelector\('\.inline-alias-correction'\)\) renderPreservingGridFocus\(\);/, 'SFA history refresh must preserve focused single-grid input');
 mustMatch(/const appliedText = lastSfaResultAppliedAt \? ` · 적용 \$\{sfaCompareTime\(lastSfaResultAppliedAt\)\}` : '';/, 'SFA compare meta must track UI application time');
 mustMatch(/완료 \$\{sfaCompareTime\(data\.savedAt\)\}` : ''\}\$\{appliedText\}/, 'SFA compare meta must separate Excel completion and UI application times');
@@ -306,7 +311,7 @@ mustMatch(/function renderOrderAmountSpan\(item, stockNeed, resolvedRow = undefi
 mustMatch(/실발주 \$\{fmt\(actualQty, 2\)\}\$\{actualUnit\}/, 'each order row must disclose actual SFA order quantity');
 mustMatch(/가격 미해결: \$\{reason\}/, 'unresolved prices must show a Korean reason instead of an empty or zero amount');
 mustMatch(/const priority = \['ALIAS_CONFLICT', 'DATA_CONFLICT'/, 'alias-conflict Korean reason must take priority over price evidence');
-mustMatch(/단가 \$\{formatWon\(estimate\.unit_price\)\} · 예상 \$\{formatWon\(estimate\.expected_order_amount\)\} · 가격출처/, 'resolved rows must show unit price, expected amount, and source');
+mustMatch(/const text = \[actualText, `단가 \$\{formatWon\(estimate\.unit_price\)\}`, chickenDetail, `예상 \$\{formatWon\(estimate\.expected_order_amount\)\}`, `가격출처 \$\{priceSource \|\| '실발주 엑셀'\}`\]/, 'resolved rows must show unit price, optional chicken sanity, expected amount, and source');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g, resolvedOrderRow\)\}/, 'unit conversion and mapped resolver evidence must share the same row');
 mustMatch(/예상 발주금액 \$\{formatWon\(estimate\.expected_order_amount\)\}/, 'amount chip title must disclose expected order amount');
 mustMatch(/가격출처 \$\{priceSource \|\| '실발주 엑셀'\}/, 'amount chip must disclose the Korean price source');
@@ -435,6 +440,7 @@ mustMatch(/class="cell zone" type="text" tabindex="-1"/, 'zone field must be ski
 mustMatch(/<button class="add" tabindex="-1"/, 'row action buttons must be skipped by keyboard next navigation');
 mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must move within the current DOM order');
 mustMatch(/function renderAndFocusStock\([^)]*\)[\s\S]*if \(gridSortMode === 'input'\) \{[\s\S]*render\(\);[\s\S]*queueMicrotask\(focusNext\);/, 'stock Enter must resort completed rows and restore focus after detached-DOM cleanup only in input mode');
+mustMatch(/모바일 숫자키보드의 Next[\s\S]*flushAutoSave\('stockChange'\);/, 'mobile Next/change must commit stock without requiring a keydown Enter event');
 mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
 mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');
 mustMatch(/sortStockRowsAndKeepFlow\(currentId, 'change'\)/, 'change with already-correct focus must preserve current DOM flow');
@@ -546,6 +552,8 @@ this.__OrderHelperApi = {
   orderManualItemsForPayload,
   sfaAnalysisHistoryForPayload,
   sfaActualHistoryLedgerForPayload,
+  sanitizeSfaPriceHistory,
+  priceHistoryEvidenceForItem,
   sfaOrderLedgerForPayload,
   normalizedSfaFileName,
   sanitizeSfaAnalysisHistory,
@@ -719,6 +727,9 @@ this.__OrderHelperApi = {
   setSfaActualHistoryForCheck(value) {
     sfaActualHistory = value || {};
     markSfaLedgerChanged();
+  },
+  setSfaPriceHistoryForCheck(value) {
+    sfaPriceHistory = sanitizeSfaPriceHistory(value);
   },
 };`, sandbox);
 

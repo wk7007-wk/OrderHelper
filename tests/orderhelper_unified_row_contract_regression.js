@@ -44,6 +44,16 @@ fixture.movementCases.forEach(testCase => {
 
 const item = api.MASTER.find(row => row.name === '신선육(10호)-뼈한마리');
 assert(item, 'factor-10 unified-row fixture item missing');
+const legacyPackItem = api.MASTER.find(row => row.name === '두마리치킨,파더스');
+assert(legacyPackItem, 'legacy pack migration fixture item missing');
+api.setUnitCorrectionsForCheck({
+  [legacyPackItem.name]: { factor: 1, orderMultiple: 10, updatedAt: 1 },
+});
+const migratedPackCorrection = plain(api.unitCorrectionForItem(legacyPackItem.name));
+assert.strictEqual(migratedPackCorrection.factor, 10, 'legacy pack size must migrate to 1 order = 10 stock/chicken units');
+assert.strictEqual(migratedPackCorrection.orderUnitToStockFactor, 10, 'migrated pack factor must use the explicit directional field');
+assert.strictEqual(migratedPackCorrection.orderMultiple, undefined, 'legacy pack size must no longer multiply the number of order boxes');
+assert.strictEqual(migratedPackCorrection.migratedFromOrderMultiple, true, 'legacy conversion must remain visible for audit');
 const actualName = '실발주품목';
 const now = Date.UTC(2026, 6, 14, 12);
 
@@ -69,6 +79,7 @@ function setBaseState() {
   api.setOverridesForCheck({ [item.name]: { l: 25, k: 0 } });
   api.setSalesForCheck([], 280);
   api.setUnitCorrectionsForCheck({});
+  api.setSfaPriceHistoryForCheck({ version: 1, canonicalSource: 'sfaAnalysisRuns', advisoryOnly: true, items: {} });
   api.setSiteMappingsForCheck({});
   api.setAliasMappingsForCheck({
     [item.name]: {
@@ -178,6 +189,47 @@ assert.strictEqual(result.row.matchStatus, 'MATCHED', 'missing price must not er
 assert.strictEqual(result.row.unitPrice, null, 'missing price must stay null, never fabricated zero');
 assert.strictEqual(result.row.expectedAmount, null, 'missing price must keep expected amount unresolved');
 assert(result.row.issues.some(issue => issue.code === 'PRICE_JOIN_BUG' && issue.message.includes('엑셀 금액 행')), 'matched alias without price must raise Korean PRICE_JOIN_BUG');
+
+setBaseState();
+api.setAliasMappingsForCheck({});
+api.setUnitCorrectionsForCheck({ [item.name]: { factor: 10 } });
+api.setSfaAnalysisHistoryForCheck({ records: [] });
+api.setSfaPriceHistoryForCheck({
+  version: 1,
+  canonicalSource: 'sfaAnalysisRuns',
+  advisoryOnly: true,
+  updatedAt: now,
+  latestRunId: 'history-run-3month',
+  latestRunPath: '/order/desk_q7m9r3a8/sfaAnalysisRuns/history-run-3month',
+  items: {
+    [item.name]: {
+      mappedName: item.name,
+      actualName: '3개월 원본 실발주명',
+      actualUnit: 'BOX',
+      actualOrderQty: 5,
+      amount: 12000,
+      unitPrice: 2400,
+      dateKey: '20260710',
+      score: 0.99,
+      sourceRunId: 'history-run-3month',
+      sourceRunIds: ['history-run-3month'],
+      sourcePath: '/order/desk_q7m9r3a8/sfaAnalysisRuns/history-run-3month',
+      sourceFile: '3개월재분석.xlsx',
+      sourceSavedAt: now,
+      priceEvidenceVersion: 1,
+      orderUnitToStockFactorCandidate: 10,
+      perStockUnitPrice: 240,
+    },
+  },
+});
+result = targetRow();
+assert.strictEqual(result.row.matchStatus, 'CANDIDATE', 'price-history exact mappedName evidence must remain candidate-only without a saved alias');
+assert.strictEqual(result.row.priceCandidateOnly, true, '3-month price history must never persist or pretend an alias');
+assert.strictEqual(result.row.priceEvidence.provenance, 'SFA_PRICE_HISTORY');
+assert.strictEqual(result.row.unitPrice, 2400, '3-month price history must restore the actual order-unit price');
+assert.strictEqual(result.row.expectedAmount, 7200, 'restored price history must calculate today amount with the explicit factor exactly once');
+assert.strictEqual(Object.keys(plain(api.getAliasMappingsForCheck())).length, 0, 'reading price history must not mutate user alias mappings');
+api.setSfaPriceHistoryForCheck({ version: 1, canonicalSource: 'sfaAnalysisRuns', advisoryOnly: true, items: {} });
 
 api.setAliasMappingsForCheck({});
 api.setSiteMappingsForCheck({});

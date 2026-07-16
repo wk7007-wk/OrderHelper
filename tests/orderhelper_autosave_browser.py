@@ -115,7 +115,6 @@ def main():
                         input.value = String(value);
                         input.dispatchEvent(new Event('input', { bubbles: true }));
                     }
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
                     window.dispatchEvent(new Event('online'));
                     document.dispatchEvent(new Event('visibilitychange'));
                     const local = JSON.parse(localStorage.getItem('bbq_entries') || '[]');
@@ -129,7 +128,7 @@ def main():
                 }"""
             )
             page.wait_for_timeout(1600)
-            assert writes == [], "ten stock inputs plus blur/online/visibility must produce PUT 0"
+            assert writes == [], "ten draft stock inputs plus online/visibility must produce PUT 0"
             assert fixture["localStock"] == 10 and fixture["pending"] > 0
             assert fixture["status"] == "로컬 입력됨 · Enter 저장"
 
@@ -146,31 +145,47 @@ def main():
                     input.value = '11';
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, isComposing: true, bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
                 }""",
                 fixture["id"],
             )
             page.wait_for_timeout(1100)
-            assert writes == [], "IME Enter and blur-only must produce PUT 0"
+            assert writes == [], "IME composition keydown without completion/change must produce PUT 0"
 
             page.evaluate(
                 """id => {
                     const input = Array.from(document.querySelectorAll('input.cell[data-field="stock"]')).find(row => row.dataset.id === id);
-                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                 }""",
                 fixture["id"],
             )
             wait_for_puts(page, writes, 2)
             page.wait_for_timeout(250)
-            assert len(writes) == 2, "Enter followed by change must not duplicate PUTs"
-            assert {row["kind"] for row in writes} == {"current", "history"}
-            assert writes[0]["body"] == writes[1]["body"]
-            entered_payload = json.loads(writes[0]["body"])
+            assert len(writes) == 2, "mobile Next/change completion must create one current/history pair"
+            change_payload = json.loads(writes[0]["body"])
+            change_row = next(row for row in change_payload["entries"] if row["id"] == fixture["id"])
+            assert change_row["stock"] == 11
+
+            page.evaluate(
+                """id => {
+                    const input = Array.from(document.querySelectorAll('input.cell[data-field="stock"]')).find(row => row.dataset.id === id);
+                    input.value = '12';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }""",
+                fixture["id"],
+            )
+            wait_for_puts(page, writes, 4)
+            page.wait_for_timeout(250)
+            assert len(writes) == 4, "Enter followed by change must add only one current/history pair"
+            entered_writes = writes[2:4]
+            assert {row["kind"] for row in entered_writes} == {"current", "history"}
+            assert entered_writes[0]["body"] == entered_writes[1]["body"]
+            entered_payload = json.loads(entered_writes[0]["body"])
             entered_row = next(row for row in entered_payload["entries"] if row["id"] == fixture["id"])
-            assert entered_row["stock"] == 11
+            assert entered_row["stock"] == 12
             keyed = entered_payload["inventoryByItemKey"][fixture["itemKey"]]
-            assert keyed["total"] == 11, "saved keyed inventory must match the entered stock/output read model"
+            assert keyed["total"] == 12, "saved keyed inventory must match the entered stock/output read model"
 
             before_zone = len(writes)
             page.evaluate(
@@ -208,6 +223,52 @@ def main():
                 "document.getElementById('baseSalesInput').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))"
             )
             wait_for_puts(page, writes, before_base + 2)
+
+            before_kitchen = len(writes)
+            kitchen_page = browser.new_page()
+            kitchen_page.route("**/*firebasedatabase.app/**", firebase_route)
+            kitchen_page.goto(origin, wait_until="domcontentloaded")
+            kitchen_page.evaluate("startOrderHelperApp()")
+            kitchen_page.evaluate(
+                """() => {
+                    entries = MASTER.slice(0, 21).map((item, index) => ({
+                        id: `kitchen-frozen-${index}`,
+                        entryKey: `kitchen-frozen-${index}`,
+                        itemKey: itemKeyForName(item.name),
+                        name: item.name,
+                        zone: '주방냉동',
+                        stock: null,
+                    }));
+                    gridSortMode = 'sfa';
+                    render();
+                }"""
+            )
+            for index in range(21):
+                kitchen_page.evaluate(
+                    """index => {
+                        const input = Array.from(document.querySelectorAll('input.cell[data-field="stock"]'))
+                            .find(row => row.dataset.id === `kitchen-frozen-${index}`);
+                        if (!input) throw new Error(`missing kitchen-frozen-${index}`);
+                        input.value = String(index + 1);
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    }""",
+                    index,
+                )
+                kitchen_page.wait_for_timeout(10)
+            kitchen_page.wait_for_function(
+                "!saveInFlight && !pendingSave && !readConfirmedSaveQueue().active && !readConfirmedSaveQueue().queued"
+            )
+            page.wait_for_timeout(150)
+            assert len(writes) >= before_kitchen + 2, "21 kitchen-frozen change completions must reach Firebase"
+            kitchen_rows = {
+                row["id"]: row for row in (remote["current"] or {}).get("entries", [])
+                if row.get("zone") == "주방냉동"
+            }
+            assert len(kitchen_rows) == 21, "all 21 kitchen-frozen rows must survive the coalesced confirmed-save queue"
+            assert [kitchen_rows[f"kitchen-frozen-{index}"]["stock"] for index in range(21)] == list(range(1, 22))
+            assert remote["history"] == remote["current"], "kitchen-frozen current/history snapshots must remain identical"
+            kitchen_page.close()
 
             before_action = len(writes)
             page.evaluate("id => addRow(id)", fixture["id"])
