@@ -3,6 +3,7 @@ import http.server
 import json
 import socketserver
 import threading
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -567,6 +568,107 @@ def main():
             assert unknown_auth["activeId"] == "pinInput" and unknown_auth["gpsCalls"] == 0, unknown_auth
             assert "미등록 단말" in unknown_auth["message"], unknown_auth
             auth_page.close()
+
+            registration_state = {"mode": "disabled", "window_gets": 0, "patches": [], "window_start": 0, "window_end": 0}
+
+            def registration_route(route, request):
+                now = int(time.time() * 1000)
+                if "/registrationWindow.json" in request.url:
+                    registration_state["window_gets"] += 1
+                    mode = registration_state["mode"]
+                    if mode == "network_fail":
+                        route.abort()
+                        return
+                    active = {
+                        "enabled": True,
+                        "windowId": "window-active",
+                        "startsAt": registration_state["window_start"] or now - 60_000,
+                        "expiresAt": registration_state["window_end"] or now + 3_000_000,
+                        "autoApprove": False,
+                    }
+                    if mode == "active":
+                        body = active
+                    elif mode == "disable_after_first" and registration_state["window_gets"] == 1:
+                        body = active
+                    elif mode == "expired":
+                        body = {**active, "startsAt": now - 3_700_000, "expiresAt": now - 100_000}
+                    else:
+                        body = {**active, "enabled": False}
+                    route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
+                    return
+                if "/registrationCandidates/" in request.url:
+                    if request.method == "GET":
+                        route.fulfill(status=200, content_type="application/json", body="null")
+                    elif request.method == "PATCH":
+                        registration_state["patches"].append({"url": request.url, "body": json.loads(request.post_data or "{}")})
+                        route.fulfill(status=200, content_type="application/json", body=request.post_data or "{}")
+                    else:
+                        route.fulfill(status=405, body="")
+                    return
+                route.fulfill(status=200, content_type="application/json", body="null")
+
+            registration_page = browser.new_page(viewport={"width": 390, "height": 844})
+            registration_page.route("**/*firebasedatabase.app/**", registration_route)
+            registration_page.route(
+                "https://api.ipify.org/**",
+                lambda route: route.fulfill(status=200, content_type="application/json", body='{"ip":"203.0.113.9"}'),
+            )
+            registration_page.goto(origin, wait_until="domcontentloaded")
+            registration_page.wait_for_timeout(50)
+
+            def run_unknown_registration(mode, token, hash_value):
+                registration_state["mode"] = mode
+                registration_state["window_gets"] = 0
+                now = int(time.time() * 1000)
+                registration_state["window_start"] = now - 60_000
+                registration_state["window_end"] = now + 3_000_000
+                return registration_page.evaluate(
+                    """async ({ token, hashValue }) => {
+                        localStorage.setItem(AUTH_GEO.deviceKey, JSON.stringify({ token, name: 'factory-pc' }));
+                        document.getElementById('deviceNameInput').value = 'factory-pc';
+                        hashPin = async () => hashValue;
+                        document.body.classList.add('auth-locked');
+                        document.getElementById('pinOverlay').classList.remove('authed');
+                        document.getElementById('registrationAccessStatus').hidden = true;
+                        const restored = await restoreAuthIfPossible();
+                        const status = document.getElementById('registrationAccessStatus');
+                        return {
+                            restored,
+                            locked: document.body.classList.contains('auth-locked'),
+                            statusHidden: status.hidden,
+                            statusText: status.textContent,
+                        };
+                    }""",
+                    {"token": token, "hashValue": hash_value},
+                )
+
+            active_hash = "a" * 64
+            before_patches = len(registration_state["patches"])
+            active_registration = run_unknown_registration("active", "raw-token-must-not-leak", active_hash)
+            assert active_registration == {
+                "restored": True,
+                "locked": False,
+                "statusHidden": False,
+                "statusText": "임시 등록 접속",
+            }, active_registration
+            assert len(registration_state["patches"]) == before_patches + 1, registration_state
+            active_patch = registration_state["patches"][-1]
+            assert f"/registrationCandidates/window-active/{active_hash}.json" in active_patch["url"], active_patch
+            assert "raw-token-must-not-leak" not in json.dumps(active_patch["body"]), active_patch
+            assert "token" not in active_patch["body"], active_patch
+            assert active_patch["body"]["deviceHash"] == active_hash
+            assert active_patch["body"]["deviceName"] == "factory-pc"
+            assert active_patch["body"]["deviceNameTrust"] == "display_only"
+            assert active_patch["body"]["autoApproved"] is False
+            assert active_patch["body"]["publicIp"] == "203.0.113.9"
+            assert active_patch["body"]["appVersion"] == "0717.0225"
+
+            for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
+                before_patches = len(registration_state["patches"])
+                result = run_unknown_registration(mode, f"unknown-{mode}", hash_char * 64)
+                assert result["restored"] is False and result["locked"] is True, (mode, result)
+                assert len(registration_state["patches"]) == before_patches, (mode, registration_state)
+            registration_page.close()
 
             browser.close()
     finally:

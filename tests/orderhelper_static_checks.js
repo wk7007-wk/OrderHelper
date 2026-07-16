@@ -47,6 +47,15 @@ mustMatch(/function isPasswordlessTrustedDeviceHash\(hash\)/, 'exact static trus
 mustMatch(/if \(isPasswordlessTrustedDeviceHash\(id\)\) \{[\s\S]*unlockOrderHelper\(\);[\s\S]*return true;/, 'trusted restore must unlock before PIN, network, or GPS factors');
 mustMatch(/미등록 단말: PIN \+ 승인 데스크탑\/매장 GPS 700m 필요/, 'unknown-device PIN and factor fallback must remain visible');
 mustNotMatch(/device\.name[\s\S]{0,120}isPasswordlessTrustedDeviceHash/, 'device labels must never authorize passwordless entry');
+mustMatch(/const REGISTRATION_WINDOW_MAX_MS = 60 \* 60 \* 1000;/, 'registration window must be capped at one hour');
+mustMatch(/function activeRegistrationWindow\(source, now = Date\.now\(\)\)/, 'strict registration-window validator missing');
+mustMatch(/source\.enabled !== true \|\| source\.autoApprove !== false/, 'registration window must require explicit enabled and autoApprove false');
+mustMatch(/expiresAt - startsAt > REGISTRATION_WINDOW_MAX_MS/, 'overlong registration windows must fail closed');
+mustMatch(/function registrationCandidatePath\(windowId, hash\)[\s\S]*\^\[a-f0-9\]\{64\}\$/, 'registration candidate path must require an exact SHA-256 hash');
+mustMatch(/deviceNameTrust: 'display_only'/, 'registration candidate names must be marked display-only');
+mustMatch(/method: 'PATCH',[\s\S]*body: JSON\.stringify\(payload\)/, 'registration candidates must use a bounded PATCH payload');
+mustNotMatch(/payload\s*=\s*\{[\s\S]{0,900}\btoken\s*:/, 'registration candidate payload must never contain the raw token');
+mustMatch(/id="registrationAccessStatus" hidden>임시 등록 접속<\/span>/, 'temporary registration access must be visible after unlock');
 mustMatchPy(/--validate-local-sfa-history/, 'local SFA history mapping validation flag missing');
 mustMatchPy(/local_sfa_backfill_low_confidence_rows/, 'local SFA mapping validation must expose low-confidence row count');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');

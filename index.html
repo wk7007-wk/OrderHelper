@@ -27,6 +27,7 @@
   .status-pill.saving { background: rgba(168, 85, 247, 0.16); color: #e9d5ff; border: 1px solid rgba(168, 85, 247, 0.35); }
   .status-pill.saved { background: rgba(34, 197, 94, 0.16); color: #bbf7d0; border: 1px solid rgba(34, 197, 94, 0.35); }
   .status-pill.error { background: rgba(239, 68, 68, 0.16); color: #fecaca; border: 1px solid rgba(239, 68, 68, 0.35); }
+  .status-pill.registration { background: rgba(249, 115, 22, 0.18); color: #fed7aa; border: 1px solid rgba(249, 115, 22, 0.48); }
   .sfa-panel { background: #111b33; border-bottom: 1px solid #0f3460; padding: 9px 14px; display: grid; gap: 8px; }
   .sfa-panel.hidden { display: none; }
   .sfa-panel-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -286,6 +287,7 @@
   <button id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel()">오차보기</button>
   <button id="desktopAccessBtn" type="button" onclick="toggleDesktopAccessPanel()">접근관리</button>
   <span class="status-pill idle" id="sfaStatus">엑셀 대기</span>
+  <span class="status-pill registration" id="registrationAccessStatus" hidden>임시 등록 접속</span>
   <button class="primary" onclick="flushAutoSave('manual')">저장</button>
   <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
@@ -429,6 +431,8 @@ const PIN_HASH = '38083c7ee9121e17401883566a148aa5c2e2d55dc53bc4a94a026517dbff3c
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30000;
 const DESKTOP_GRACE_MS = 24 * 60 * 60 * 1000;
+const REGISTRATION_WINDOW_MAX_MS = 60 * 60 * 1000;
+const REGISTRATION_REQUEST_TIMEOUT_MS = 5000;
 const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
 const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object.freeze([
   'd21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08',
@@ -475,6 +479,99 @@ async function deviceHashText(device) {
 function isPasswordlessTrustedDeviceHash(hash) {
   return PASSWORDLESS_TRUSTED_DEVICE_HASHES.includes(String(hash || '').toLowerCase());
 }
+function registrationTimestampMs(value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+function activeRegistrationWindow(source, now = Date.now()) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
+  const windowId = String(source.windowId || '').trim();
+  const startsAt = registrationTimestampMs(source.startsAt);
+  const expiresAt = registrationTimestampMs(source.expiresAt);
+  if (source.enabled !== true || source.autoApprove !== false) return null;
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(windowId)) return null;
+  if (!startsAt || !expiresAt || startsAt > now || expiresAt <= now) return null;
+  if (expiresAt <= startsAt || expiresAt - startsAt > REGISTRATION_WINDOW_MAX_MS) return null;
+  return { windowId, startsAt, expiresAt, autoApprove: false };
+}
+async function registrationFetch(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REGISTRATION_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { cache: 'no-store', ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function loadActiveRegistrationWindow(now = Date.now()) {
+  const response = await registrationFetch(`${FB_URL}${DESKTOP_ACCESS_PATH}/registrationWindow.json?_=${now}`);
+  if (!response.ok) throw new Error(`registration window HTTP ${response.status}`);
+  return activeRegistrationWindow(await response.json(), now);
+}
+function registrationCandidatePath(windowId, hash) {
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(String(windowId || ''))) return '';
+  if (!/^[a-f0-9]{64}$/.test(String(hash || ''))) return '';
+  return `${DESKTOP_ACCESS_PATH}/registrationCandidates/${windowId}/${hash}`;
+}
+async function recordRegistrationCandidate(windowState, device, hash) {
+  const path = registrationCandidatePath(windowState?.windowId, hash);
+  if (!path || !device?.token) throw new Error('invalid registration candidate identity');
+  const now = Date.now();
+  const validatedWindow = activeRegistrationWindow({ enabled: true, ...windowState }, now);
+  if (!validatedWindow) throw new Error('registration window expired');
+  const url = `${FB_URL}${path}.json`;
+  const existingResponse = await registrationFetch(`${url}?_=${now}`);
+  if (!existingResponse.ok) throw new Error(`registration candidate read HTTP ${existingResponse.status}`);
+  const existing = await existingResponse.json() || {};
+  const publicIp = await fetchPublicIp();
+  // Narrow the disable/expiry race: re-read the authoritative window after
+  // candidate/IP collection and require the exact same active window.
+  const latestWindow = await loadActiveRegistrationWindow();
+  if (
+    !latestWindow ||
+    latestWindow.windowId !== validatedWindow.windowId ||
+    latestWindow.startsAt !== validatedWindow.startsAt ||
+    latestWindow.expiresAt !== validatedWindow.expiresAt
+  ) throw new Error('registration window changed');
+  const payload = {
+    deviceHash: hash,
+    windowId: latestWindow.windowId,
+    registrationStartsAt: latestWindow.startsAt,
+    registrationExpiresAt: latestWindow.expiresAt,
+    firstSeen: registrationTimestampMs(existing.firstSeen) || now,
+    lastSeen: now,
+    deviceName: String(device.name || '단말').slice(0, 60),
+    deviceNameTrust: 'display_only',
+    platform: String(navigator.platform || '').slice(0, 80),
+    userAgent: String(navigator.userAgent || '').slice(0, 240),
+    isDesktop: isLikelyDesktopClient(),
+    publicIp: publicIp || '',
+    appVersion: APP_VERSION,
+    autoApproved: false,
+    trustedAtCapture: isPasswordlessTrustedDeviceHash(hash)
+  };
+  const response = await registrationFetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error(`registration candidate write HTTP ${response.status}`);
+  if (Date.now() >= latestWindow.expiresAt) throw new Error('registration window expired after candidate write');
+  return payload;
+}
+async function captureRegistrationCandidateIfActive(device, hash, required = false) {
+  try {
+    const windowState = await loadActiveRegistrationWindow();
+    if (!windowState) return null;
+    return await recordRegistrationCandidate(windowState, device, hash);
+  } catch (error) {
+    console.warn('[registrationWindow] candidate capture failed', error);
+    if (required) throw error;
+    return null;
+  }
+}
 async function hasAllowedAuthDevice(device) {
   if (!device?.token) return false;
   try { return isPasswordlessTrustedDeviceHash(await hashPin(device.token)); } catch { return false; }
@@ -500,7 +597,7 @@ function desktopDeviceApproved(hash, state = desktopAccessState) {
 }
 async function fetchPublicIp() {
   try {
-    const res = await fetch('https://api.ipify.org?format=json', { cache: 'no-store' });
+    const res = await registrationFetch('https://api.ipify.org?format=json');
     if (!res.ok) return '';
     const data = await res.json();
     return String(data.ip || '').slice(0, 80);
@@ -768,6 +865,13 @@ function unlockOrderHelper() {
   document.getElementById('pinOverlay').classList.add('authed');
   if (!orderHelperStarted) startOrderHelperApp();
 }
+function showRegistrationAccessStatus(windowState) {
+  const status = document.getElementById('registrationAccessStatus');
+  if (!status) return;
+  status.hidden = false;
+  status.textContent = '임시 등록 접속';
+  status.title = `등록창 ${windowState.windowId} · 만료 ${desktopAccessTimeText(windowState.expiresAt)}`;
+}
 async function checkPin() {
   const inp = document.getElementById('pinInput');
   if (Date.now() < pinLockUntil) {
@@ -820,7 +924,19 @@ async function restoreAuthIfPossible() {
   if (isPasswordlessTrustedDeviceHash(id)) {
     setPinMessage(`등록 단말 자동 인증됨 · 단말ID ${id.slice(0, 12)}`, true);
     unlockOrderHelper();
+    void captureRegistrationCandidateIfActive(device, id, false);
     return true;
+  }
+  try {
+    const captured = await captureRegistrationCandidateIfActive(device, id, true);
+    if (captured) {
+      setPinMessage(`임시 등록 접속 · 단말ID ${id.slice(0, 12)}`, true);
+      unlockOrderHelper();
+      showRegistrationAccessStatus({ windowId: captured.windowId, expiresAt: captured.registrationExpiresAt });
+      return true;
+    }
+  } catch (error) {
+    console.warn('[registrationWindow] restore kept locked', error);
   }
   if (AUTH_DEBUG) setPinMessage(`개발 검증 모드: PIN은 필요, GPS만 우회. 단말ID ${id}`, true);
   else setPinMessage(`미등록 단말: PIN + 승인 데스크탑/매장 GPS 700m 필요. 단말ID ${id}`);

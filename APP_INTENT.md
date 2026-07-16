@@ -55,6 +55,7 @@
 - 로컬 SFA 엑셀 이력의 모든 발주 행은 OrderHelper MASTER 품목에 고신뢰 매핑되어야 한다. 부족한 품목은 전역 threshold를 낮추지 말고 명시 alias 또는 웹 마스터 보강으로 처리한 뒤 백필한다.
 - SFA 의미가 다른 품목은 숫자 통과를 위해 기존 MASTER에 묶지 않는다. 예: `BBQ충진식패티(100g)(마일드)`, `BBQ페퍼로니씬피자`는 `두마리치킨,파더스`와 별도 target이다.
 - 정적 프론트 인증은 사용자 명시로 등록된 개인폰·메인PC·공장PC token의 exact SHA-256 hash 세 개만 거리·PIN·네트워크와 무관하게 자동 진입한다. 이름/label이나 `/desktopAccess` candidate row는 passwordless 근거가 아니다. 그 밖의 단말은 `PIN 통과 AND (승인된 desktop token OR 활성 grace desktop OR 서버/호스팅 허용 IP OR 매장 GPS 700m)` 구조를 유지한다.
+- 사용자 명시 1시간 등록창은 `/desktopAccess/registrationWindow`의 `enabled/windowId/startsAt/expiresAt/autoApprove=false`가 네트워크에서 fresh 확인되고 최대 1시간 범위 안에서 active일 때만 unknown 단말을 임시 진입시킨다. 진입 전 `/desktopAccess/registrationCandidates/{windowId}/{tokenHash}`에 raw token 없이 display-only 이름·환경 증거를 PATCH하며, 창을 다시 읽어 같은 active window임을 확인한다. disabled/expired/network failure/write failure는 fail-closed다.
 - IP allowlist는 CLI 기록/서버·호스팅 앞단 적용용이다. 정적 클라이언트의 임의 IP/X-Forwarded-For 값은 신뢰하지 않으며, desktop read model의 `recentIp`는 후보/감사용 보조값이다. Grace 중 수집된 단말은 `candidate/pending`이고 자동 영구 승인되지 않는다. `?authDebug=1`은 로컬 개발에서만 GPS 검증을 우회한다.
 - SFA 파일 스캔/분석 실행자는 PC/SiteBot이다. 서버폰 Termux AI Ops는 `/monitor/main_pc/*` 요청·상태·heartbeat 정체를 감시하고, 멈춤/오류 때 self_fix 분석으로 넘기는 운영 감시자다.
 - Termux 상주 모니터는 발주 품목, 단위, 환산, 하루사용량 수동값, SFA 실발주 원본을 자동 확정하거나 수정하지 않는다.
@@ -75,8 +76,8 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 배포판 기준: `20260717-05` / `0717.0225` / exact-hash trusted 3-device passwordless restore + `20260717-04` 입력 DOM/모바일 header 보호. Unknown PIN+factor, Excel 가격·원문·pair CAS와 기존 stable key·revision·수동값 보호는 유지한다.
-- 완료 포인터: `20260717-05 Passwordless exact-hash trusted devices`; 이전 포인터 `20260717-04 Preserve stock-edit DOM and mobile headers`, `20260717-01 Stock Next autosave + lossless SFA price history`.
+- 최신 코드 기준: `20260717-06` / bounded registration-window hash capture. 최신 배포판은 `20260717-05` / `0717.0225`다. exact trusted restore, unknown PIN+factor, 입력 DOM/모바일 header, Excel 가격·원문·pair CAS와 기존 stable key·revision·수동값 보호는 유지한다.
+- 완료 포인터: `20260717-06 Bounded registration-window hash capture`; 이전 포인터 `20260717-05 Passwordless exact-hash trusted devices`, `20260717-04 Preserve stock-edit DOM and mobile headers`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, `node tests/orderhelper_single_grid_ledger_regression.js`, `node tests/orderhelper_p1_review_regression.js`, `node tests/orderhelper_autosave_regression.js`, `python3 tests/orderhelper_autosave_browser.py`, inline JS syntax, `git diff --check`. 로컬 Playwright는 Firebase를 interception해 ETag pair-CAS, IME/change/Enter, stored-XSS, delegated listener를 검증한다. 실제 공장 PC/SiteBot worker·live 배포 검증은 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, 과거 producer가 버린 금액은 원본 Excel 재분석 없이는 복구할 수 없음, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.
