@@ -297,6 +297,7 @@
     <span class="sfa-panel-note" id="sfaCompareNote">분석 버튼은 비교만 하고 실발주값은 자동반영하지 않음</span>
     <span class="sfa-panel-actions">
       <button type="button" onclick="loadSfaCompareLatest(false, true)">새로고침</button>
+      <button type="button" onclick="downloadLatestSfaSourceCsv()">원문CSV</button>
       <button type="button" onclick="hideSfaComparePanel()">닫기</button>
     </span>
   </div>
@@ -384,7 +385,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0117';
+const APP_VERSION = '0717.0129';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -5764,6 +5765,68 @@ function analyzeManualSfaItems() {
   };
   refreshSfaResultViewsWithCurrentState(data, 'manualInput');
   showSfaComparePanel();
+}
+
+function sanitizeSfaSourceTable(source) {
+  if (!source || typeof source !== 'object' || !Array.isArray(source.rows)) return null;
+  const rowCount = Number(source.rowCount);
+  const columnCount = Number(source.columnCount);
+  if (!Number.isInteger(rowCount) || rowCount !== source.rows.length || rowCount < 1 || rowCount > 20000 ||
+      !Number.isInteger(columnCount) || columnCount < 1 || columnCount > 512) return null;
+  const rows = [];
+  for (const rawRow of source.rows) {
+    if (!Array.isArray(rawRow) || rawRow.length > columnCount) return null;
+    rows.push(rawRow.map(cell => String(cell ?? '')));
+  }
+  return {
+    sheet: String(source.sheet || '').slice(0, 160),
+    headerRowIndex: Number.isInteger(Number(source.headerRowIndex)) ? Number(source.headerRowIndex) : null,
+    rowCount,
+    columnCount,
+    rows
+  };
+}
+
+function sfaSourceTableCsv(source) {
+  const table = sanitizeSfaSourceTable(source);
+  if (!table) return '';
+  const encodeCell = value => {
+    let text = String(value ?? '');
+    if (/^[=+\-@]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+  return '\uFEFF' + table.rows.map(row => row.map(encodeCell).join(',')).join('\r\n');
+}
+
+async function downloadLatestSfaSourceCsv() {
+  const runPath = String(lastSfaCompareData?.runPath || '').trim();
+  if (!runPath.startsWith(`${FB_PATH}/sfaAnalysisRuns/`)) {
+    toast('원문 run 경로 없음');
+    return false;
+  }
+  try {
+    const response = await fetch(`${FB_URL}${runPath}/sourceTable.json?_=` + Date.now());
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const sourceTable = sanitizeSfaSourceTable(await response.json());
+    const csv = sfaSourceTableCsv(sourceTable);
+    if (!sourceTable || !csv) throw new Error('invalid source table');
+    const originalName = normalizedSfaFileName(lastSfaCompareData?.file?.name) || 'SFA_원문';
+    const fileName = originalName.replace(/\.(xlsx|csv)$/i, '') + '_원문.csv';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    toast(`원문CSV ${sourceTable.rowCount}행`);
+    return true;
+  } catch (error) {
+    console.warn('[sfaSourceTable] download failed', error);
+    toast('원문CSV 받기 실패');
+    return false;
+  }
 }
 
 function sfaIoOutput(data) {

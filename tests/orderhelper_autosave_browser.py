@@ -53,6 +53,19 @@ def main():
                 kind = "current" if "/current.json" in request.url else ("history" if "/history/" in request.url else "other")
                 if request.method == "OPTIONS":
                     route.fulfill(status=204, headers=cors_headers, body="")
+                elif request.method == "GET" and "/sfaAnalysisRuns/browser-source/sourceTable.json" in request.url:
+                    route.fulfill(
+                        status=200,
+                        content_type="application/json",
+                        headers=cors_headers,
+                        body=json.dumps({
+                            "sheet": "주문현황",
+                            "headerRowIndex": 0,
+                            "rowCount": 2,
+                            "columnCount": 3,
+                            "rows": [["상품명", "단가", "메모"], ["치킨,간지", "9000", "=수식"]],
+                        }),
+                    )
                 elif request.method == "PUT":
                     body = request.post_data or ""
                     if kind == "other":
@@ -79,6 +92,22 @@ def main():
             page.route("**/*firebasedatabase.app/**", firebase_route)
             page.goto(origin, wait_until="domcontentloaded")
             page.evaluate("startOrderHelperApp()")
+
+            page.evaluate(
+                """() => {
+                    lastSfaCompareData = {
+                        runPath: `${FB_PATH}/sfaAnalysisRuns/browser-source`,
+                        file: { name: '단가포함.xlsx' },
+                    };
+                }"""
+            )
+            with page.expect_download() as source_download_info:
+                assert page.evaluate("downloadLatestSfaSourceCsv()") is True
+            source_download = source_download_info.value
+            assert source_download.suggested_filename == "단가포함_원문.csv"
+            source_csv = Path(source_download.path()).read_text(encoding="utf-8-sig")
+            assert source_csv == '"상품명","단가","메모"\n"치킨,간지","9000","\'=수식"'
+            page.evaluate("lastSfaCompareData = null")
 
             factor_direction = page.evaluate(
                 """() => {

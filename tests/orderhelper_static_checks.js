@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0117';/, 'APP_VERSION must match the KST direct-price release time');
+mustMatch(/const APP_VERSION = '0717.0129';/, 'APP_VERSION must match the KST lossless source-table release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -64,6 +64,10 @@ mustMatch(/legacySyntheticZeroAmount[\s\S]*priceEvidenceVersion < 1[\s\S]*starts
 mustMatch(/function sanitizeSfaPriceHistory\(source = sfaPriceHistory\)/, 'immutable-run-backed SFA price history sanitizer missing');
 mustMatch(/function priceHistoryEvidenceForItem\(internalItemName\)/, 'durable SFA price history must feed the deterministic row resolver');
 mustMatch(/provenance: 'SFA_PRICE_HISTORY'/, 'durable SFA price history provenance missing');
+mustMatch(/onclick="downloadLatestSfaSourceCsv\(\)">원문CSV<\/button>/, 'lossless SFA source-table download action missing');
+mustMatch(/function sanitizeSfaSourceTable\(source\)/, 'lossless SFA source-table validator missing');
+mustMatch(/function sfaSourceTableCsv\(source\)/, 'lossless SFA source-table CSV serializer missing');
+mustMatch(/runPath\.startsWith\(`\$\{FB_PATH\}\/sfaAnalysisRuns\/`\)/, 'source-table download must stay under immutable SFA runs');
 mustMatch(/rawIdentity,[\s\S]*eventId = sfaLedgerEventId/, 'ledger events must preserve raw identity and a stable event id');
 mustMatch(/const eventAt = timestampMs\(/, 'ledger rows must retain a stable event timestamp for retry ordering');
 mustMatch(/const sourceRunIds = Array\.from\(new Set\(\[/, 'mirrored physical rows must retain all source run ids');
@@ -554,6 +558,8 @@ this.__OrderHelperApi = {
   sfaActualHistoryLedgerForPayload,
   sanitizeSfaPriceHistory,
   priceHistoryEvidenceForItem,
+  sanitizeSfaSourceTable,
+  sfaSourceTableCsv,
   sfaOrderLedgerForPayload,
   normalizedSfaFileName,
   sanitizeSfaAnalysisHistory,
@@ -735,6 +741,23 @@ this.__OrderHelperApi = {
 
 const api = sandbox.__OrderHelperApi;
 const plain = value => JSON.parse(JSON.stringify(value));
+const sourceTableFixture = {
+  sheet: '주문현황',
+  headerRowIndex: 0,
+  rowCount: 3,
+  columnCount: 3,
+  rows: [
+    ['상품명', '단가', '메모'],
+    ['치킨,간지', '9000', '따옴표 "확인"'],
+    ['=위험수식', '-1', ''],
+  ],
+};
+assert.deepStrictEqual(plain(api.sanitizeSfaSourceTable(sourceTableFixture)).rows, sourceTableFixture.rows, 'source-table validator must preserve every raw cell');
+const sourceCsv = api.sfaSourceTableCsv(sourceTableFixture);
+assert(sourceCsv.startsWith('\uFEFF"상품명","단가","메모"\r\n'), 'source-table CSV must include UTF-8 BOM and deterministic CRLF rows');
+assert(sourceCsv.includes('"치킨,간지","9000","따옴표 ""확인"""'), 'source-table CSV must quote commas and quotes losslessly');
+assert(sourceCsv.includes('"\'=위험수식","\'-1",""'), 'source-table CSV export must neutralize spreadsheet formulas');
+assert.strictEqual(api.sanitizeSfaSourceTable({ ...sourceTableFixture, rowCount: 2 }), null, 'source-table row-count mismatch must fail closed');
 const inventoryName = api.MASTER[0].name;
 api.setEntriesForCheck([
   { id: 'dup-entry', name: inventoryName, zone: '주방', stock: 0 },
