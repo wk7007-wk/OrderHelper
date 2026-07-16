@@ -28,6 +28,7 @@
   .status-pill.saved { background: rgba(34, 197, 94, 0.16); color: #bbf7d0; border: 1px solid rgba(34, 197, 94, 0.35); }
   .status-pill.error { background: rgba(239, 68, 68, 0.16); color: #fecaca; border: 1px solid rgba(239, 68, 68, 0.35); }
   .status-pill.registration { background: rgba(249, 115, 22, 0.18); color: #fed7aa; border: 1px solid rgba(249, 115, 22, 0.48); }
+  #registrationAccessStatus[hidden] { display: none !important; }
   .sfa-panel { background: #111b33; border-bottom: 1px solid #0f3460; padding: 9px 14px; display: grid; gap: 8px; }
   .sfa-panel.hidden { display: none; }
   .sfa-panel-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -389,7 +390,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0447';
+const APP_VERSION = '0717.0505';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';

@@ -570,6 +570,7 @@ def main():
                         accessPanelHidden: accessPanel.hidden,
                         accessPanelClassHidden: accessPanel.classList.contains('hidden'),
                         accessBodyText: document.getElementById('desktopAccessBody').textContent,
+                        registrationStatusDisplay: getComputedStyle(document.getElementById('registrationAccessStatus')).display,
                     };
                 }""",
                 "b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6",
@@ -579,6 +580,7 @@ def main():
             assert trusted_auth["accessButtonHidden"] is True, trusted_auth
             assert trusted_auth["accessPanelHidden"] is True and trusted_auth["accessPanelClassHidden"] is True, trusted_auth
             assert trusted_auth["accessBodyText"] == "", trusted_auth
+            assert trusted_auth["registrationStatusDisplay"] == "none", trusted_auth
             assert trusted_auth["hashes"] == [
                 "20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491",
                 "b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6",
@@ -688,6 +690,7 @@ def main():
                             statusHidden: status.hidden,
                             statusText: status.textContent,
                             statusTitle: status.title,
+                            statusDisplay: getComputedStyle(status).display,
                         };
                     }""",
                     {"token": token, "hashValue": hash_value},
@@ -702,6 +705,7 @@ def main():
                 "statusHidden": False,
                 "statusText": "임시 접속",
                 "statusTitle": "관리자가 허용한 임시 접속입니다.",
+                "statusDisplay": "flex",
             }, active_registration
             assert len(registration_state["patches"]) == before_patches + 1, registration_state
             active_patch = registration_state["patches"][-1]
@@ -713,12 +717,13 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0447"
+            assert active_patch["body"]["appVersion"] == "0717.0505"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])
                 result = run_unknown_registration(mode, f"unknown-{mode}", hash_char * 64)
                 assert result["restored"] is False and result["locked"] is True, (mode, result)
+                assert result["statusHidden"] is True and result["statusDisplay"] == "none", (mode, result)
                 assert len(registration_state["patches"]) == before_patches, (mode, registration_state)
             registration_page.close()
 
