@@ -5,7 +5,8 @@
     "CANDIDATE",
     "ALIAS_CONFLICT",
     "UNIT_UNCONFIRMED",
-    "ITEM_UNMATCHED"
+    "ITEM_UNMATCHED",
+    "ITEM_UNLINKED"
   ],
   "equationCases": [
     {"id": "derive_unit_price", "inputs": {"actualOrderQty": 5, "amount": 12000}, "expected": {"actualUnitPrice": 2400, "formula": "amount / actualOrderQty"}},

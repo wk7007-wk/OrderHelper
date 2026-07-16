@@ -335,6 +335,30 @@ assert.strictEqual(wrongIndexPriceEvidence.unitPrice, null, 'different present r
 api.setAliasMappingsForCheck({
   [item.name]: {
     aliasName: item.name,
+    actualName: '거부할 자동 후보',
+    actualUnit: 'BOX',
+    status: 'unlinked',
+    source: 'user',
+    conversionFactor: 10,
+    conversionStatus: 'confirmed',
+  },
+});
+const unlinkedRows = plain(api.resolveUnifiedOrderRows(exactMappedCompare, { version: 2, records: [] }, 2, now));
+const unlinkedRow = unlinkedRows.find(row => row.itemKey === api.itemKeyForName(item.name));
+assert.strictEqual(unlinkedRow.matchStatus, 'ITEM_UNLINKED', 'explicit unlink must win over exact mapped-name price evidence');
+assert.strictEqual(unlinkedRow.actualName, '', 'unlinked row must not expose a rejected actual name');
+assert.deepStrictEqual(unlinkedRow.actualAliases, [], 'unlinked row must have no effective aliases');
+assert.strictEqual(unlinkedRow.priceEvidence, null, 'unlinked row must not use current Excel, history, or ledger prices');
+assert.strictEqual(unlinkedRow.unitPrice, null, 'unlinked row must not resolve a unit price');
+assert.strictEqual(unlinkedRow.expectedAmount, null, 'unlinked row must not calculate an expected amount');
+assert.deepStrictEqual(unlinkedRow.issues, [], 'intentional unlink is a closed user choice, not an error');
+assert.strictEqual(api.renderOrderAmountSpan(item, unlinkedRow.stockNeed, unlinkedRow), '<span class="order-amount empty"></span>', 'unlinked row must show no misleading amount card');
+const unlinkedSummary = plain(api.summarizeUnifiedOrderAmounts([unlinkedRow]));
+assert.deepStrictEqual(unlinkedSummary, { needCount: 0, validAmountCount: 0, total: 0, unresolvedPriceCount: 0, unresolvedAmountCount: 0 }, 'intentional unlink must not inflate top unresolved counts');
+
+api.setAliasMappingsForCheck({
+  [item.name]: {
+    aliasName: item.name,
     actualName: '과거에 저장된 다른 실발주명',
     actualUnit: 'BOX',
     status: 'confirmed',

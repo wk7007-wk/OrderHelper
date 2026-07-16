@@ -280,6 +280,60 @@ def main():
             assert enter_payload["orderAliasMappings"][second]["actualName"] == "두번째 임의 별명 Enter"
             assert enter_payload["orderAliasMappings"][second]["status"] == "manual"
 
+            # An explicit "연결 안 함" is a durable user choice, not a blank/reset.
+            before_unlink = len(writes)
+            unlink_state = page.evaluate(
+                """aliasName => {
+                    const select = document.querySelector(`[data-alias-name="${CSS.escape(aliasName)}"].sfa-alias-select`);
+                    select.value = ORDER_ALIAS_UNLINKED_VALUE;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    const draft = orderAliasMappingDraftsForPayload(lastSfaCompareData)
+                        .find(row => row.aliasName === aliasName);
+                    return {
+                        raw: orderAliasMappings[aliasName],
+                        selected: document.querySelector(`[data-alias-name="${CSS.escape(aliasName)}"].sfa-alias-select`)?.value,
+                        statusText: document.querySelector(`[data-alias-name="${CSS.escape(aliasName)}"].sfa-alias-select`)
+                            ?.closest('.sfa-match-row')?.querySelector('.sfa-match-status')?.textContent.trim(),
+                        effective: effectiveOrderAliasMappingsForPayload(lastSfaCompareData)[aliasName] || null,
+                        draft,
+                    };
+                }""",
+                fixture["aliasName"],
+            )
+            wait_for_writes(page, writes, before_unlink + 2)
+            unlink_pair = writes[before_unlink : before_unlink + 2]
+            assert unlink_pair[0]["body"] == unlink_pair[1]["body"]
+            assert {row["if_match"] for row in unlink_pair} == {'"v2"'}, "unlink pair must advance both target ETags"
+            unlink_payload = json.loads(unlink_pair[0]["body"])
+            unlinked = unlink_payload["orderAliasMappings"][fixture["aliasName"]]
+            assert unlinked["status"] == "unlinked"
+            assert unlinked["actualName"] == ""
+            assert fixture["aliasName"] not in unlink_payload["effectiveOrderAliasMappings"]
+            unlink_draft = next(row for row in unlink_payload["orderAliasMappingDrafts"] if row["aliasName"] == fixture["aliasName"])
+            assert unlink_draft["status"] == "unlinked"
+            assert unlink_draft["actualCandidates"] == []
+            assert unlink_state["raw"]["status"] == "unlinked"
+            assert unlink_state["selected"] == "__ORDERHELPER_UNLINKED__"
+            assert unlink_state["statusText"] == "연결 안 함"
+            assert unlink_state["effective"] is None
+
+            page.reload(wait_until="domcontentloaded")
+            show_alias_review(page)
+            reloaded_unlink = page.evaluate(
+                """aliasName => ({
+                    raw: orderAliasMappings[aliasName],
+                    selected: document.querySelector(`[data-alias-name="${CSS.escape(aliasName)}"].sfa-alias-select`)?.value,
+                    statusText: document.querySelector(`[data-alias-name="${CSS.escape(aliasName)}"].sfa-alias-select`)
+                        ?.closest('.sfa-match-row')?.querySelector('.sfa-match-status')?.textContent.trim(),
+                    effective: effectiveOrderAliasMappingsForPayload(lastSfaCompareData)[aliasName] || null,
+                })""",
+                fixture["aliasName"],
+            )
+            assert reloaded_unlink["raw"]["status"] == "unlinked"
+            assert reloaded_unlink["selected"] == "__ORDERHELPER_UNLINKED__"
+            assert reloaded_unlink["statusText"] == "연결 안 함"
+            assert reloaded_unlink["effective"] is None
+
             browser.close()
     finally:
         server.shutdown()

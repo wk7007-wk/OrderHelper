@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0611';/, 'APP_VERSION must match the KST simplified amount-card release time');
+mustMatch(/const APP_VERSION = '0717.0628';/, 'APP_VERSION must match the KST explicit-unlink release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -154,7 +154,7 @@ mustMatch(/provenance: mappedNameCandidate \? 'EXACT_MAPPED_NAME_CURRENT_EXCEL' 
 mustMatch(/nonStoredCandidate: mappedNameCandidate/, 'mappedName candidate evidence must be marked non-stored');
 mustMatch(/numericEvidenceNode\(amount \/ qty, 'actualUnitPrice', context, 'amount \/ actualOrderQty'/, 'actual unit price must be Excel line amount divided by actual SFA order quantity');
 mustMatch(/numericEvidenceNode\(orderQty \* priceEvidence\.unitPrice, 'expectedAmount',[\s\S]*'orderQty \* actualUnitPrice', \['orderQty', 'actualUnitPrice'\]/, 'today expected amount must multiply recommended order-unit quantity by actual order-unit price exactly once');
-mustMatch(/const canCalculateAmount = !aliasConflict && hasResolvedPrice && Number\.isFinite\(orderQty\);/, 'an alias conflict must block expected amount calculation even when price evidence exists');
+mustMatch(/const canCalculateAmount = !aliasUnlinked && !aliasConflict && hasResolvedPrice && Number\.isFinite\(orderQty\);/, 'an explicit unlink or alias conflict must block expected amount calculation even when price evidence exists');
 mustMatch(/if \(aliasState\.aliases\.length && !hasResolvedPrice && !issues\.some\(issue => issue\.code === 'DATA_CONFLICT'\)\) issues\.push\(unifiedOrderIssue\('PRICE_JOIN_BUG'\)\);/, 'an explicitly matched alias without joined ledger price must fail as PRICE_JOIN_BUG');
 mustMatch(/return Math\.ceil\(\(n - 1e-9\) \* 10\) \/ 10;/, 'order quantity must round up to one decimal instead of whole units');
 mustMatch(/return fmt\(outputOrderQty\(item, days\), 1\);/, 'order quantity display must preserve one decimal digit');
@@ -242,6 +242,8 @@ mustMatch(/function ensureManualOrderItem\(name, unit = '', source = 'user', sou
 mustMatch(/function normalizeSiteItemName\(text\)/, 'site item normalizer missing');
 mustMatch(/function scoreSiteToMaster\(siteName, masterName\)/, 'site/master score helper missing');
 mustMatch(/function buildOrderSiteMatches\(data = lastSfaCompareData\)/, 'order-site matching builder missing');
+mustMatch(/const mappingUnlinked = correctionTargetUnlinked \|\| analysisTargetUnlinked;/, 'site mapping must preserve an explicit unlink policy');
+mustMatch(/let status = mappingUnlinked \? 'unlinked' : 'unmatched';/, 'unlinked site rows must be closed instead of reported as unresolved');
 mustMatch(/function collectActualOrderCandidates\(data = lastSfaCompareData\)/, 'actual order candidate collector missing');
 mustMatch(/function bestActualCandidatesForAlias\(aliasName, candidates = collectActualOrderCandidates\(\), limit = 5\)/, 'alias candidate scorer missing');
 mustMatch(/function usageEstimateFromRecord\(record, name\)/, 'usage estimate resolver missing');
@@ -256,7 +258,7 @@ mustMatch(/function setOrderSiteMapping\(siteKey, targetName, siteName = '', sit
 mustMatch(/const LOCAL_NEW_SOURCE_ALIAS_STORAGE_KEY = 'bbq_local_new_source_aliases_v1';/, 'new raw source aliases need a durable local overlay');
 mustMatch(/function suggestedMasterCandidatesForNewSource\(row, limit = 5\)/, 'new raw source must expose suggestions without auto-confirming them');
 mustNotMatch(/else if \(candidates\[0\]\?\.score >= 0\.84\)/, 'a fuzzy local candidate must never auto-confirm a new raw source');
-mustMatch(/isNewSource: !correction,/, 'mapping-absent SFA rows must be marked as new');
+mustMatch(/isNewSource: !correction && !mappingUnlinked,/, 'mapping-absent SFA rows must be new unless the user explicitly unlinked them');
 mustMatch(/function confirmNewSourceAliasMapping\(siteKey, targetName, siteName = '', siteUnit = ''\)/, 'new raw source needs an explicit canonical confirmation action');
 mustMatch(/setOrderSiteMapping\(siteKey, nextTarget, siteName, siteUnit, 'local'\)/, 'explicit new-source confirmation must use the local overlay path');
 mustMatch(/orderSiteMappings = mergeLocalNewSourceAliases\(orderSiteMappings\);/, 'remote current hydration must reapply confirmed local new-source aliases');
@@ -275,6 +277,10 @@ mustMatch(/analysisHistory: sfaAnalysisHistoryForPayload\(\)/, 'analysis IO expo
 mustMatch(/sfaAnalysisHistoryRecords\(\)\.forEach\(record =>/, 'actual order candidates must read cumulative SFA analysis history');
 mustMatch(/latestSfaAnalysisRecordsByDate\(\)\.forEach\(record =>/, 'usage calculations must read latest cumulative SFA analysis record per date');
 mustMatch(/function setOrderAliasMapping\(aliasName, actualName\)/, 'order alias mapping setter missing');
+mustMatch(/const ORDER_ALIAS_UNLINKED_VALUE = '__ORDERHELPER_UNLINKED__';/, 'explicit order-name unlink sentinel missing');
+mustMatch(/function setOrderAliasUnlinked\(aliasName\)/, 'order-name unlink setter missing');
+mustMatch(/status: 'unlinked',[\s\S]*reason: '사용자 연결 안 함'/, 'unlink state must be durable and user-owned');
+mustMatch(/function applyOrderAliasSelection\(aliasName, value\)[\s\S]*ORDER_ALIAS_UNLINKED_VALUE[\s\S]*setOrderAliasUnlinked/, 'alias selection must route the explicit unlink option');
 mustMatch(/function setManualOrderAlias\(aliasName, actualName, actualUnit = ''\)/, 'arbitrary manual alias setter missing');
 mustMatch(/status: 'manual',[\s\S]*reason: candidate\?\.reason \|\| '사용자 직접 입력 발주명'/, 'arbitrary order names must be preserved as explicit manual corrections');
 mustMatch(/class="sfa-edit sfa-alias-new-input"/, 'alias review must expose an arbitrary actual-name input');
@@ -304,13 +310,17 @@ mustMatch(/const current = isUserSelectedAliasStatus\(row\.conversionStatus\) \?
 mustMatch(/function inlineSiteMatchesHtml\(itemName, rows\)/, 'same row must expose SFA site matching controls');
 mustMatch(/function inlineUnmatchedSiteRowHtml\(row\)/, 'unmatched SFA rows must remain inside the single grid');
 mustMatch(/function bindInlineSiteControls\(\)/, 'inline site/new-item controls must be bound without opening another tab');
-mustMatch(/setOrderAliasMapping\(e\.target\.dataset\.aliasName, e\.target\.value\);/, 'inline alias selector must reuse confirmed alias mapping setter');
+mustMatch(/applyOrderAliasSelection\(e\.target\.dataset\.aliasName, e\.target\.value\);/, 'inline alias selector must support both confirmed mapping and explicit unlink');
 mustMatch(/setOrderAliasConversion\(e\.target\.dataset\.aliasName, e\.target\.value, 'candidate'\);/, 'inline conversion candidate selector must save through confirmed conversion setter');
 mustMatch(/setOrderAliasConversion\(e\.target\.dataset\.aliasName, e\.target\.value, 'manual'\);/, 'inline manual conversion input must save through manual conversion setter');
 mustMatch(/const inlineAliasRowsByName = new Map\(buildOrderAliasMatches\(lastSfaCompareData\)\.map\(row => \[row\.aliasName, row\]\)\);/, 'input view must share alias match rows with alias review state');
 mustMatch(/data-item-name="\$\{escapeHtml\(item\.name\)\}"/, 'input row name cell must keep item identity while showing inline correction controls');
 mustMatch(/bindInlineAliasControls\(\);\s*bindInlineSiteControls\(\);\s*updateStickyOffsets\(\);/, 'single grid must bind inline alias and site controls after rendering rows');
-mustMatch(/const allowedStatuses = new Set\(\['candidate', 'default', 'confirmed', 'manual'\]\);/, 'alias mapping sanitizer must preserve default status');
+mustMatch(/const allowedStatuses = new Set\(\['candidate', 'default', 'confirmed', 'manual', 'unlinked'\]\);/, 'alias mapping sanitizer must preserve explicit unlink status');
+mustMatch(/if \(!actualName && !unlinked\) return;/, 'unlink status must survive with no actual order name');
+mustMatch(/연결 안 함 · 자동 후보 사용 안 함/, 'employee alias selector must expose a plain unlink option');
+mustMatch(/if \(status === 'unlinked'\) return '연결 안 함';/, 'employee UI must label explicit unlink plainly');
+mustMatch(/const actualText = unlinked \? '자동 후보 사용 안 함'/, 'unlinked rows must not display the rejected automatic candidate as active');
 mustMatch(/if \(status === 'default'\) return '자동 연결·확인 필요';/, 'alias default status must explicitly request confirmation');
 mustMatch(/function aliasConnectionStatusText\(status\)/, 'inline order-name status helper missing');
 mustMatch(/if \(status === 'default'\) return '자동 연결·확인 필요';/, 'default order name must remain visibly unconfirmed');
@@ -320,8 +330,11 @@ mustMatch(/function aliasConversionSummaryText\(factor, status\)[\s\S]*발주 1�
 mustMatch(/function siteMatchSummaryText\(rows\)[\s\S]*발주 사이트 품목 \$\{count\}건 · \$\{state\}/, 'inline site mapping must explain count and connection state');
 mustNotMatch(/summary::before \{ content: '보정'|<summary>사이트 매칭 \$\{linked\.length\}건<\/summary>/, 'employee row summaries must not use unexplained correction or site-matching labels');
 mustMatch(/function conversionStatusText\(status\)/, 'conversion status label helper missing');
+mustMatch(/if \(isOrderAliasUnlinked\(item\?\.name\)\) return parts\.same \? 1 : null;/, 'automatic conversion analysis must not apply while an alias is unlinked');
 mustMatch(/function conversionCandidateCanBeDefault\(candidate, item\)[\s\S]*candidate\.source === 'compare'[\s\S]*Math\.abs\(factor - Math\.round\(factor\)\) < 0\.0005/, 'single-compare fractional ratios must remain review-only candidates');
 mustMatch(/effectiveOrderAliasMappings,/, 'SFA request payload must include effective alias mappings');
+mustMatch(/const inferenceEvents = events\.filter\(event => !isOrderAliasUnlinked\(event\?\.mappedName \|\| ''\)\);/, 'AI evidence must exclude ledger events mapped to explicitly unlinked items');
+mustMatch(/if \(isOrderAliasUnlinked\(itemName\)\) return null;[\s\S]*const advisory = aiUsageAdvisory\[itemName\];/, 'unlinked items must hide stale AI usage advisories');
 mustMatch(/if \(source === 'usage'\) return '실사용량 비교';/, 'usage-based conversion source label missing');
 mustMatch(/function conversionDirectionText\(factor, orderUnit = '발주단위', checkUnit = '체크\/재고'\)/, 'conversion direction helper missing');
 mustMatch(/1발주 = 재고\/사용량 \$\{fmt\(factor, 3\)\}개/, 'conversion direction helper must define stock/usage units per one order unit');
@@ -366,6 +379,9 @@ mustMatch(/단위환산 분석: orderUnitToStockFactor \$\{fmt\(analysis\.factor
 mustMatch(/stockNeed: Math\.round\(g\s*\*\s*100\) \/ 100/, 'calc payload must preserve stock-unit need separately');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show conversion/missing warning');
 mustMatch(/function renderOrderAmountSpan\(item, stockNeed, resolvedRow = undefined\)/, 'output order amount renderer missing');
+mustMatch(/ITEM_UNLINKED: 'ITEM_UNLINKED'/, 'unified order-row contract must represent explicit unlink');
+mustMatch(/if \(row\?\.matchStatus === UNIFIED_ORDER_MATCH_STATUSES\.ITEM_UNLINKED\) return '<span class="order-amount empty"><\/span>';/, 'unlinked rows must not render price evidence');
+mustMatch(/row\?\.matchStatus !== UNIFIED_ORDER_MATCH_STATUSES\.ITEM_UNLINKED/, 'top amount summary must exclude intentionally unlinked rows');
 mustMatch(/실발주 \$\{fmt\(actualQty, 2\)\}\$\{actualUnit\}/, 'amount-card detail must preserve actual SFA order quantity');
 mustMatch(/가격 미해결: \$\{reason\}/, 'amount-card detail must preserve the full Korean missing reason');
 mustMatch(/const priority = \['ALIAS_CONFLICT', 'DATA_CONFLICT'/, 'alias-conflict Korean reason must take priority over price evidence');
@@ -608,7 +624,11 @@ this.__OrderHelperApi = {
   buildOrderSiteMatches,
   collectActualOrderCandidates,
   buildOrderAliasMatches,
+  sfaAnalysisRowsFromData,
+  buildSfaAnalysisReadModel,
   aliasConnectionStatusText,
+  aliasActualOptionsHtml,
+  inlineAliasCorrectionHtml,
   aliasConversionSummaryText,
   siteMatchStatusText,
   siteMatchSummaryText,
@@ -621,6 +641,7 @@ this.__OrderHelperApi = {
   orderUnitsForStockNeed,
   stockUnitsForOrderQty,
   conversionFactorForItem,
+  orderUnitParts,
   unitCorrectionForItem,
   orderManualItemsForPayload,
   sfaAnalysisHistoryForPayload,
@@ -719,6 +740,7 @@ this.__OrderHelperApi = {
   },
   shouldApplyIncomingCurrent,
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
+  setConversionAnalysisForCheck(value) { conversionAnalysis = value || {}; },
   setSiteMappingsForCheck(value) { orderSiteMappings = sanitizeOrderSiteMappings(value); },
   getSiteMappingsForCheck() { return orderSiteMappings; },
   setLocalNewSourceAliasesForCheck(value) { localNewSourceAliasMappings = sanitizeOrderSiteMappings(value); },
@@ -733,6 +755,9 @@ this.__OrderHelperApi = {
   },
   getAliasMappingsForCheck() { return orderAliasMappings; },
   setManualOrderAlias,
+  setOrderAliasUnlinked,
+  applyOrderAliasSelection,
+  ORDER_ALIAS_UNLINKED_VALUE,
   getEntriesForCheck() { return entries; },
   totalStock,
   displayDecimal,
@@ -813,6 +838,7 @@ const plain = value => JSON.parse(JSON.stringify(value));
 assert.strictEqual(api.aliasConnectionStatusText('default'), '자동 연결·확인 필요');
 assert.strictEqual(api.aliasConnectionStatusText('confirmed'), '선택 완료');
 assert.strictEqual(api.aliasConnectionStatusText('manual'), '직접 입력 완료');
+assert.strictEqual(api.aliasConnectionStatusText('unlinked'), '연결 안 함');
 assert.strictEqual(api.aliasConnectionStatusText('conflict'), '중복·확인 필요');
 assert.strictEqual(api.aliasConnectionStatusText('unmatched'), '연결 필요');
 assert.strictEqual(api.aliasConversionSummaryText(1, 'default'), '발주 1개당 재고 1개 · 자동 계산·확인 필요');
@@ -998,6 +1024,67 @@ assert.strictEqual(cheeseAlias.conversionFactor, 2.5, 'saved alias mapping shoul
 assert.strictEqual(cheeseAlias.conversionStatus, 'manual', 'saved alias mapping should preserve manual conversion status');
 aliasDraft = api.orderAliasMappingDraftsForPayload(compareOnlyData).find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
 assert.strictEqual(aliasDraft.conversionFactor, 2.5, 'alias draft payload should include conversion factor');
+api.setAliasMappingsForCheck({ [cheeseAlias.aliasName]: { actualName: 'BBQ치즈볼', actualUnit: 'BOX', status: 'unlinked', conversionFactor: 2.5, conversionStatus: 'manual', conversionReason: '직접 입력 보존' } });
+aliasRows = api.buildOrderAliasMatches(compareOnlyData);
+cheeseAlias = aliasRows.find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+assert.strictEqual(cheeseAlias.status, 'unlinked', 'explicit unlink must override the high-confidence automatic candidate');
+assert.strictEqual(cheeseAlias.actualName, '', 'explicit unlink must have no effective actual order name');
+assert.strictEqual(cheeseAlias.effectiveActualName, '', 'explicit unlink must suppress effective mapping');
+assert.strictEqual(cheeseAlias.effectiveConversionFactor, null, 'saved conversion must not be applied while unlinked');
+assert.strictEqual(cheeseAlias.savedConversionFactor, 2.5, 'manual conversion may be retained for a later reconnect');
+assert(cheeseAlias.candidates.some(row => row.actualName === 'BBQ치즈볼'), 'rejected candidates must remain available for an intentional reconnect');
+aliasDraft = api.orderAliasMappingDraftsForPayload(compareOnlyData).find(row => row.aliasName === cheeseAlias.aliasName);
+assert.strictEqual(aliasDraft.status, 'unlinked', 'draft payload must preserve explicit unlink');
+assert.strictEqual(aliasDraft.defaultCandidate, null, 'unlinked draft must not publish an automatic default');
+assert.deepStrictEqual(plain(aliasDraft.actualCandidates), [], 'unlinked draft must not expose candidates as effective analysis inputs');
+assert.strictEqual(aliasDraft.savedConversionFactor, 2.5, 'draft must retain user-owned conversion without applying it');
+effectiveAliases = api.effectiveOrderAliasMappingsForPayload(compareOnlyData);
+assert.strictEqual(effectiveAliases[cheeseAlias.aliasName], undefined, 'effective mapping payload must omit explicitly unlinked items');
+const unlinkedAnalysisRows = plain(api.sfaAnalysisRowsFromData(compareOnlyData));
+const unlinkedAnalysisRow = unlinkedAnalysisRows.find(row => row.originalName === 'BBQ치즈볼');
+assert(unlinkedAnalysisRow, 'SFA analysis must retain the lossless source row while unlinking it');
+assert.strictEqual(unlinkedAnalysisRow.mappedName, '', 'SFA analysis row must blank the rejected mapped name');
+assert.strictEqual(unlinkedAnalysisRow.status, 'unlinked', 'SFA analysis row must carry the explicit unlink status');
+const unlinkedSiteRow = plain(api.buildOrderSiteMatches(compareOnlyData)).find(row => row.siteName === 'BBQ치즈볼');
+assert.strictEqual(unlinkedSiteRow.targetName, '', 'site read model must not target an unlinked internal item');
+assert.strictEqual(unlinkedSiteRow.status, 'unlinked', 'site read model must treat explicit unlink as a closed choice');
+assert.strictEqual(unlinkedSiteRow.isNewSource, false, 'an explicitly unlinked source must not return as a new-source prompt');
+const unlinkedPayloadState = plain(api.buildSfaAnalysisPayloadState(compareOnlyData));
+assert.strictEqual(unlinkedPayloadState.orderAliasMappings[cheeseAlias.aliasName].status, 'unlinked', 'SFA payload must preserve the raw unlink policy');
+assert.strictEqual(unlinkedPayloadState.effectiveOrderAliasMappings[cheeseAlias.aliasName], undefined, 'SFA payload effective mappings must omit the unlinked item');
+const unlinkedReadModelRow = unlinkedPayloadState.sfaAnalysisReadModel.rows.find(row => row.siteName === 'BBQ치즈볼');
+assert.strictEqual(unlinkedReadModelRow.targetName, '', 'SFA read model must remain unmapped after rebuild');
+assert.strictEqual(unlinkedReadModelRow.mappingStatus, 'unlinked', 'SFA read model must publish the closed unlink status');
+const unlinkedAiEvidence = plain(api.buildAiUsageEvidence(90, Date.UTC(2026, 6, 17), {
+  version: 2,
+  records: [{
+    runId: 'unlinked-ai-run', dateKey: '20260717', source: 'excel', fileName: 'unlinked.xlsx',
+    items: [{ eventId: 'unlinked-ai-run#1', dateKey: '20260717', originalName: 'BBQ치즈볼', mappedName: cheeseAlias.aliasName, quantity: 2, actualOrderQty: 2, amount: 12000, unit: 'BOX' }]
+  }]
+}));
+assert.strictEqual(unlinkedAiEvidence.ledger.eventCount, 0, 'AI evidence must exclude old events mapped to an unlinked item');
+assert.strictEqual(unlinkedAiEvidence.excludedUnlinkedEventCount, 1, 'AI evidence must audit how many unlinked events were excluded');
+assert.strictEqual(unlinkedAiEvidence.manualUsage[cheeseAlias.aliasName].aliasLinkStatus, 'unlinked', 'AI worker contract must expose the unlink policy');
+api.setAiUsageAdvisoryForCheck({ [cheeseAlias.aliasName]: { suggestedUsage: 99, confidence: 0.9, analysisRunId: 'stale-link-run', updatedAt: Date.UTC(2026, 6, 17) } });
+assert.strictEqual(api.aiUsageReadModelForItem(cheeseAlias.aliasName), null, 'stale AI advisory must stay hidden while the item is unlinked');
+api.setAiUsageAdvisoryForCheck({});
+const unlinkedSelectHtml = api.aliasActualOptionsHtml(cheeseAlias);
+assert(unlinkedSelectHtml.includes(`value="${api.ORDER_ALIAS_UNLINKED_VALUE}" selected`), 'unlink option must remain selected after rebuild');
+const unlinkedInlineHtml = api.inlineAliasCorrectionHtml(cheeseAlias);
+assert(unlinkedInlineHtml.includes('연결 안 함') && unlinkedInlineHtml.includes('자동 후보 사용 안 함'), 'inline row must explain explicit unlink plainly');
+assert(!unlinkedInlineHtml.includes('inline-alias-factor-select'), 'unlinked row must hide irrelevant conversion controls');
+const unlinkedConversionItem = api.MASTER.find(item => !api.orderUnitParts(item).same);
+assert(unlinkedConversionItem, 'non-equal unit fixture item required for unlink conversion test');
+api.setConversionAnalysisForCheck({ [unlinkedConversionItem.name]: { factor: 10, source: 'item', samples: 3, spread: 1 } });
+api.setAliasMappingsForCheck({ [unlinkedConversionItem.name]: { status: 'unlinked' } });
+api.setUnitCorrectionsForCheck({});
+assert.strictEqual(api.conversionFactorForItem(unlinkedConversionItem), null, 'automatic movement conversion must not apply while unlinked');
+assert.strictEqual(api.recommendedOrderQty(unlinkedConversionItem, 25), 1, 'unlinked non-equal units must not reuse an automatic factor');
+api.setUnitCorrectionsForCheck({ [unlinkedConversionItem.name]: { factor: 10 } });
+assert.strictEqual(api.conversionFactorForItem(unlinkedConversionItem), 10, 'independent user unit correction must remain authoritative while unlinked');
+assert.strictEqual(api.recommendedOrderQty(unlinkedConversionItem, 25), 3, 'explicit user unit correction must remain usable without an alias link');
+api.setConversionAnalysisForCheck({});
+api.setUnitCorrectionsForCheck({});
 api.setAliasMappingsForCheck({});
 api.setSfaActualHistoryForCheck({
   '20260701': {
