@@ -6106,11 +6106,19 @@ function currentStockFocusId() {
 }
 
 function renderAndFocusStock(nextId, source, currentId) {
-  const moved = focusStockInputById(nextId);
-  const msg = `${source} current=${currentId || '-'} next=${nextId || '-'} result=${moved ? 'focused' : 'end'}`;
-  console.debug('[stock-flow]', msg);
-  pushDebugLog('입력이동 ' + msg, moved ? 'sync' : 'warn');
-  return moved;
+  const focusNext = () => {
+    const moved = focusStockInputById(nextId);
+    const msg = `${source} current=${currentId || '-'} next=${nextId || '-'} result=${moved ? 'focused' : 'end'}`;
+    console.debug('[stock-flow]', msg);
+    pushDebugLog('입력이동 ' + msg, moved ? 'sync' : 'warn');
+    return moved;
+  };
+  if (gridSortMode === 'input') {
+    render();
+    queueMicrotask(focusNext);
+    return Boolean(nextId);
+  }
+  return focusNext();
 }
 
 function sortStockRowsAndKeepFlow(currentId, source = 'sort') {
@@ -6121,6 +6129,12 @@ function sortStockRowsAndKeepFlow(currentId, source = 'sort') {
 
 function isStockChecked(entry) {
   return entry && entry.stock !== null && entry.stock !== '' && !Number.isNaN(Number(entry.stock));
+}
+
+function inputRowPriority(entry, hidden) {
+  if (hidden) return 2;
+  if (isStockChecked(entry)) return 1;
+  return 0;
 }
 
 function fmt(n, dp=2) {
@@ -6143,6 +6157,9 @@ function normalizedZone(zone) {
 }
 
 function compareInputRows(left, right) {
+  const priorityDiff = inputRowPriority(left.entry, left.hidden) - inputRowPriority(right.entry, right.hidden);
+  if (priorityDiff !== 0) return priorityDiff;
+
   const leftZone = normalizedZone(left.entry.zone);
   const rightZone = normalizedZone(right.entry.zone);
   if (leftZone && !rightZone) return -1;

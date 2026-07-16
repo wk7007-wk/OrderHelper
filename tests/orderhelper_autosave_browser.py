@@ -272,6 +272,63 @@ def main():
             resumed = writes[before_reload_pending : before_reload_pending + 2]
             assert resumed[0]["body"] == pending_body and resumed[1]["body"] == pending_body
 
+            sort_page = browser.new_page()
+            sort_page.route("**/*firebasedatabase.app/**", firebase_route)
+            sort_page.goto(origin, wait_until="domcontentloaded")
+            sort_page.evaluate("startOrderHelperApp()")
+            sort_page.wait_for_function("document.activeElement?.id === 'pinInput'")
+            sort_page.evaluate("unlockOrderHelper(); document.activeElement?.blur()")
+            input_sort = sort_page.evaluate(
+                """() => {
+                    const items = MASTER.slice().sort(defaultOutputCompare).slice(0, 3);
+                    entries = items.map((item, index) => ({
+                        id: `sort-${index}`,
+                        entryKey: `sort-${index}`,
+                        itemKey: itemKeyForName(item.name),
+                        name: item.name,
+                        zone: '가',
+                        stock: index === 2 ? 5 : null,
+                    }));
+                    gridSortMode = 'input';
+                    render();
+                    const input = document.querySelector('input.cell[data-field="stock"][data-id="sort-0"]');
+                    input.focus();
+                    input.value = '1';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    return new Promise(resolve => setTimeout(() => resolve({
+                        ids: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).map(row => row.dataset.entryKey),
+                        activeId: document.activeElement?.dataset?.id || '',
+                    }), 0));
+                }"""
+            )
+            assert input_sort["ids"] == ["sort-1", "sort-0", "sort-2"], "input mode Enter must move the completed row below unchecked rows"
+            assert input_sort["activeId"] == "sort-1", f"input mode Enter must keep focus on the next unchecked stock row: {input_sort}"
+
+            sfa_sort = sort_page.evaluate(
+                """() => {
+                    entries.forEach(row => { row.stock = null; });
+                    gridSortMode = 'sfa';
+                    render();
+                    const before = Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).map(row => row.dataset.entryKey);
+                    const first = document.querySelector('input.cell[data-field="stock"]');
+                    const next = Array.from(document.querySelectorAll('input.cell[data-field="stock"]'))[1];
+                    first.focus();
+                    first.value = '1';
+                    first.dispatchEvent(new Event('input', { bubbles: true }));
+                    first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    return {
+                        before,
+                        after: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).map(row => row.dataset.entryKey),
+                        activeId: document.activeElement?.dataset?.id || '',
+                        expectedNextId: next?.dataset?.id || '',
+                    };
+                }"""
+            )
+            assert sfa_sort["after"] == sfa_sort["before"], "SFA mode Enter must keep the fixed SFA row order"
+            assert sfa_sort["activeId"] == sfa_sort["expectedNextId"], "SFA mode Enter must focus the next row without resorting"
+            sort_page.close()
+
             browser.close()
     finally:
         server.shutdown()

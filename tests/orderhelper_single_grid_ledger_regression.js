@@ -23,6 +23,21 @@ assert.deepStrictEqual(
   'order context must sort the same rows by initial SFA order'
 );
 
+const completionSortFixture = [
+  { id: 'checked-first', entryKey: 'checked-first', name: firstSfa.name, zone: '가', stock: 1 },
+  { id: 'unchecked-later', entryKey: 'unchecked-later', name: laterSfa.name, zone: '나', stock: null },
+];
+assert.deepStrictEqual(
+  plain(api.gridRowsForCheck(completionSortFixture, 'input')),
+  ['unchecked-later', 'checked-first'],
+  'input context must move completed stock rows below unchecked rows'
+);
+assert.deepStrictEqual(
+  plain(api.gridRowsForCheck(completionSortFixture, 'sfa')),
+  ['checked-first', 'unchecked-later'],
+  'SFA context must keep initial SFA order regardless of completion state'
+);
+
 const focusSource = {
   value: '12.3',
   selectionStart: 2,
