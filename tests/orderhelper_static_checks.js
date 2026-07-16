@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0628';/, 'APP_VERSION must match the KST explicit-unlink release time');
+mustMatch(/const APP_VERSION = '0717.0703';/, 'APP_VERSION must match the KST simplified-alias-editor release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -292,8 +292,8 @@ mustMatch(/function setOrderAliasConversion\(aliasName, value, mode = 'candidate
 mustMatch(/function inlineAliasCorrectionHtml\(row\)/, 'input row inline alias correction renderer missing');
 mustMatch(/class="inline-alias-correction \$\{statusClass\}"/, 'input row alias correction must render a compact details block');
 mustMatch(/class="sfa-select inline-alias-select"/, 'input row actual-name alias selector missing');
-mustMatch(/class="sfa-select inline-alias-factor-select"/, 'input row conversion candidate selector missing');
 mustMatch(/class="sfa-edit inline-alias-factor-input"/, 'input row manual conversion input missing');
+mustMatch(/class="inline-alias-factor-save"/, 'input row must expose an explicit quantity save action');
 mustMatch(/function bindInlineAliasControls\(\)/, 'input row inline alias binding missing');
 mustMatch(/class="sfa-edit inline-alias-new-input"/, 'same row must allow a typed new actual-order alias');
 mustMatch(/class="inline-alias-new-button"/, 'same row must save a typed new alias explicitly');
@@ -302,8 +302,11 @@ const inlineAliasRenderer = html.slice(
   html.indexOf('function inlineSiteMatchesHtml(itemName, rows)')
 );
 assert.strictEqual((inlineAliasRenderer.match(/class="inline-alias-new-fields"/g) || []).length, 1, 'inline order-name editor must render one direct-input block');
-assert(inlineAliasRenderer.includes('이 이름으로 확정'), 'inline direct order-name action must state what it confirms');
-assert(!/별명 추가|별명 생성|최근비교|1발주=/.test(inlineAliasRenderer), 'inline employee UI must not expose duplicate or technical mapping copy');
+assert(inlineAliasRenderer.includes('1. 발주명 연결') && inlineAliasRenderer.includes('2. 수량 맞춤'), 'inline editor must present only the two employee tasks');
+assert(inlineAliasRenderer.includes('이 이름으로 연결'), 'inline direct order-name action must state what it connects');
+assert(inlineAliasRenderer.includes('수량 저장'), 'inline quantity action must be explicit');
+assert(!inlineAliasRenderer.includes('inline-alias-factor-select'), 'inline employee UI must not render a duplicate conversion candidate selector');
+assert(!/별명 추가|별명 생성|자동후보|자동 후보|최근비교|추천점수|1발주=|발주 사이트 품목/.test(inlineAliasRenderer), 'inline employee UI must not expose duplicate or technical mapping copy');
 mustMatch(/\.inline-alias-summary-text \{[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/, 'full inline order name must wrap instead of being ellipsized');
 mustMatch(/const confirmedActualName = isUserSelectedAliasStatus\(row\.status\) \? row\.actualName : '';/, 'automatic order-name suggestions must remain explicitly selectable');
 mustMatch(/const current = isUserSelectedAliasStatus\(row\.conversionStatus\) \? normalizeConversionFactor\(row\.conversionFactor\) : null;/, 'automatic conversion suggestions must remain explicitly selectable');
@@ -311,23 +314,21 @@ mustMatch(/function inlineSiteMatchesHtml\(itemName, rows\)/, 'same row must exp
 mustMatch(/function inlineUnmatchedSiteRowHtml\(row\)/, 'unmatched SFA rows must remain inside the single grid');
 mustMatch(/function bindInlineSiteControls\(\)/, 'inline site/new-item controls must be bound without opening another tab');
 mustMatch(/applyOrderAliasSelection\(e\.target\.dataset\.aliasName, e\.target\.value\);/, 'inline alias selector must support both confirmed mapping and explicit unlink');
-mustMatch(/setOrderAliasConversion\(e\.target\.dataset\.aliasName, e\.target\.value, 'candidate'\);/, 'inline conversion candidate selector must save through confirmed conversion setter');
-mustMatch(/setOrderAliasConversion\(e\.target\.dataset\.aliasName, e\.target\.value, 'manual'\);/, 'inline manual conversion input must save through manual conversion setter');
+mustMatch(/function saveInlineAliasFactorFromControl\(control\)[\s\S]*setOrderAliasConversion\(control\?\.dataset\.aliasName \|\| input\.dataset\.aliasName, input\.value \|\| '', 'manual'\);/, 'inline quantity save helper must confirm the displayed number');
+mustMatch(/\.inline-alias-factor-input[\s\S]*if \(!isExplicitAliasEnter\(event\)\) return;[\s\S]*saveInlineAliasFactorFromControl\(event\.currentTarget\);/, 'inline quantity Enter must be an explicit confirmed action');
+mustMatch(/\.inline-alias-factor-save[\s\S]*saveInlineAliasFactorFromControl\(event\.currentTarget\);/, 'inline quantity save button must use the same explicit save path');
 mustMatch(/const inlineAliasRowsByName = new Map\(buildOrderAliasMatches\(lastSfaCompareData\)\.map\(row => \[row\.aliasName, row\]\)\);/, 'input view must share alias match rows with alias review state');
 mustMatch(/data-item-name="\$\{escapeHtml\(item\.name\)\}"/, 'input row name cell must keep item identity while showing inline correction controls');
 mustMatch(/bindInlineAliasControls\(\);\s*bindInlineSiteControls\(\);\s*updateStickyOffsets\(\);/, 'single grid must bind inline alias and site controls after rendering rows');
 mustMatch(/const allowedStatuses = new Set\(\['candidate', 'default', 'confirmed', 'manual', 'unlinked'\]\);/, 'alias mapping sanitizer must preserve explicit unlink status');
 mustMatch(/if \(!actualName && !unlinked\) return;/, 'unlink status must survive with no actual order name');
-mustMatch(/연결 안 함 · 자동 후보 사용 안 함/, 'employee alias selector must expose a plain unlink option');
+mustMatch(/<option value="\$\{ORDER_ALIAS_UNLINKED_VALUE\}"\$\{unlinked \? ' selected' : ''\}>연결 안 함<\/option>/, 'employee alias selector must expose a plain unlink option');
 mustMatch(/if \(status === 'unlinked'\) return '연결 안 함';/, 'employee UI must label explicit unlink plainly');
-mustMatch(/const actualText = unlinked \? '자동 후보 사용 안 함'/, 'unlinked rows must not display the rejected automatic candidate as active');
-mustMatch(/if \(status === 'default'\) return '자동 연결·확인 필요';/, 'alias default status must explicitly request confirmation');
+mustMatch(/const actualText = unlinked \? '발주명 연결 안 함'/, 'unlinked rows must not display the rejected automatic candidate as active');
 mustMatch(/function aliasConnectionStatusText\(status\)/, 'inline order-name status helper missing');
-mustMatch(/if \(status === 'default'\) return '자동 연결·확인 필요';/, 'default order name must remain visibly unconfirmed');
-mustMatch(/if \(status === 'manual'\) return '직접 입력 완료';/, 'manual order name must be visibly confirmed');
-mustMatch(/if \(status === 'conflict'\) return '중복·확인 필요';/, 'conflicting order names must request review');
-mustMatch(/function aliasConversionSummaryText\(factor, status\)[\s\S]*발주 1개당 재고 \$\{fmt\(value, 3\)\}개[\s\S]*자동 계산·확인 필요/, 'inline conversion status must show the factor direction and confirmation state');
-mustMatch(/function siteMatchSummaryText\(rows\)[\s\S]*발주 사이트 품목 \$\{count\}건 · \$\{state\}/, 'inline site mapping must explain count and connection state');
+mustMatch(/function aliasCorrectionStatusText\(row\)[\s\S]*nameReady && quantityReady \? '설정 완료' : '확인 필요'/, 'inline correction must summarize both name and quantity confirmation');
+mustMatch(/function aliasConversionSummaryText\(factor, status\)[\s\S]*발주 1개 = 재고 \$\{fmt\(value, 3\)\}개/, 'inline conversion status must show the factor direction plainly');
+mustMatch(/function siteMatchSummaryText\(rows\)[\s\S]*엑셀 연결 \$\{count\}건 · \$\{state\}/, 'inline Excel mapping must use a plain employee label');
 mustNotMatch(/summary::before \{ content: '보정'|<summary>사이트 매칭 \$\{linked\.length\}건<\/summary>/, 'employee row summaries must not use unexplained correction or site-matching labels');
 mustMatch(/function conversionStatusText\(status\)/, 'conversion status label helper missing');
 mustMatch(/if \(isOrderAliasUnlinked\(item\?\.name\)\) return parts\.same \? 1 : null;/, 'automatic conversion analysis must not apply while an alias is unlinked');
@@ -835,19 +836,19 @@ this.__OrderHelperApi = {
 
 const api = sandbox.__OrderHelperApi;
 const plain = value => JSON.parse(JSON.stringify(value));
-assert.strictEqual(api.aliasConnectionStatusText('default'), '자동 연결·확인 필요');
-assert.strictEqual(api.aliasConnectionStatusText('confirmed'), '선택 완료');
-assert.strictEqual(api.aliasConnectionStatusText('manual'), '직접 입력 완료');
+assert.strictEqual(api.aliasConnectionStatusText('default'), '확인 필요');
+assert.strictEqual(api.aliasConnectionStatusText('confirmed'), '연결됨');
+assert.strictEqual(api.aliasConnectionStatusText('manual'), '연결됨');
 assert.strictEqual(api.aliasConnectionStatusText('unlinked'), '연결 안 함');
-assert.strictEqual(api.aliasConnectionStatusText('conflict'), '중복·확인 필요');
-assert.strictEqual(api.aliasConnectionStatusText('unmatched'), '연결 필요');
-assert.strictEqual(api.aliasConversionSummaryText(1, 'default'), '발주 1개당 재고 1개 · 자동 계산·확인 필요');
-assert.strictEqual(api.aliasConversionSummaryText(10, 'confirmed'), '발주 1개당 재고 10개 · 선택 완료');
-assert.strictEqual(api.aliasConversionSummaryText(null, 'unmatched'), '발주 단위 설정 필요');
-assert.strictEqual(api.siteMatchStatusText('confirmed'), '연결 완료');
-assert.strictEqual(api.siteMatchSummaryText([{ status: 'confirmed' }]), '발주 사이트 품목 1건 · 연결 완료');
-assert.strictEqual(api.siteMatchSummaryText([{ status: 'default' }]), '발주 사이트 품목 1건 · 자동 연결·확인 필요');
-assert.strictEqual(api.siteMatchSummaryText([{ status: 'conflict' }]), '발주 사이트 품목 1건 · 중복·확인 필요');
+assert.strictEqual(api.aliasConnectionStatusText('conflict'), '확인 필요');
+assert.strictEqual(api.aliasConnectionStatusText('unmatched'), '확인 필요');
+assert.strictEqual(api.aliasConversionSummaryText(1, 'default'), '발주 1개 = 재고 1개');
+assert.strictEqual(api.aliasConversionSummaryText(10, 'confirmed'), '발주 1개 = 재고 10개');
+assert.strictEqual(api.aliasConversionSummaryText(null, 'unmatched'), '수량 입력 필요');
+assert.strictEqual(api.siteMatchStatusText('confirmed'), '연결됨');
+assert.strictEqual(api.siteMatchSummaryText([{ status: 'confirmed' }]), '엑셀 연결 1건 · 연결됨');
+assert.strictEqual(api.siteMatchSummaryText([{ status: 'default' }]), '엑셀 연결 1건 · 확인 필요');
+assert.strictEqual(api.siteMatchSummaryText([{ status: 'conflict' }]), '엑셀 연결 1건 · 확인 필요');
 const sourceTableFixture = {
   sheet: '주문현황',
   headerRowIndex: 0,
@@ -1071,8 +1072,8 @@ api.setAiUsageAdvisoryForCheck({});
 const unlinkedSelectHtml = api.aliasActualOptionsHtml(cheeseAlias);
 assert(unlinkedSelectHtml.includes(`value="${api.ORDER_ALIAS_UNLINKED_VALUE}" selected`), 'unlink option must remain selected after rebuild');
 const unlinkedInlineHtml = api.inlineAliasCorrectionHtml(cheeseAlias);
-assert(unlinkedInlineHtml.includes('연결 안 함') && unlinkedInlineHtml.includes('자동 후보 사용 안 함'), 'inline row must explain explicit unlink plainly');
-assert(!unlinkedInlineHtml.includes('inline-alias-factor-select'), 'unlinked row must hide irrelevant conversion controls');
+assert(unlinkedInlineHtml.includes('연결 안 함') && unlinkedInlineHtml.includes('발주명 연결 안 함'), 'inline row must explain explicit unlink plainly');
+assert(!unlinkedInlineHtml.includes('inline-alias-factor-input') && !unlinkedInlineHtml.includes('inline-alias-factor-save'), 'unlinked row must hide irrelevant conversion controls');
 const unlinkedConversionItem = api.MASTER.find(item => !api.orderUnitParts(item).same);
 assert(unlinkedConversionItem, 'non-equal unit fixture item required for unlink conversion test');
 api.setConversionAnalysisForCheck({ [unlinkedConversionItem.name]: { factor: 10, source: 'item', samples: 3, spread: 1 } });

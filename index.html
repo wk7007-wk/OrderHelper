@@ -97,17 +97,20 @@
   .inline-alias-badge.unlinked, .inline-alias-factor-badge.unlinked { color: #cbd5e1; border-color: rgba(148, 163, 184, 0.38); background: rgba(100, 116, 139, 0.12); }
   .inline-alias-badge.unmatched, .inline-alias-factor-badge.unmatched { color: #fed7aa; border-color: rgba(249, 115, 22, 0.42); background: rgba(249, 115, 22, 0.1); }
   .inline-alias-badge.conflict { color: #fecaca; border-color: rgba(239, 68, 68, 0.45); background: rgba(239, 68, 68, 0.12); }
-  .inline-alias-body { display: grid; gap: 6px; margin-top: 4px; padding: 6px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(8, 14, 24, 0.38); }
-  .inline-alias-fields { display: grid; grid-template-columns: 1fr; gap: 5px; align-items: stretch; }
-  .inline-alias-fields label { display: grid; gap: 3px; color: #cbd5e1; font-size: 9px; font-weight: 800; white-space: normal; }
-  .inline-alias-fields .sfa-select, .inline-alias-fields .sfa-edit { min-height: 26px; padding: 4px 5px; border-radius: 4px; font-size: 10px; }
-  .inline-alias-manual-label { color: #cbd5e1; font-size: 9px; font-weight: 800; white-space: normal; }
+  .inline-alias-body { display: grid; gap: 7px; margin-top: 4px; padding: 7px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(8, 14, 24, 0.38); }
+  .inline-alias-step { display: grid; gap: 5px; min-width: 0; }
+  .inline-alias-step + .inline-alias-step { padding-top: 7px; border-top: 1px solid rgba(49, 90, 141, 0.32); }
+  .inline-alias-step-title { color: #e5e7eb; font-size: 10px; font-weight: 900; }
+  .inline-alias-step .sfa-select, .inline-alias-step .sfa-edit { min-height: 28px; padding: 4px 5px; border-radius: 4px; font-size: 10px; }
+  .inline-alias-factor-line { display: grid; grid-template-columns: auto auto auto minmax(42px, 1fr) auto; gap: 4px; align-items: center; color: #dbeafe; font-size: 10px; font-weight: 800; white-space: nowrap; }
+  .inline-alias-factor-line .inline-alias-factor-input { min-width: 0; text-align: center; }
+  .inline-alias-factor-save { min-height: 28px; padding: 4px 7px; border: 1px solid #315a8d; border-radius: 4px; background: #315a8d; color: #fff; font-size: 10px; font-weight: 800; cursor: pointer; }
+  .inline-alias-manual { min-width: 0; }
+  .inline-alias-manual > summary { min-height: 18px; color: #93c5fd; font-size: 9px; font-weight: 800; }
   .inline-alias-new-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(62px, .45fr); gap: 4px; }
   .inline-alias-new-fields .sfa-edit { min-height: 26px; padding: 4px 5px; border-radius: 4px; font-size: 10px; }
   .inline-alias-meta { color: #93a4bb; font-size: 9px; white-space: normal; }
   .inline-alias-new-fields button { grid-column: 1 / -1; width: 100%; min-height: 28px; padding: 4px 6px; border: 1px solid #315a8d; border-radius: 4px; background: #315a8d; color: #fff; font-size: 10px; font-weight: 800; }
-  .inline-alias-help { display: grid; gap: 3px; padding-top: 2px; color: #a8bad1; font-size: 9px; line-height: 1.4; white-space: normal; }
-  .inline-alias-help div { overflow-wrap: anywhere; }
   .inline-site-match { margin-top: 4px; max-width: 270px; color: #9aa7b7; font-size: 10px; }
   .inline-site-match summary { cursor: pointer; color: #bfdbfe; font-weight: 800; white-space: normal; }
   .inline-site-list { display: grid; gap: 5px; margin-top: 4px; }
@@ -394,7 +397,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0628';
+const APP_VERSION = '0717.0703';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -5398,8 +5401,8 @@ function aliasActualOptionsHtml(row) {
   const confirmedActualName = isUserSelectedAliasStatus(row.status) ? row.actualName : '';
   const placeholderSelected = !confirmedActualName && !unlinked ? ' selected' : '';
   const options = [
-    `<option value="" disabled${placeholderSelected}>이름을 선택해 확정</option>`,
-    `<option value="${ORDER_ALIAS_UNLINKED_VALUE}"${unlinked ? ' selected' : ''}>연결 안 함 · 자동 후보 사용 안 함</option>`
+    `<option value="" disabled${placeholderSelected}>연결할 발주명 선택</option>`,
+    `<option value="${ORDER_ALIAS_UNLINKED_VALUE}"${unlinked ? ' selected' : ''}>연결 안 함</option>`
   ].concat(Array.from(optionByName.values()).map(candidate => {
     const selected = candidate.actualName === confirmedActualName ? ' selected' : '';
     const unitText = candidate.actualUnit ? ` · ${candidate.actualUnit}` : '';
@@ -5431,19 +5434,9 @@ function aliasConversionFieldsHtml(row) {
     <input class="sfa-edit sfa-alias-factor-input" type="number" inputmode="decimal" step="0.001" data-alias-name="${escapeHtml(row.aliasName)}" value="${escapeHtml(current ?? '')}" placeholder="예: 10">`;
 }
 
-function inlineAliasConversionFieldsHtml(row) {
-  return `${inlineAliasConversionSelectHtml(row)}
-    ${inlineAliasConversionInputHtml(row)}`;
-}
-
-function inlineAliasConversionSelectHtml(row) {
-  const current = isUserSelectedAliasStatus(row.conversionStatus) ? normalizeConversionFactor(row.conversionFactor) : null;
-  return `<select class="sfa-select inline-alias-factor-select" data-alias-name="${escapeHtml(row.aliasName)}">${aliasConversionOptionsHtml(row, current)}</select>`;
-}
-
 function inlineAliasConversionInputHtml(row) {
   const current = normalizeConversionFactor(row.conversionFactor);
-  return `<input class="sfa-edit inline-alias-factor-input" type="number" inputmode="decimal" step="0.001" data-alias-name="${escapeHtml(row.aliasName)}" value="${escapeHtml(current ?? '')}" placeholder="예: 10">`;
+  return `<input class="sfa-edit inline-alias-factor-input" type="number" inputmode="decimal" step="0.001" aria-label="발주 1개당 재고 수량" data-alias-name="${escapeHtml(row.aliasName)}" value="${escapeHtml(current ?? '')}" placeholder="예: 10">`;
 }
 
 function inlineAliasStatusClass(status) {
@@ -5452,97 +5445,74 @@ function inlineAliasStatusClass(status) {
 
 function aliasConnectionStatusText(status) {
   if (status === 'unlinked') return '연결 안 함';
-  if (status === 'confirmed') return '선택 완료';
-  if (status === 'manual') return '직접 입력 완료';
-  if (status === 'default') return '자동 연결·확인 필요';
-  if (status === 'candidate') return '후보·확인 필요';
-  if (status === 'conflict') return '중복·확인 필요';
-  return '연결 필요';
+  if (status === 'confirmed' || status === 'manual') return '연결됨';
+  return '확인 필요';
 }
 
 function aliasConversionSummaryText(factor, status) {
   const value = normalizeConversionFactor(factor);
-  if (!value) return '발주 단위 설정 필요';
-  const direction = `발주 1개당 재고 ${fmt(value, 3)}개`;
-  if (status === 'manual') return `${direction} · 직접 입력 완료`;
-  if (status === 'confirmed') return `${direction} · 선택 완료`;
-  if (status === 'default') return `${direction} · 자동 계산·확인 필요`;
-  if (status === 'candidate') return `${direction} · 후보·확인 필요`;
-  return `${direction} · 확인 필요`;
+  if (!value) return '수량 입력 필요';
+  return `발주 1개 = 재고 ${fmt(value, 3)}개`;
+}
+
+function aliasCorrectionStatusText(row) {
+  if (row?.status === 'unlinked') return '연결 안 함';
+  const conversionStatus = row?.effectiveConversionStatus || row?.conversionStatus;
+  const nameReady = isUserSelectedAliasStatus(row?.status);
+  const quantityReady = Boolean(normalizeConversionFactor(row?.effectiveConversionFactor) && isUserSelectedAliasStatus(conversionStatus));
+  return nameReady && quantityReady ? '설정 완료' : '확인 필요';
 }
 
 function siteMatchStatusText(status) {
-  if (status === 'confirmed' || status === 'manual') return '연결 완료';
-  if (status === 'default') return '자동 연결·확인 필요';
-  if (status === 'candidate') return '후보·확인 필요';
-  if (status === 'conflict') return '중복·확인 필요';
-  return '연결 필요';
+  if (status === 'confirmed' || status === 'manual') return '연결됨';
+  return '확인 필요';
 }
 
 function siteMatchSummaryText(rows) {
   const list = Array.isArray(rows) ? rows : [];
   const count = list.length;
   const statuses = list.map(row => row?.status);
-  let state = '연결 필요';
-  if (statuses.some(status => status === 'conflict')) state = '중복·확인 필요';
-  else if (statuses.some(status => status === 'unmatched' || !status)) state = '연결 필요';
-  else if (statuses.every(status => status === 'confirmed' || status === 'manual')) state = '연결 완료';
-  else state = '자동 연결·확인 필요';
-  return `발주 사이트 품목 ${count}건 · ${state}`;
-}
-
-function aliasNameHelpText(status) {
-  if (status === 'unlinked') return '발주명: 자동 후보를 사용하지 않습니다. 다시 연결하려면 위에서 이름을 선택하세요.';
-  if (status === 'confirmed') return '발주명: 목록에서 선택해 확인했습니다.';
-  if (status === 'manual') return '발주명: 직접 입력해 확인했습니다.';
-  if (status === 'default') return '발주명: 자동으로 찾은 이름입니다. 맞으면 위 목록에서 선택하세요.';
-  if (status === 'candidate') return '발주명: 추천 후보입니다. 맞는 이름을 위 목록에서 선택하세요.';
-  if (status === 'conflict') return '발주명: 같은 이름이 여러 품목에 연결됐습니다. 다시 선택하세요.';
-  return '발주명: 연결할 이름을 선택하거나 직접 입력하세요.';
-}
-
-function aliasConversionHelpText(factor, status) {
-  if (!normalizeConversionFactor(factor)) return '발주 단위: 발주 1개가 재고 몇 개인지 선택하거나 입력하세요.';
-  if (status === 'confirmed') return '발주 단위: 목록에서 선택해 확인했습니다.';
-  if (status === 'manual') return '발주 단위: 직접 입력해 확인했습니다.';
-  if (status === 'default') return '발주 단위: 자동으로 계산한 수량입니다. 맞으면 위 목록에서 선택하세요.';
-  if (status === 'candidate') return '발주 단위: 추천 후보입니다. 맞는 수량을 위 목록에서 선택하세요.';
-  return '발주 단위: 표시된 수량을 확인하세요.';
+  const state = statuses.length && statuses.every(status => status === 'confirmed' || status === 'manual') ? '연결됨' : '확인 필요';
+  return `엑셀 연결 ${count}건 · ${state}`;
 }
 
 function inlineAliasCorrectionHtml(row) {
   if (!row) return '';
   const unlinked = row.status === 'unlinked';
-  const actualText = unlinked ? '자동 후보 사용 안 함' : (row.effectiveActualName || row.defaultActualName || '연결할 발주명 없음');
+  const actualText = unlinked ? '발주명 연결 안 함' : (row.effectiveActualName || row.defaultActualName || '발주명 선택 필요');
   const statusClass = inlineAliasStatusClass(row.status);
   const conversionStatus = row.effectiveConversionStatus || row.conversionStatus;
   const conversionClass = inlineAliasStatusClass(conversionStatus);
-  const aliasStatusText = aliasConnectionStatusText(row.status);
+  const correctionStatusText = aliasCorrectionStatusText(row);
   const factorText = unlinked ? '' : aliasConversionSummaryText(row.effectiveConversionFactor, conversionStatus);
-  const ariaText = ['발주명과 단위', aliasStatusText, actualText, factorText].filter(Boolean).join(' · ');
+  const ariaText = ['발주 연결', correctionStatusText, actualText, factorText].filter(Boolean).join(' · ');
   return `<details class="inline-alias-correction ${statusClass}" data-inline-alias-name="${escapeHtml(row.aliasName)}">
     <summary aria-label="${escapeHtml(ariaText)}">
-      <span class="inline-alias-setting-label">발주명·단위</span>
-      <span class="inline-alias-badge ${statusClass}">${escapeHtml(aliasStatusText)}</span>
+      <span class="inline-alias-setting-label">발주 연결</span>
+      <span class="inline-alias-badge ${statusClass}">${escapeHtml(correctionStatusText)}</span>
       <span class="inline-alias-summary-text" title="${escapeHtml(actualText)}">${escapeHtml(actualText)}</span>
       ${unlinked ? '' : `<span class="inline-alias-factor-badge ${conversionClass}">${escapeHtml(factorText)}</span>`}
     </summary>
     <div class="inline-alias-body">
-      <div class="inline-alias-fields">
-        <label>발주 사이트에서 사용할 이름${inlineAliasActualSelectHtml(row)}</label>
-        ${unlinked ? '' : `<label>발주 1개당 재고 수량${inlineAliasConversionSelectHtml(row)}</label>
-        <label>수량 직접 입력${inlineAliasConversionInputHtml(row)}</label>`}
+      <div class="inline-alias-step inline-alias-name-step">
+        <div class="inline-alias-step-title">1. 발주명 연결</div>
+        ${inlineAliasActualSelectHtml(row)}
+        <details class="inline-alias-manual">
+          <summary>목록에 없는 발주명 입력</summary>
+          <div class="inline-alias-new-fields">
+            <input class="sfa-edit inline-alias-new-input" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="발주명">
+            <input class="sfa-edit inline-alias-new-unit" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="단위(예: BOX)">
+            <button class="inline-alias-new-button" type="button" data-alias-name="${escapeHtml(row.aliasName)}">이 이름으로 연결</button>
+          </div>
+        </details>
       </div>
-      <div class="inline-alias-manual-label">목록에 없으면 발주 사이트 이름 직접 입력</div>
-      <div class="inline-alias-new-fields">
-        <input class="sfa-edit inline-alias-new-input" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="발주 사이트 품목명">
-        <input class="sfa-edit inline-alias-new-unit" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="단위(예: EA)">
-        <button class="inline-alias-new-button" type="button" data-alias-name="${escapeHtml(row.aliasName)}">이 이름으로 확정</button>
-      </div>
-      <div class="inline-alias-help">
-        <div>${escapeHtml(aliasNameHelpText(row.status))}</div>
-        ${unlinked ? '' : `<div>${escapeHtml(aliasConversionHelpText(row.effectiveConversionFactor, conversionStatus))}</div>`}
-      </div>
+      ${unlinked ? '' : `<div class="inline-alias-step inline-alias-quantity-step">
+        <div class="inline-alias-step-title">2. 수량 맞춤</div>
+        <div class="inline-alias-factor-line">
+          <span>발주 1개</span><span>=</span><span>재고</span>${inlineAliasConversionInputHtml(row)}<span>개</span>
+        </div>
+        <button class="inline-alias-factor-save" type="button" data-alias-name="${escapeHtml(row.aliasName)}">수량 저장</button>
+      </div>`}
     </div>
   </details>`;
 }
@@ -5875,6 +5845,13 @@ function saveManualAliasFromControl(control) {
   return setManualOrderAlias(control?.dataset.aliasName || nameInput?.dataset.aliasName, nameInput?.value || '', unitInput?.value || '');
 }
 
+function saveInlineAliasFactorFromControl(control) {
+  const input = control?.closest('.inline-alias-quantity-step')?.querySelector('.inline-alias-factor-input');
+  if (!input) return false;
+  setOrderAliasConversion(control?.dataset.aliasName || input.dataset.aliasName, input.value || '', 'manual');
+  return true;
+}
+
 function isExplicitAliasEnter(event) {
   return event.key === 'Enter' && !event.isComposing && event.keyCode !== 229;
 }
@@ -6010,14 +5987,16 @@ function bindInlineAliasControls() {
       applyOrderAliasSelection(e.target.dataset.aliasName, e.target.value);
     });
   });
-  document.querySelectorAll('.inline-alias-factor-select').forEach(sel => {
-    sel.addEventListener('change', e => {
-      setOrderAliasConversion(e.target.dataset.aliasName, e.target.value, 'candidate');
+  document.querySelectorAll('.inline-alias-factor-input').forEach(input => {
+    input.addEventListener('keydown', event => {
+      if (!isExplicitAliasEnter(event)) return;
+      event.preventDefault();
+      saveInlineAliasFactorFromControl(event.currentTarget);
     });
   });
-  document.querySelectorAll('.inline-alias-factor-input').forEach(inp => {
-    inp.addEventListener('change', e => {
-      setOrderAliasConversion(e.target.dataset.aliasName, e.target.value, 'manual');
+  document.querySelectorAll('.inline-alias-factor-save').forEach(button => {
+    button.addEventListener('click', event => {
+      saveInlineAliasFactorFromControl(event.currentTarget);
     });
   });
   document.querySelectorAll('.inline-alias-new-button').forEach(button => {

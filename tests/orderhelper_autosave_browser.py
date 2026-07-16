@@ -153,7 +153,9 @@ def main():
                             newFieldCount: host.querySelectorAll('.inline-alias-new-fields').length,
                             buttonText: host.querySelector('.inline-alias-new-button').textContent.trim(),
                             nameSelectValue: host.querySelector('.inline-alias-select').value,
-                            factorSelectValue: host.querySelector('.inline-alias-factor-select').value,
+                            factorInputValue: host.querySelector('.inline-alias-factor-input').value,
+                            factorSaveText: host.querySelector('.inline-alias-factor-save').textContent.trim(),
+                            factorSelectCount: host.querySelectorAll('.inline-alias-factor-select').length,
                             fullNameWhiteSpace: getComputedStyle(host.querySelector('.inline-alias-summary-text')).whiteSpace,
                             bodyFits: body.scrollWidth <= body.clientWidth,
                         };
@@ -165,37 +167,49 @@ def main():
                         actualName: 'BBQ양념먹태매운맛',
                         savedActualName: 'BBQ양념먹태매운맛',
                     });
+                    const completedSummary = summaryText({
+                        ...base,
+                        status: 'confirmed',
+                        actualName: 'BBQ양념먹태매운맛',
+                        savedActualName: 'BBQ양념먹태매운맛',
+                        conversionStatus: 'manual',
+                        effectiveConversionStatus: 'manual',
+                        savedConversionFactor: 1,
+                    });
                     host.remove();
                     return {
                         defaultSummary,
                         mixedSummary,
+                        completedSummary,
                         siteConfirmed: siteMatchSummaryText([{ status: 'confirmed' }]),
                         siteCandidate: siteMatchSummaryText([{ status: 'default' }]),
                         siteConflict: siteMatchSummaryText([{ status: 'conflict' }]),
                     };
                 }"""
             )
-            assert "발주명·단위" in mapping_copy["defaultSummary"]["text"], mapping_copy
-            assert "자동 연결·확인 필요" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "발주 연결" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "확인 필요" in mapping_copy["defaultSummary"]["text"], mapping_copy
             assert "BBQ양념먹태매운맛" in mapping_copy["defaultSummary"]["text"], mapping_copy
-            assert "발주 1개당 재고 1개 · 자동 계산·확인 필요" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "발주 1개 = 재고 1개" in mapping_copy["defaultSummary"]["text"], mapping_copy
             assert mapping_copy["defaultSummary"]["newFieldCount"] == 1, mapping_copy
-            assert mapping_copy["defaultSummary"]["buttonText"] == "이 이름으로 확정", mapping_copy
+            assert mapping_copy["defaultSummary"]["buttonText"] == "이 이름으로 연결", mapping_copy
             assert mapping_copy["defaultSummary"]["nameSelectValue"] == "", "automatic name must require an explicit selection"
-            assert mapping_copy["defaultSummary"]["factorSelectValue"] == "", "automatic conversion must require an explicit selection"
+            assert mapping_copy["defaultSummary"]["factorInputValue"] == "1", mapping_copy
+            assert mapping_copy["defaultSummary"]["factorSaveText"] == "수량 저장", mapping_copy
+            assert mapping_copy["defaultSummary"]["factorSelectCount"] == 0, mapping_copy
             assert mapping_copy["defaultSummary"]["fullNameWhiteSpace"] == "normal", mapping_copy
             assert mapping_copy["defaultSummary"]["bodyFits"] is True, mapping_copy
-            assert "발주 사이트에서 사용할 이름" in mapping_copy["defaultSummary"]["bodyText"], mapping_copy
-            assert "자동으로 찾은 이름" in mapping_copy["defaultSummary"]["bodyText"], mapping_copy
-            assert "자동으로 계산한 수량" in mapping_copy["defaultSummary"]["bodyText"], mapping_copy
-            assert all(term not in mapping_copy["defaultSummary"]["bodyText"] for term in ("별명", "최근비교", "100%", "1발주=")), mapping_copy
-            assert "선택 완료" in mapping_copy["mixedSummary"]["text"], mapping_copy
-            assert "자동 계산·확인 필요" in mapping_copy["mixedSummary"]["text"], "name confirmation must not hide an unconfirmed conversion"
+            assert "1. 발주명 연결" in mapping_copy["defaultSummary"]["bodyText"], mapping_copy
+            assert "2. 수량 맞춤" in mapping_copy["defaultSummary"]["bodyText"], mapping_copy
+            assert "발주 1개" in mapping_copy["defaultSummary"]["bodyText"] and "재고" in mapping_copy["defaultSummary"]["bodyText"], mapping_copy
+            assert all(term not in mapping_copy["defaultSummary"]["bodyText"] for term in ("별명", "자동후보", "자동 후보", "최근비교", "추천점수", "100%", "1발주=")), mapping_copy
+            assert "확인 필요" in mapping_copy["mixedSummary"]["text"], "name confirmation must not hide an unconfirmed conversion"
             assert mapping_copy["mixedSummary"]["nameSelectValue"] == "BBQ양념먹태매운맛", mapping_copy
-            assert mapping_copy["mixedSummary"]["factorSelectValue"] == "", mapping_copy
-            assert mapping_copy["siteConfirmed"] == "발주 사이트 품목 1건 · 연결 완료", mapping_copy
-            assert mapping_copy["siteCandidate"] == "발주 사이트 품목 1건 · 자동 연결·확인 필요", mapping_copy
-            assert mapping_copy["siteConflict"] == "발주 사이트 품목 1건 · 중복·확인 필요", mapping_copy
+            assert mapping_copy["mixedSummary"]["factorInputValue"] == "1", mapping_copy
+            assert "설정 완료" in mapping_copy["completedSummary"]["text"], mapping_copy
+            assert mapping_copy["siteConfirmed"] == "엑셀 연결 1건 · 연결됨", mapping_copy
+            assert mapping_copy["siteCandidate"] == "엑셀 연결 1건 · 확인 필요", mapping_copy
+            assert mapping_copy["siteConflict"] == "엑셀 연결 1건 · 확인 필요", mapping_copy
 
             page.evaluate(
                 """() => {
@@ -857,7 +871,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0628"
+            assert active_patch["body"]["appVersion"] == "0717.0703"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])
