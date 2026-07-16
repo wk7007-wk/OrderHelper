@@ -43,7 +43,7 @@
 - 엑셀분석은 비교/실발주 확인 데이터와 참고 배지로만 쓰고, 수동 하루사용량/품목 단위표/재고/발주 원본을 별도 확인 없이 자동수정하지 않는다.
 - SFA 원천 품목 행은 보존하고, 사용자 확정 매칭과 단위 보정만 `orderSiteMappings`/`orderUnitCorrections`로 분리 저장한다. 사이트/엑셀 품목이 MASTER에 없으면 분석 화면에서 원명 그대로 또는 임의 이름으로 `orderManualItems`를 추가하고 `orderSiteMappings` target으로 재사용한다.
 - 사용자사이트 별명→실발주항목 확정값과 환산 검수값은 `orderAliasMappings`로 분리 저장한다. 점수 높은 품목/환산 후보는 자동 확정하지 않고 `default` 선택값으로 표시/전달하며, 환산 후보에는 최근비교, 재고변동, 날짜별 실사용량 비교 근거를 포함한다. 환산값은 전역값이 아니라 별명/실발주항목별 값이며, 사용자가 `별명 검수` 탭 또는 체크 입력 행에서 후보 선택 시 `confirmed`, 직접 숫자 입력 시 `manual`로 저장한다.
-- 최신 엑셀 비교와 `/sfaPriceHistory/latest`의 exact `mappedName` 가격은 확정 별명이 없거나 저장 별명의 actual name이 오래된 경우에도 비저장 후보 증거로만 사용할 수 있다. canonical은 append-only `/sfaAnalysisRuns/{runId}`이고 가격 read model은 원본 run path/hash를 가리킨다. 이 후보는 `orderAliasMappings`를 자동 생성·수정하지 않으며, 가격 null과 versioned 유효 0원을 구분한다.
+- 최신 엑셀 비교와 `/sfaPriceHistory/latest`의 exact `mappedName` 가격은 확정 별명이 없거나 저장 별명의 actual name이 오래된 경우에도 비저장 후보 증거로만 사용할 수 있다. canonical은 append-only `/sfaAnalysisRuns/{runId}`이고 가격은 Excel direct `단가`를 우선하며 없을 때만 `금액÷수량`으로 계산한다. 수량·합계금액이 0이어도 versioned direct 단가는 유효하다. 이 후보는 alias를 자동 변경하지 않는다.
 - 오차보기의 사용자 명시 선택/신규 품목 생성은 `orderSiteMappings`와 `orderAliasMappings`를 함께 갱신한다. 같은 정규화 이름이라도 원문+단위 identity가 다르면 별도 site key로 보존하고, 자동 고신뢰 후보는 `candidate`일 뿐 확정하지 않는다. 수량 `0`, 빈 배열, 충돌 상태도 current/history/effective read model에서 지우지 않는다.
 - SFA에 처음 보인 원문+단위는 fuzzy 점수가 높아도 자동 매칭하지 않고 `신규 발주 원문`으로 표시한다. 사용자가 기존 canonical 품목을 명시 선택한 뒤에만 local overlay `bbq_local_new_source_aliases_v1`에 저장하며, 원격 current 새로고침 뒤에도 overlay를 다시 합쳐 기존 확정 매핑과 재고 draft를 잃지 않는다.
 - 단위 보정은 환산계수, 묶음단위, 최소발주단위, 표기 보정으로 제한하며 다음 발주량 계산과 엑셀분석 요청에 반영한다.
@@ -75,7 +75,7 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 코드·라이브 기준: `20260717-01` / `0717.0059` / 입력순 Enter·모바일 Next 자동저장·정렬 / SFA순 고정 / null·0원 구분 / append-only SFA run과 누적 가격 read model / current-history pair CAS / 기존 stable item·entry key·revision·수동값 보호 유지.
+- 최신 코드·라이브 기준: `20260717-02` / `0717.0117` / 입력순 Enter·모바일 Next 자동저장·정렬 / SFA순 고정 / Excel direct 단가 우선·null/0 구분 / append-only SFA run과 누적 가격 read model / current-history pair CAS / 기존 stable item·entry key·revision·수동값 보호 유지.
 - 완료 포인터: `20260717-01 Stock Next autosave + lossless SFA price history`; 이전 포인터 `20260716-01 Restore Enter autosort in input context`, `20260715-02 Live integration: explicit new-source overlay + dirty-refresh preservation + pair CAS/lossless ledger/advisory latest`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, `node tests/orderhelper_single_grid_ledger_regression.js`, `node tests/orderhelper_p1_review_regression.js`, `node tests/orderhelper_autosave_regression.js`, `python3 tests/orderhelper_autosave_browser.py`, inline JS syntax, `git diff --check`. 로컬 Playwright는 Firebase를 interception해 ETag pair-CAS, IME/change/Enter, stored-XSS, delegated listener를 검증한다. 실제 공장 PC/SiteBot worker·live 배포 검증은 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.

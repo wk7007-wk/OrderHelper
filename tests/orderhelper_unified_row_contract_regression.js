@@ -229,6 +229,38 @@ assert.strictEqual(result.row.priceEvidence.provenance, 'SFA_PRICE_HISTORY');
 assert.strictEqual(result.row.unitPrice, 2400, '3-month price history must restore the actual order-unit price');
 assert.strictEqual(result.row.expectedAmount, 7200, 'restored price history must calculate today amount with the explicit factor exactly once');
 assert.strictEqual(Object.keys(plain(api.getAliasMappingsForCheck())).length, 0, 'reading price history must not mutate user alias mappings');
+
+api.setSfaPriceHistoryForCheck({
+  version: 1,
+  canonicalSource: 'sfaAnalysisRuns',
+  advisoryOnly: true,
+  updatedAt: now + 1,
+  latestRunId: 'direct-price-run',
+  latestRunPath: '/order/desk_q7m9r3a8/sfaAnalysisRuns/direct-price-run',
+  items: {
+    [item.name]: {
+      mappedName: item.name,
+      actualName: '엑셀 단가 표시 원명',
+      actualUnit: 'BOX',
+      actualOrderQty: 0,
+      amount: 0,
+      unitPrice: 9000,
+      dateKey: '20260710',
+      score: 0.99,
+      sourceRunId: 'direct-price-run',
+      sourceRunIds: ['direct-price-run'],
+      sourcePath: '/order/desk_q7m9r3a8/sfaAnalysisRuns/direct-price-run',
+      sourceFile: '단가포함.xlsx',
+      sourceSavedAt: now + 1,
+      priceEvidenceVersion: 2,
+      priceBasis: 'direct_unit_price',
+    },
+  },
+});
+result = targetRow();
+assert.strictEqual(result.row.unitPrice, 9000, 'a downloaded Excel direct unit price must work even when ordered quantity and line amount are zero');
+assert.strictEqual(result.row.unitPriceEvidence.formula, 'source', 'direct Excel unit price must remain source evidence, not amount/quantity derivation');
+assert.strictEqual(result.row.expectedAmount, 27000, 'direct unit price must calculate the current order amount without fabricating an historical quantity');
 api.setSfaPriceHistoryForCheck({ version: 1, canonicalSource: 'sfaAnalysisRuns', advisoryOnly: true, items: {} });
 
 api.setAliasMappingsForCheck({});
