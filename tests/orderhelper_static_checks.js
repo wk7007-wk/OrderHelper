@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0523';/, 'APP_VERSION must match the KST order-first-grid release time');
+mustMatch(/const APP_VERSION = '0717.0536';/, 'APP_VERSION must match the KST employee-readable mapping-state release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -301,7 +301,14 @@ mustMatch(/const inlineAliasRowsByName = new Map\(buildOrderAliasMatches\(lastSf
 mustMatch(/data-item-name="\$\{escapeHtml\(item\.name\)\}"/, 'input row name cell must keep item identity while showing inline correction controls');
 mustMatch(/bindInlineAliasControls\(\);\s*bindInlineSiteControls\(\);\s*updateStickyOffsets\(\);/, 'single grid must bind inline alias and site controls after rendering rows');
 mustMatch(/const allowedStatuses = new Set\(\['candidate', 'default', 'confirmed', 'manual'\]\);/, 'alias mapping sanitizer must preserve default status');
-mustMatch(/if \(status === 'default'\) return '자동추정';/, 'alias default status must be clearly marked as an automatic estimate');
+mustMatch(/if \(status === 'default'\) return '추천값·미확정';/, 'alias default status must explicitly remain unconfirmed');
+mustMatch(/function aliasConnectionStatusText\(status\)/, 'inline order-name status helper missing');
+mustMatch(/if \(status === 'default'\) return '발주명 추천값·미확정';/, 'default order name must remain visibly unconfirmed');
+mustMatch(/if \(status === 'manual'\) return '발주명 직접확정';/, 'manual order name must be visibly confirmed');
+mustMatch(/if \(status === 'conflict'\) return '발주명 중복확인';/, 'conflicting order names must request review');
+mustMatch(/function aliasConversionSummaryText\(factor, status\)[\s\S]*발주 1개 → 재고 \$\{fmt\(value, 3\)\}개[\s\S]*추정값·미확정/, 'inline conversion status must show the factor direction and confirmation state');
+mustMatch(/function siteMatchSummaryText\(rows\)[\s\S]*사이트 품목 \$\{count\}건 \$\{state\}/, 'inline site mapping must explain count and connection state');
+mustNotMatch(/summary::before \{ content: '보정'|<summary>사이트 매칭 \$\{linked\.length\}건<\/summary>/, 'employee row summaries must not use unexplained correction or site-matching labels');
 mustMatch(/function conversionStatusText\(status\)/, 'conversion status label helper missing');
 mustMatch(/function conversionCandidateCanBeDefault\(candidate, item\)[\s\S]*candidate\.source === 'compare'[\s\S]*Math\.abs\(factor - Math\.round\(factor\)\) < 0\.0005/, 'single-compare fractional ratios must remain review-only candidates');
 mustMatch(/effectiveOrderAliasMappings,/, 'SFA request payload must include effective alias mappings');
@@ -316,10 +323,10 @@ mustMatch(/row\.orderUnitToStockFactor = factor;\s*row\.factorMeaning = ORDER_UN
 mustMatch(/row\.orderUnitToStockFactor = conversionFactor;\s*row\.conversionFactorMeaning = ORDER_UNIT_TO_STOCK_FACTOR_MEANING;/, 'stored alias correction must make the factor direction explicit');
 mustMatch(/class="sfa-select sfa-alias-factor-select"/, 'alias conversion candidate selector missing');
 mustMatch(/class="sfa-edit sfa-alias-factor-input"/, 'alias conversion direct input missing');
-mustMatch(/환산값: 1발주 = 재고\/사용량 N개/, 'alias conversion selector must state the factor direction');
+mustMatch(/발주 단위: 발주 1개 → 재고 N개/, 'alias conversion selector must state the factor direction plainly');
 mustMatch(/placeholder="예: 10"/, 'alias conversion direct input should show the 10-per-box example value');
 mustNotMatch(/발주1=체크|환산값=발주/, 'user-facing conversion text must not use the ambiguous old direction label');
-mustMatch(/1발주 = 재고\/사용량 \$\{fmt\(row\.conversionFactor, 3\)\}개/, 'alias row must show fixed conversion direction');
+mustMatch(/aliasConversionSummaryText\(row\.conversionFactor, row\.conversionStatus\)/, 'alias row must use the same plain conversion summary');
 mustMatch(/orderUnitToStockFactor: candidate\.factor/, 'conversion candidate payload must include orderUnitToStockFactor alias');
 mustMatch(/conversionFactorMeaning: ORDER_UNIT_TO_STOCK_FACTOR_MEANING/, 'analysis payload must include conversion factor meaning');
 mustMatch(/function parseManualSfaItemsText\(text\)/, 'manual analysis input parser missing');
@@ -585,6 +592,10 @@ this.__OrderHelperApi = {
   buildOrderSiteMatches,
   collectActualOrderCandidates,
   buildOrderAliasMatches,
+  aliasConnectionStatusText,
+  aliasConversionSummaryText,
+  siteMatchStatusText,
+  siteMatchSummaryText,
   orderAliasMappingDraftsForPayload,
   effectiveOrderAliasMappingsForPayload,
   buildSfaAnalysisPayloadState,
@@ -783,6 +794,18 @@ this.__OrderHelperApi = {
 
 const api = sandbox.__OrderHelperApi;
 const plain = value => JSON.parse(JSON.stringify(value));
+assert.strictEqual(api.aliasConnectionStatusText('default'), '발주명 추천값·미확정');
+assert.strictEqual(api.aliasConnectionStatusText('confirmed'), '발주명 선택확정');
+assert.strictEqual(api.aliasConnectionStatusText('manual'), '발주명 직접확정');
+assert.strictEqual(api.aliasConnectionStatusText('conflict'), '발주명 중복확인');
+assert.strictEqual(api.aliasConnectionStatusText('unmatched'), '발주명 연결필요');
+assert.strictEqual(api.aliasConversionSummaryText(1, 'default'), '발주 1개 → 재고 1개 · 추정값·미확정');
+assert.strictEqual(api.aliasConversionSummaryText(10, 'confirmed'), '발주 1개 → 재고 10개 · 선택확정');
+assert.strictEqual(api.aliasConversionSummaryText(null, 'unmatched'), '발주단위 설정필요');
+assert.strictEqual(api.siteMatchStatusText('confirmed'), '연결확정');
+assert.strictEqual(api.siteMatchSummaryText([{ status: 'confirmed' }]), '사이트 품목 1건 연결확정');
+assert.strictEqual(api.siteMatchSummaryText([{ status: 'default' }]), '사이트 품목 1건 후보·미확정');
+assert.strictEqual(api.siteMatchSummaryText([{ status: 'conflict' }]), '사이트 품목 1건 중복확인');
 const sourceTableFixture = {
   sheet: '주문현황',
   headerRowIndex: 0,

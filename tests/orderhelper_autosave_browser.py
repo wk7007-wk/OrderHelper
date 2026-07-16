@@ -117,6 +117,63 @@ def main():
                 "saveStateDisplay": "flex",
             }, compact_save_ui
 
+            mapping_copy = page.evaluate(
+                """() => {
+                    const base = {
+                        aliasName: '테스트 내부명',
+                        status: 'default',
+                        actualName: '',
+                        actualUnit: 'BON',
+                        effectiveActualName: 'BBQ양념먹태매운맛',
+                        defaultActualName: 'BBQ양념먹태매운맛',
+                        savedActualName: '',
+                        candidates: [{ actualName: 'BBQ양념먹태매운맛', actualUnit: 'BON', score: 0.98 }],
+                        conversionFactor: 1,
+                        effectiveConversionFactor: 1,
+                        defaultConversionFactor: 1,
+                        savedConversionFactor: null,
+                        conversionStatus: 'default',
+                        effectiveConversionStatus: 'default',
+                        conversionCandidates: [{ factor: 1, source: 'same', score: 1 }],
+                        reason: '',
+                    };
+                    const host = document.createElement('div');
+                    document.body.appendChild(host);
+                    const summaryText = row => {
+                        host.innerHTML = inlineAliasCorrectionHtml(row);
+                        return {
+                            text: host.querySelector('summary').innerText,
+                            aria: host.querySelector('summary').getAttribute('aria-label'),
+                        };
+                    };
+                    const defaultSummary = summaryText(base);
+                    const mixedSummary = summaryText({
+                        ...base,
+                        status: 'confirmed',
+                        actualName: 'BBQ양념먹태매운맛',
+                        savedActualName: 'BBQ양념먹태매운맛',
+                    });
+                    host.remove();
+                    return {
+                        defaultSummary,
+                        mixedSummary,
+                        siteConfirmed: siteMatchSummaryText([{ status: 'confirmed' }]),
+                        siteCandidate: siteMatchSummaryText([{ status: 'default' }]),
+                        siteConflict: siteMatchSummaryText([{ status: 'conflict' }]),
+                    };
+                }"""
+            )
+            assert "발주 설정" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "발주명 추천값·미확정" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "BBQ양념먹태매운맛" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "발주 1개 → 재고 1개 · 추정값·미확정" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "자동추정" not in mapping_copy["defaultSummary"]["text"] and "1발주=" not in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "발주명 선택확정" in mapping_copy["mixedSummary"]["text"], mapping_copy
+            assert "추정값·미확정" in mapping_copy["mixedSummary"]["text"], "name confirmation must not hide an unconfirmed conversion"
+            assert mapping_copy["siteConfirmed"] == "사이트 품목 1건 연결확정", mapping_copy
+            assert mapping_copy["siteCandidate"] == "사이트 품목 1건 후보·미확정", mapping_copy
+            assert mapping_copy["siteConflict"] == "사이트 품목 1건 중복확인", mapping_copy
+
             page.evaluate(
                 """() => {
                     lastSfaCompareData = {
@@ -157,7 +214,7 @@ def main():
             assert factor_direction["orderFor20"] == 2, "factor 10 must convert 20 stock units to 2 order units"
             assert factor_direction["stockFor2"] == 20, "2 order units at factor 10 must restore 20 stock/usage units"
             assert factor_direction["sameUnitDecimal"] == 2.3, "same-unit factor-1 path must preserve 0.1 precision"
-            assert "1발주=10개" in factor_direction["chip"] and "1발주 = 재고/사용량 10개" in factor_direction["title"], "visible factor label must state 1 order equals 10 stock units"
+            assert "발주 1개 → 재고 10개" in factor_direction["chip"] and "1발주 = 재고/사용량 10개" in factor_direction["title"], "visible factor label must explain the stock-unit direction"
             assert factor_direction["correction"]["orderUnitToStockFactor"] == 10
             assert factor_direction["correction"]["factorMeaning"] == "1발주 단위 = 재고/사용량 N개"
 
@@ -777,7 +834,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0523"
+            assert active_patch["body"]["appVersion"] == "0717.0536"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])
