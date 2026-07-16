@@ -419,6 +419,104 @@ def main():
             assert sfa_sort["activeId"] == sfa_sort["expectedNextId"], "SFA mode Enter must focus the next row without resorting"
             sort_page.close()
 
+            mobile_page = browser.new_page(viewport={"width": 390, "height": 844})
+            mobile_page.route("**/*firebasedatabase.app/**", firebase_route)
+            mobile_page.goto(origin, wait_until="domcontentloaded")
+            mobile_page.evaluate("startOrderHelperApp(); unlockOrderHelper(); document.activeElement?.blur()")
+            mobile_header = mobile_page.evaluate(
+                """() => {
+                    const wrap = document.querySelector('.table-wrap').getBoundingClientRect();
+                    const headers = Array.from(document.querySelectorAll('#thead th')).slice(0, 3).map(cell => {
+                        const rect = cell.getBoundingClientRect();
+                        return { x: rect.x, right: rect.right, top: rect.top };
+                    });
+                    const cells = Array.from(document.querySelectorAll('#tbody tr[data-entry-key]:first-of-type td')).slice(0, 3).map(cell => {
+                        const rect = cell.getBoundingClientRect();
+                        return { x: rect.x, right: rect.right };
+                    });
+                    return { wrapTop: wrap.top, headers, cells };
+                }"""
+            )
+            assert abs(mobile_header["headers"][0]["top"] - mobile_header["wrapTop"]) <= 1, mobile_header
+            for header, cell in zip(mobile_header["headers"], mobile_header["cells"]):
+                assert abs(header["x"] - cell["x"]) < 1 and abs(header["right"] - cell["right"]) < 1, mobile_header
+
+            focus_race = mobile_page.evaluate(
+                """async () => {
+                    const first = MASTER.find(item => item.name !== '신선육(10호)-뼈한마리');
+                    const second = MASTER.find(item => item.name !== first.name && item.name !== '신선육(10호)-뼈한마리');
+                    const fresh = MASTER.find(item => item.name === '신선육(10호)-뼈한마리');
+                    entries = [
+                        { id: 'typing-row', entryKey: 'typing-row', itemKey: itemKeyForName(first.name), name: first.name, zone: '가', stock: null },
+                        { id: 'pending-row', entryKey: 'pending-row', itemKey: itemKeyForName(second.name), name: second.name, zone: '가', stock: null },
+                        { id: 'fresh-row', entryKey: 'fresh-row', itemKey: itemKeyForName(fresh.name), name: fresh.name, zone: '가', stock: 5 },
+                    ];
+                    gridSortMode = 'input';
+                    render();
+                    const input = document.querySelector('input.cell[data-field="stock"][data-id="typing-row"]');
+                    const beforeRenderCount = gridPerf.fullRenders;
+                    input.focus();
+                    input.value = '1';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    refreshSfaResultViewsWithCurrentState({
+                        ok: true, runId: 'focus-race', savedAt: Date.now(), items: [],
+                        comparison: { matched: [], missing: [], extra: [] },
+                    }, 'latestCompare');
+                    const whileEditing = {
+                        order: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).map(row => row.dataset.entryKey),
+                        activeId: document.activeElement?.dataset?.id || '',
+                        sameNode: document.activeElement === input,
+                        fullRenders: gridPerf.fullRenders - beforeRenderCount,
+                        pendingRender: pendingGridRender,
+                    };
+                    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    await new Promise(resolve => setTimeout(resolve, 20));
+                    const afterEnter = {
+                        order: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).map(row => row.dataset.entryKey),
+                        activeId: document.activeElement?.dataset?.id || '',
+                        typingNodePreserved: document.querySelector('input.cell[data-field="stock"][data-id="typing-row"]') === input,
+                        fullRenders: gridPerf.fullRenders - beforeRenderCount,
+                    };
+
+                    const duplicateItem = first;
+                    entries = [
+                        { id: 'dup-checked', entryKey: 'dup-checked', itemKey: itemKeyForName(duplicateItem.name), name: duplicateItem.name, zone: '가', stock: 1 },
+                        { id: 'dup-edit', entryKey: 'dup-edit', itemKey: itemKeyForName(duplicateItem.name), name: duplicateItem.name, zone: '나', stock: null },
+                    ];
+                    pendingGridRender = false;
+                    render({ allowDuringGridEdit: true });
+                    const duplicateInput = document.querySelector('input.cell[data-field="stock"][data-id="dup-edit"]');
+                    duplicateInput.focus();
+                    duplicateInput.value = '2';
+                    duplicateInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    duplicateInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    const duplicate = {
+                        order: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).map(row => row.dataset.entryKey),
+                        nodePreserved: document.querySelector('input.cell[data-field="stock"][data-id="dup-edit"]') === duplicateInput,
+                        uniqueNodes: new Set(Array.from(document.querySelectorAll('input.cell[data-field="stock"]'))).size,
+                    };
+                    return { whileEditing, afterEnter, duplicate };
+                }"""
+            )
+            assert focus_race["whileEditing"] == {
+                "order": ["typing-row", "pending-row", "fresh-row"],
+                "activeId": "typing-row",
+                "sameNode": True,
+                "fullRenders": 0,
+                "pendingRender": True,
+            }, focus_race
+            assert focus_race["afterEnter"]["order"] == ["pending-row", "typing-row", "fresh-row"], focus_race
+            assert focus_race["afterEnter"]["activeId"] == "pending-row", focus_race
+            assert focus_race["afterEnter"]["typingNodePreserved"] is True, focus_race
+            assert focus_race["afterEnter"]["fullRenders"] == 0, focus_race
+            assert focus_race["duplicate"]["nodePreserved"] is True, focus_race
+            assert focus_race["duplicate"]["uniqueNodes"] == 2, focus_race
+            mobile_page.close()
+
             browser.close()
     finally:
         server.shutdown()

@@ -47,6 +47,10 @@ mustMatchPy(/local_sfa_backfill_low_confidence_rows/, 'local SFA mapping validat
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
 mustMatch(/function renderAndFocusStock\(nextId, source, currentId\)/, 'stock sort render/focus helper missing');
 mustMatch(/function sortStockRowsAndKeepFlow\(currentId, source = 'sort'\)/, 'already-focused stock sort helper missing');
+mustMatch(/const stockEnterHandledTargets = new WeakSet\(\);/, 'Enter/change dedupe must be scoped to the exact DOM input target');
+mustMatch(/function activeGridCellInput\(\)/, 'background renders need an active grid-edit guard');
+mustMatch(/function flushPendingGridRenderIfSafe\(\)/, 'deferred background render flush missing');
+mustMatch(/function reorderRenderedGridRows\(\)/, 'confirmed input sorting must reuse existing row DOM');
 mustMatch(/function stockEventLabel\(e, phase\)/, 'stock key event label missing');
 mustMatch(/function logStockEvent\(e, phase\)/, 'stock key event logger missing');
 mustMatch(/let usageHistory = \{\};/, 'usage history state missing');
@@ -420,7 +424,7 @@ mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderManualItems
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
-mustMatch(/function setGridSortMode\(mode\) \{[\s\S]*flushDeferredInputWork\(\);[\s\S]*gridSortMode = nextMode;[\s\S]*render\(\{ focusSnapshot \}\);/, 'sort context switch must flush deferred state and restore the keyed focus snapshot');
+mustMatch(/function setGridSortMode\(mode\) \{[\s\S]*flushDeferredInputWork\(\);[\s\S]*gridSortMode = nextMode;[\s\S]*render\(\{ focusSnapshot, allowDuringGridEdit: true \}\);/, 'sort context switch must flush deferred state and restore the keyed focus snapshot');
 mustNotMatch(/flushAutoSave\('sortSwitch'\)/, 'sort-only UI changes must not confirm an unentered draft');
 mustMatch(/const flowEpoch = stockFlowEpoch;[\s\S]*if \(flowEpoch !== stockFlowEpoch\) return;/, 'sort switch must fence a stale blur-driven stock advance');
 mustMatch(/function compareGridRows\(left, right, mode = gridSortMode\)/, 'single grid needs explicit input-zone and SFA sort contexts');
@@ -443,7 +447,11 @@ mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{safeEntryId\}" data-entry-key=
 mustMatch(/class="cell zone" type="text" tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');
 mustMatch(/<button class="add" tabindex="-1"/, 'row action buttons must be skipped by keyboard next navigation');
 mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must move within the current DOM order');
-mustMatch(/function renderAndFocusStock\([^)]*\)[\s\S]*if \(gridSortMode === 'input'\) \{[\s\S]*render\(\);[\s\S]*queueMicrotask\(focusNext\);/, 'stock Enter must resort completed rows and restore focus after detached-DOM cleanup only in input mode');
+mustMatch(/function renderAndFocusStock\([^)]*\)[\s\S]*if \(gridSortMode === 'input'\) \{[\s\S]*reorderRenderedGridRows\(\)[\s\S]*queueMicrotask\(focusNext\);/, 'stock Enter must reorder existing rows without replacing the focused tbody');
+mustMatch(/if \(!options\.allowDuringGridEdit && activeGridCellInput\(\)\) \{\s*pendingGridRender = true;\s*return false;/, 'background full renders must defer while a grid input is active');
+mustMatch(/if \(stockEnterHandledTargets\.has\(e\.target\)\) \{\s*return;\s*\}/, 'all stale changes from the exact Enter-handled DOM input must stay suppressed');
+mustNotMatch(/skipStockRenderOnceId/, 'global entry-id dedupe can suppress the wrong replacement input');
+mustMatch(/th \{ position: sticky; top: 0;/, 'mobile table header must stay at the table-wrap origin instead of being offset into body rows');
 mustMatch(/모바일 숫자키보드의 Next[\s\S]*flushAutoSave\('stockChange'\);/, 'mobile Next/change must commit stock without requiring a keydown Enter event');
 mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
 mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');

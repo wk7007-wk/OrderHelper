@@ -127,7 +127,9 @@
   table { width: 100%; min-width: 1180px; border-collapse: separate; border-spacing: 0; }
   thead { background: #0f3460; z-index: 5; }
   th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid #0f3460; white-space: nowrap; }
-  th { position: sticky; top: var(--sticky-top); z-index: 6; background: #0f3460; font-size: 11px; color: #ccc; font-weight: 600; }
+  /* Horizontal overflow makes .table-wrap the sticky containing block.  A
+     page-header offset here pushes the headings down into the body rows. */
+  th { position: sticky; top: 0; z-index: 6; background: #0f3460; font-size: 11px; color: #ccc; font-weight: 600; }
   #thead th:nth-child(1), #tbody td:nth-child(1) { position: sticky; left: 0; width: 106px; min-width: 106px; max-width: 106px; }
   #thead th:nth-child(2), #tbody td:nth-child(2) { position: sticky; left: 106px; width: 220px; min-width: 220px; max-width: 220px; }
   #thead th:nth-child(-n+2) { z-index: 8; }
@@ -942,7 +944,8 @@ let lastSfaCompareSavedAt = 0;
 let lastSfaCompareStatusKey = '';
 let lastSfaCompareData = null;
 let lastSfaResultAppliedAt = 0;
-let skipStockRenderOnceId = null;
+const stockEnterHandledTargets = new WeakSet();
+let pendingGridRender = false;
 let stockFlowEpoch = 0;
 let pendingSnoozeName = null;
 let usageHistory = {};
@@ -6375,6 +6378,41 @@ function currentStockFocusId() {
   return active?.dataset?.field === 'stock' ? active.dataset.id || null : null;
 }
 
+function activeGridCellInput() {
+  const active = document.activeElement;
+  return active?.matches?.('input.cell') ? active : null;
+}
+
+function flushPendingGridRenderIfSafe() {
+  if (!pendingGridRender || activeGridCellInput()) return false;
+  pendingGridRender = false;
+  return render({ allowDuringGridEdit: true });
+}
+
+function reorderRenderedGridRows() {
+  const tbody = document.getElementById('tbody');
+  if (!tbody) return false;
+  const renderedRows = Array.from(tbody.querySelectorAll('tr[data-entry-key]'));
+  if (renderedRows.length !== entries.length) return false;
+  const byEntryKey = new Map(renderedRows.map(row => [row.dataset.entryKey || '', row]));
+  const ordered = entries.map((entry, inputIndex) => {
+    const item = orderItemByName(entry.name);
+    return item ? { entry, item, hidden: isItemHidden(item.name), inputIndex } : null;
+  }).filter(Boolean).sort((left, right) => compareGridRows(left, right));
+  if (ordered.length !== renderedRows.length) return false;
+  const trailingRows = Array.from(tbody.children).filter(row => !row.dataset?.entryKey);
+  for (const { entry, hidden } of ordered) {
+    const row = byEntryKey.get(entry.entryKey || entry.id || '');
+    if (!row) return false;
+    row.classList.toggle('row-hidden', hidden);
+    row.classList.toggle('row-checked', !hidden && isStockChecked(entry));
+    row.classList.toggle('row-pending', !hidden && !isStockChecked(entry));
+    tbody.appendChild(row);
+  }
+  trailingRows.forEach(row => tbody.appendChild(row));
+  return true;
+}
+
 function renderAndFocusStock(nextId, source, currentId) {
   const focusNext = () => {
     const moved = focusStockInputById(nextId);
@@ -6384,7 +6422,9 @@ function renderAndFocusStock(nextId, source, currentId) {
     return moved;
   };
   if (gridSortMode === 'input') {
-    render();
+    // Confirmed completion only reorders existing rows. Rebuilding tbody here
+    // blurs the edited input and can emit a second stale change event.
+    if (!reorderRenderedGridRows()) render({ allowDuringGridEdit: true });
     queueMicrotask(focusNext);
     return Boolean(nextId);
   }
@@ -6500,7 +6540,7 @@ function setGridSortMode(mode) {
   stockFlowEpoch += 1;
   flushDeferredInputWork();
   gridSortMode = nextMode;
-  render({ focusSnapshot });
+  render({ focusSnapshot, allowDuringGridEdit: true });
 }
 
 function defaultOutputCompare(a, b) {
@@ -6681,8 +6721,7 @@ function bindCellInputs() {
         logStockEvent(e, 'change');
         const currentId = e.target.dataset.id;
         const flowEpoch = stockFlowEpoch;
-        if (skipStockRenderOnceId === e.target.dataset.id) {
-          skipStockRenderOnceId = null;
+        if (stockEnterHandledTargets.has(e.target)) {
           return;
         }
         flushAutoSave('stockChange');
@@ -6714,7 +6753,7 @@ function bindCellInputs() {
       if (!['stock', 'zone', 'k', 'l'].includes(e.target.dataset.field)) return;
       e.preventDefault();
       if (e.target.dataset.field === 'stock') {
-        skipStockRenderOnceId = e.target.dataset.id;
+        stockEnterHandledTargets.add(e.target);
         advanceStockInput(e.target.dataset.id, 'keydown');
       } else {
         e.target.blur();
@@ -6747,6 +6786,14 @@ function kstDateKey(ts) {
 }
 
 function render(options = {}) {
+  // Price/history/status refreshes may finish while an employee is typing.
+  // Defer their full tbody replacement until the grid edit has ended; the
+  // explicit stock-completion path performs its own in-place row reorder.
+  if (!options.allowDuringGridEdit && activeGridCellInput()) {
+    pendingGridRender = true;
+    return false;
+  }
+  pendingGridRender = false;
   gridPerf.fullRenders += 1;
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
@@ -6842,6 +6889,7 @@ function render(options = {}) {
   bindInlineSiteControls();
   updateStickyOffsets();
   if (options.focusSnapshot) restoreGridFocus(options.focusSnapshot);
+  return true;
 }
 
 function refreshNeedBadge(days = parseInt(document.getElementById('orderDays')?.value || recommendedDays())) {
@@ -7360,6 +7408,7 @@ document.addEventListener('focusout', e => {
     inputFocused = false;
     setTimeout(() => {
       applyPendingFBDataIfSafe();
+      flushPendingGridRenderIfSafe();
     }, 300);
   }
 });
