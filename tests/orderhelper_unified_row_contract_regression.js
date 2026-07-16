@@ -178,6 +178,43 @@ assert(wingPackHtml.includes('발주 1박스 가격 123,200원'), 'detail title 
 assert(wingPackHtml.includes('환산 1박스 = 재고 10개'), 'detail title must disclose the price conversion direction');
 assert(!wingPackHtml.includes('단가 123,200원'), 'one-box amount must never be mislabeled as an ambiguous unit price');
 
+const tteokPackItem = api.MASTER.find(row => row.name === '냉동-떡볶이(16개)');
+assert(tteokPackItem, '16-piece tteokbokki pack item missing');
+api.setUnitCorrectionsForCheck({ [tteokPackItem.name]: { factor: 16, packUnit: '박스' } });
+assert.strictEqual(api.recommendedOrderQty(tteokPackItem, 16), 1, 'one full 16-piece pack must recommend one box');
+assert.strictEqual(api.recommendedOrderQty(tteokPackItem, 17), 2, 'one piece beyond a full pack must recommend two boxes');
+const tteokPackRow = {
+  matchStatus: 'CANDIDATE',
+  factor: 16,
+  unitPrice: 80000,
+  perStockUnitPrice: 5000,
+  actualOrderQty: 2,
+  chickenPriceSanity: 'not_applicable',
+  issues: [],
+  priceEvidence: {
+    valid: true,
+    basis: 'SFA_ORDER_UNIT_AMOUNT_DIV_QTY',
+    provenance: 'SFA_PRICE_HISTORY',
+    actualUnit: 'BOX',
+    actualOrderQty: 2,
+    amount: 160000,
+    dateKey: '20260717',
+    fileName: '3개월 발주.xlsx',
+    runId: 'tteok-pack-price-run',
+    equation: { actualUnitPrice: { formula: 'amount / actualOrderQty' } },
+  },
+};
+const tteokPackEstimate = plain(api.expectedOrderAmountForItem(tteokPackItem, 17, tteokPackRow));
+assert.strictEqual(tteokPackEstimate.recommended_order_qty, 2, '17 checked pieces must resolve two ordered boxes');
+assert.strictEqual(tteokPackEstimate.order_unit_price, 80000, 'Excel price must remain the one-box price');
+assert.strictEqual(tteokPackEstimate.stock_unit_price, 5000, 'employee each-price must divide one-box price by 16');
+assert.strictEqual(tteokPackEstimate.expected_order_amount, 160000, 'two boxes must cost two times the box price, without multiplying by 16 again');
+const tteokPackHtml = api.renderOrderAmountSpan(tteokPackItem, 17, tteokPackRow);
+const tteokPackVisible = tteokPackHtml.replace(/<[^>]+>/g, '');
+assert(tteokPackVisible.includes('예상 160,000원'), 'employee card must show the two-box expected spend');
+assert(tteokPackVisible.includes('개당 5,000원 · 1박스 80,000원 · 최근 3개월 발주 기준'), 'employee card must separate each price from the box price');
+assert(tteokPackHtml.includes('환산 1박스 = 재고 16개'), 'detail title must say one box equals 16 checked pieces');
+
 setBaseState();
 api.setSfaAnalysisHistoryForCheck(ledger([{
   runId: 'run-explicit-zero-price', dateKey: '20260714', eventAt: now, originalName: actualName,

@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0725';/, 'APP_VERSION must match the KST stock-unit-price release time');
+mustMatch(/const APP_VERSION = '0717.0753';/, 'APP_VERSION must match the KST package-unit clarification release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -327,7 +327,8 @@ mustMatch(/if \(status === 'unlinked'\) return '연결 안 함';/, 'employee UI 
 mustMatch(/const actualText = unlinked \? '발주명 연결 안 함'/, 'unlinked rows must not display the rejected automatic candidate as active');
 mustMatch(/function aliasConnectionStatusText\(status\)/, 'inline order-name status helper missing');
 mustMatch(/function aliasCorrectionStatusText\(row\)[\s\S]*nameReady && quantityReady \? '설정 완료' : '확인 필요'/, 'inline correction must summarize both name and quantity confirmation');
-mustMatch(/function aliasConversionSummaryText\(factor, status\)[\s\S]*발주 1개 = 재고 \$\{fmt\(value, 3\)\}개/, 'inline conversion status must show the factor direction plainly');
+mustMatch(/function orderConversionDisplayText\(item, factor, separator = '='\)[\s\S]*\$\{labels\.orderLabel\} \$\{separator\} 재고 \$\{fmt\(value, 3\)\}\$\{labels\.checkUnit\}/, 'conversion text must show the real order and stock units when available');
+mustMatch(/function aliasConversionSummaryText\(factor, status, itemName = ''\)[\s\S]*orderConversionDisplayText\(orderItemByName\(itemName\), value\)/, 'inline conversion status must use the shared real-unit wording');
 mustMatch(/function siteMatchSummaryText\(rows\)[\s\S]*엑셀 연결 \$\{count\}건 · \$\{state\}/, 'inline Excel mapping must use a plain employee label');
 mustNotMatch(/summary::before \{ content: '보정'|<summary>사이트 매칭 \$\{linked\.length\}건<\/summary>/, 'employee row summaries must not use unexplained correction or site-matching labels');
 mustMatch(/function conversionStatusText\(status\)/, 'conversion status label helper missing');
@@ -348,10 +349,11 @@ mustMatch(/row\.orderUnitToStockFactor = conversionFactor;\s*row\.conversionFact
 mustMatch(/class="sfa-select sfa-alias-factor-select"/, 'alias conversion candidate selector missing');
 mustMatch(/class="sfa-edit sfa-alias-factor-input"/, 'alias conversion direct input missing');
 mustMatch(/수량을 선택해 확정/, 'alias conversion selector must ask for an explicit confirmation');
-mustMatch(/발주 1개당 재고 \$\{fmt\(candidate\.factor, 3\)\}개/, 'alias conversion candidates must state the factor direction plainly');
+mustMatch(/orderConversionDisplayText\(item, candidate\.factor\)/, 'alias conversion candidates must use the same real-unit wording');
 mustMatch(/placeholder="예: 10"/, 'alias conversion direct input should show the 10-per-box example value');
 mustNotMatch(/발주1=체크|환산값=발주/, 'user-facing conversion text must not use the ambiguous old direction label');
-mustMatch(/aliasConversionSummaryText\(row\.conversionFactor, row\.conversionStatus\)/, 'alias row must use the same plain conversion summary');
+mustMatch(/aliasConversionSummaryText\(row\.conversionFactor, row\.conversionStatus, row\.aliasName\)/, 'alias row must use the same real-unit conversion summary');
+mustMatch(/manualConversionLocked \? 'confirmed'/, 'an explicit unit correction must be shown as confirmed without confirming the alias name');
 mustMatch(/orderUnitToStockFactor: candidate\.factor/, 'conversion candidate payload must include orderUnitToStockFactor alias');
 mustMatch(/conversionFactorMeaning: ORDER_UNIT_TO_STOCK_FACTOR_MEANING/, 'analysis payload must include conversion factor meaning');
 mustMatch(/function parseManualSfaItemsText\(text\)/, 'manual analysis input parser missing');
@@ -631,6 +633,8 @@ this.__OrderHelperApi = {
   sfaAnalysisRowsFromData,
   buildSfaAnalysisReadModel,
   aliasConnectionStatusText,
+  orderConversionDisplayText,
+  orderAnalysisText,
   aliasActualOptionsHtml,
   inlineAliasCorrectionHtml,
   aliasConversionSummaryText,
@@ -847,6 +851,7 @@ assert.strictEqual(api.aliasConnectionStatusText('conflict'), '확인 필요');
 assert.strictEqual(api.aliasConnectionStatusText('unmatched'), '확인 필요');
 assert.strictEqual(api.aliasConversionSummaryText(1, 'default'), '발주 1개 = 재고 1개');
 assert.strictEqual(api.aliasConversionSummaryText(10, 'confirmed'), '발주 1개 = 재고 10개');
+assert.strictEqual(api.aliasConversionSummaryText(16, 'confirmed', '냉동-떡볶이(16개)'), '1박스 = 재고 16개');
 assert.strictEqual(api.aliasConversionSummaryText(null, 'unmatched'), '수량 입력 필요');
 assert.strictEqual(api.siteMatchStatusText('confirmed'), '연결됨');
 assert.strictEqual(api.siteMatchSummaryText([{ status: 'confirmed' }]), '엑셀 연결 1건 · 연결됨');
@@ -975,6 +980,42 @@ assert.strictEqual(api.conversionFactorForItem(freshMeat), 10, 'manual factor sh
 assert.strictEqual(api.recommendedOrderQty(freshMeat, 11), 2, 'manual multiple/minimum should adjust converted order qty');
 assert.deepStrictEqual(plain(api.parseManualSfaItemsText('A,2,BOX\\nB\\t3\\tEA').map(row => [row.name, row.qty, row.unit])), [['A', 2, 'BOX'], ['B', 3, 'EA']], 'manual analysis input parser should support comma and tab rows');
 assert.deepStrictEqual(plain(api.parseManualSfaItemsText(JSON.stringify({ mappings: [{ siteName: 'C', siteQty: 4, siteUnit: 'BOX' }] })).map(row => [row.name, row.qty, row.unit])), [['C', 4, 'BOX']], 'manual analysis input parser should accept exported mapping JSON');
+const tteokPackItem = api.MASTER.find(item => item.name === '냉동-떡볶이(16개)');
+assert(tteokPackItem, '16-piece tteokbokki pack fixture missing');
+api.setAliasMappingsForCheck({});
+api.setUnitCorrectionsForCheck({ [tteokPackItem.name]: { factor: 16, packUnit: '박스' } });
+const tteokPackData = {
+  ok: true,
+  items: [{ name: 'BBQ떡볶이(466G)', qty: 1, unit: 'BOX', row_index: 18 }],
+  comparison: {
+    matched: [{
+      row_index: 18,
+      sfa_name: 'BBQ떡볶이(466G)',
+      sfa_qty: 1,
+      sfa_unit: 'BOX',
+      expected_name: tteokPackItem.name,
+      expected_stock_need: 16,
+      score: 0.99,
+    }],
+    missing: [],
+    extra: [],
+  },
+};
+const tteokPackAlias = api.buildOrderAliasMatches(tteokPackData).find(row => row.aliasName === tteokPackItem.name);
+assert.strictEqual(tteokPackAlias.status, 'default', 'confirming the box quantity must not auto-confirm the suggested order name');
+assert.deepStrictEqual(plain(api.getAliasMappingsForCheck()), {}, 'reading a confirmed box quantity must not persist or auto-confirm the suggested order name');
+assert.strictEqual(tteokPackAlias.conversionFactor, 16, 'explicit unit correction must be the effective 16-piece box factor');
+assert.strictEqual(tteokPackAlias.conversionStatus, 'confirmed', 'explicit unit correction must not be mislabeled as an automatic estimate');
+assert.strictEqual(tteokPackAlias.effectiveConversionStatus, 'confirmed', 'effective payload must retain the confirmed quantity state');
+assert.strictEqual(api.recommendedOrderQty(tteokPackItem, 16), 1, '16 checked pieces must recommend one box');
+assert.strictEqual(api.recommendedOrderQty(tteokPackItem, 17), 2, '17 checked pieces must round up to two boxes');
+assert.strictEqual(api.stockUnitsForOrderQty(2, 16), 32, 'two ordered boxes must restore 32 checked pieces');
+assert.strictEqual(api.orderAnalysisText(tteokPackItem, 17), '1박스 → 재고 16개', 'row analysis must name both real units');
+const tteokPackInline = api.inlineAliasCorrectionHtml(tteokPackAlias);
+assert(tteokPackInline.includes('inline-alias-factor-badge confirmed'), 'confirmed box quantity must use the confirmed badge style');
+assert(tteokPackInline.includes('1박스 = 재고 16개'), 'collapsed correction summary must say one box equals 16 checked pieces');
+assert(tteokPackInline.includes('확인 필요'), 'the unconfirmed order-name suggestion must remain visibly pending');
+api.setUnitCorrectionsForCheck({});
 const compareOnlyData = {
   ok: true,
   items: [{ name: 'BBQ치즈볼', unit: 'BOX', row_index: 9 }],
