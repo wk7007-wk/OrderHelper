@@ -122,7 +122,7 @@ def main():
                     const base = {
                         aliasName: '테스트 내부명',
                         status: 'default',
-                        actualName: '',
+                        actualName: 'BBQ양념먹태매운맛',
                         actualUnit: 'BON',
                         effectiveActualName: 'BBQ양념먹태매운맛',
                         defaultActualName: 'BBQ양념먹태매운맛',
@@ -135,15 +135,27 @@ def main():
                         conversionStatus: 'default',
                         effectiveConversionStatus: 'default',
                         conversionCandidates: [{ factor: 1, source: 'same', score: 1 }],
-                        reason: '',
+                        reason: '기술 상세 근거',
+                        conversionReason: '최근비교 100%',
                     };
                     const host = document.createElement('div');
+                    host.style.width = '172px';
                     document.body.appendChild(host);
                     const summaryText = row => {
                         host.innerHTML = inlineAliasCorrectionHtml(row);
+                        const details = host.querySelector('details');
+                        details.open = true;
+                        const body = host.querySelector('.inline-alias-body');
                         return {
                             text: host.querySelector('summary').innerText,
                             aria: host.querySelector('summary').getAttribute('aria-label'),
+                            bodyText: body.innerText,
+                            newFieldCount: host.querySelectorAll('.inline-alias-new-fields').length,
+                            buttonText: host.querySelector('.inline-alias-new-button').textContent.trim(),
+                            nameSelectValue: host.querySelector('.inline-alias-select').value,
+                            factorSelectValue: host.querySelector('.inline-alias-factor-select').value,
+                            fullNameWhiteSpace: getComputedStyle(host.querySelector('.inline-alias-summary-text')).whiteSpace,
+                            bodyFits: body.scrollWidth <= body.clientWidth,
                         };
                     };
                     const defaultSummary = summaryText(base);
@@ -163,16 +175,27 @@ def main():
                     };
                 }"""
             )
-            assert "발주 설정" in mapping_copy["defaultSummary"]["text"], mapping_copy
-            assert "발주명 추천값·미확정" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "발주명·단위" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert "자동 연결·확인 필요" in mapping_copy["defaultSummary"]["text"], mapping_copy
             assert "BBQ양념먹태매운맛" in mapping_copy["defaultSummary"]["text"], mapping_copy
-            assert "발주 1개 → 재고 1개 · 추정값·미확정" in mapping_copy["defaultSummary"]["text"], mapping_copy
-            assert "자동추정" not in mapping_copy["defaultSummary"]["text"] and "1발주=" not in mapping_copy["defaultSummary"]["text"], mapping_copy
-            assert "발주명 선택확정" in mapping_copy["mixedSummary"]["text"], mapping_copy
-            assert "추정값·미확정" in mapping_copy["mixedSummary"]["text"], "name confirmation must not hide an unconfirmed conversion"
-            assert mapping_copy["siteConfirmed"] == "사이트 품목 1건 연결확정", mapping_copy
-            assert mapping_copy["siteCandidate"] == "사이트 품목 1건 후보·미확정", mapping_copy
-            assert mapping_copy["siteConflict"] == "사이트 품목 1건 중복확인", mapping_copy
+            assert "발주 1개당 재고 1개 · 자동 계산·확인 필요" in mapping_copy["defaultSummary"]["text"], mapping_copy
+            assert mapping_copy["defaultSummary"]["newFieldCount"] == 1, mapping_copy
+            assert mapping_copy["defaultSummary"]["buttonText"] == "이 이름으로 확정", mapping_copy
+            assert mapping_copy["defaultSummary"]["nameSelectValue"] == "", "automatic name must require an explicit selection"
+            assert mapping_copy["defaultSummary"]["factorSelectValue"] == "", "automatic conversion must require an explicit selection"
+            assert mapping_copy["defaultSummary"]["fullNameWhiteSpace"] == "normal", mapping_copy
+            assert mapping_copy["defaultSummary"]["bodyFits"] is True, mapping_copy
+            assert "발주 사이트에서 사용할 이름" in mapping_copy["defaultSummary"]["bodyText"], mapping_copy
+            assert "자동으로 찾은 이름" in mapping_copy["defaultSummary"]["bodyText"], mapping_copy
+            assert "자동으로 계산한 수량" in mapping_copy["defaultSummary"]["bodyText"], mapping_copy
+            assert all(term not in mapping_copy["defaultSummary"]["bodyText"] for term in ("별명", "최근비교", "100%", "1발주=")), mapping_copy
+            assert "선택 완료" in mapping_copy["mixedSummary"]["text"], mapping_copy
+            assert "자동 계산·확인 필요" in mapping_copy["mixedSummary"]["text"], "name confirmation must not hide an unconfirmed conversion"
+            assert mapping_copy["mixedSummary"]["nameSelectValue"] == "BBQ양념먹태매운맛", mapping_copy
+            assert mapping_copy["mixedSummary"]["factorSelectValue"] == "", mapping_copy
+            assert mapping_copy["siteConfirmed"] == "발주 사이트 품목 1건 · 연결 완료", mapping_copy
+            assert mapping_copy["siteCandidate"] == "발주 사이트 품목 1건 · 자동 연결·확인 필요", mapping_copy
+            assert mapping_copy["siteConflict"] == "발주 사이트 품목 1건 · 중복·확인 필요", mapping_copy
 
             page.evaluate(
                 """() => {
@@ -834,7 +857,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0536"
+            assert active_patch["body"]["appVersion"] == "0717.0553"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])

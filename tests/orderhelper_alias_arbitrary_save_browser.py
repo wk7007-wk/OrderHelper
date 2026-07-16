@@ -222,7 +222,7 @@ def main():
             page.wait_for_timeout(250)
             assert writes == [], "typing, blur/change, and IME Enter must produce PUT 0"
             assert fixture["fieldWidth"] > 100, f"390px mobile alias input must remain usable: {fixture}"
-            assert fixture["buttonText"] == "별명 생성"
+            assert fixture["buttonText"] == "이 이름으로 확정"
 
             page.evaluate(
                 "document.querySelector('.sfa-alias-new-button').click()"
