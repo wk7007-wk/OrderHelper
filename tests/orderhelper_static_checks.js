@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0514';/, 'APP_VERSION must match the KST compact-save-status release time');
+mustMatch(/const APP_VERSION = '0717.0523';/, 'APP_VERSION must match the KST order-first-grid release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -165,7 +165,11 @@ mustMatch(/tbody\.dataset\.gridActionsBound === '1'/, 're-rendered rows must not
 mustMatch(/data-grid-action="add" data-entry-id="\$\{safeEntryId\}"/, 'row actions must carry escaped data instead of dynamic inline handlers');
 mustNotMatch(/onclick="addRow\(|onclick="deleteRow\(/, 'stored row ids must never be interpolated into inline JavaScript');
 mustMatch(/value="\$\{escapeHtml\(ent\.zone \|\| ''\)\}"/, 'stored zone text must be escaped before HTML rendering');
-mustMatch(/<th>필요량<\/th>\s*<th>추천발주 · 분석 · 금액<\/th>/, 'single grid must show need and recommended output columns beside editable inputs');
+const orderFirstHeader = /<th id="thZone" data-column="zone">구역<\/th>\s*<th data-column="name">품목명<\/th>\s*<th data-column="need">필요량<\/th>\s*<th data-column="order">추천발주 · 분석 · 금액<\/th>\s*<th data-column="stock">재고<\/th>\s*<th data-column="k">여유<\/th>\s*<th data-column="l">일사용<\/th>\s*<th data-column="unit">단위<\/th>\s*<th id="thAct" data-column="actions"><\/th>/g;
+assert.strictEqual((html.match(orderFirstHeader) || []).length, 2, 'static and dynamic headers must share the order-first column contract');
+mustMatch(/\$\{needCell\}\s*\$\{orderCell\}\s*<td data-column="stock"><input class="cell"[\s\S]{0,500}data-field="stock"[\s\S]{0,200}<\/td>\s*\$\{KL\}/, 'every stored row must put need and recommended order before the stock input');
+mustMatch(/#thead th\[data-column="need"\], #tbody td\.need-qty[\s\S]*text-align: center;/, 'need header and values must align in one centered column');
+mustMatch(/#thead th\[data-column="order"\], #tbody td\.order-qty[\s\S]*text-align: left;[\s\S]*\.order-cell \{ display: flex;[\s\S]*align-items: center;[\s\S]*justify-content: flex-start;/, 'recommended order details must align visibly within one row');
 assert.strictEqual((html.match(/<table\b/g) || []).length, 1, 'input and output must share exactly one table');
 mustNotMatch(/id="modeBtn"|function toggleMode\(|let viewMode\s*=/, 'separate input/output view mode must be removed');
 mustMatch(/function normalizeOrderUnit\(unit\)/, 'unit alias normalizer missing');
