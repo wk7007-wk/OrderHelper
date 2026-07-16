@@ -397,7 +397,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0703';
+const APP_VERSION = '0717.0725';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -3504,9 +3504,17 @@ function expectedOrderAmountForItem(item, stockNeed, resolvedRow = undefined) {
   if (!row?.priceEvidence || !Number.isFinite(row.unitPrice) || row.matchStatus === UNIFIED_ORDER_MATCH_STATUSES.ALIAS_CONFLICT) return null;
   const recommendedQty = orderQtyForUnifiedRow(item, stockNeed, row.factor);
   if (!Number.isFinite(recommendedQty)) return null;
+  const factor = Number(row.factor);
+  const stockUnitPrice = Number.isFinite(row.perStockUnitPrice)
+    ? row.perStockUnitPrice
+    : (Number.isFinite(factor) && factor > 0 ? row.unitPrice / factor : null);
   return {
     expected_order_amount: recommendedQty * row.unitPrice,
     recommended_order_qty: recommendedQty,
+    order_unit_price: row.unitPrice,
+    stock_unit_price: stockUnitPrice,
+    order_unit_to_stock_factor: Number.isFinite(factor) && factor > 0 ? factor : null,
+    // 기존 내부 계약 호환용이며 의미는 발주 1단위 가격이다.
     unit_price: row.unitPrice,
     basis: row.priceEvidence.basis,
     source_date: row.priceEvidence.dateKey,
@@ -3602,6 +3610,38 @@ function priceEvidenceShortSourceText(evidence) {
   return '발주 엑셀 기준';
 }
 
+function orderPricePresentation(item, estimate) {
+  const units = orderUnitParts(item);
+  const orderPrice = Number(estimate?.order_unit_price ?? estimate?.unit_price);
+  const stockPrice = Number(estimate?.stock_unit_price);
+  const factor = Number(estimate?.order_unit_to_stock_factor);
+  const orderLabel = units.orderUnit ? `1${units.orderUnit}` : '1발주';
+  const hasConversion = Number.isFinite(factor) && factor > 0 && (Math.abs(factor - 1) > 1e-9 || !units.same);
+  if (hasConversion && Number.isFinite(stockPrice)) {
+    const stockLabel = units.checkUnit ? `${units.checkUnit}당` : '재고 1개당';
+    const factorStockLabel = units.checkUnit ? `${fmt(factor, 2)}${units.checkUnit}` : `${fmt(factor, 2)}개`;
+    return {
+      visible: `${stockLabel} ${formatWon(stockPrice)} · ${orderLabel} ${formatWon(orderPrice)}`,
+      titleParts: [
+        `재고 ${stockLabel} 가격 ${formatWon(stockPrice)}`,
+        `발주 ${orderLabel} 가격 ${formatWon(orderPrice)}`,
+        `환산 ${orderLabel} = 재고 ${factorStockLabel}`
+      ]
+    };
+  }
+  const sharedUnit = units.checkUnit || units.orderUnit;
+  if (sharedUnit) {
+    return {
+      visible: `${sharedUnit}당 ${formatWon(orderPrice)}`,
+      titleParts: [`재고·발주 ${sharedUnit}당 가격 ${formatWon(orderPrice)}`]
+    };
+  }
+  return {
+    visible: `1발주 ${formatWon(orderPrice)}`,
+    titleParts: [`발주 1단위 가격 ${formatWon(orderPrice)}`]
+  };
+}
+
 function orderPriceMissingReason(row) {
   if (!row) return '가격 계산 행을 만들지 못했습니다.';
   const priority = ['ALIAS_CONFLICT', 'DATA_CONFLICT', 'PRICE_JOIN_BUG', 'PRICE_SOURCE_MISSING', 'ITEM_UNMATCHED', 'UNIT_UNCONFIRMED', 'DERIVATION_BUG'];
@@ -3664,18 +3704,19 @@ function renderOrderAmountSpan(item, stockNeed, resolvedRow = undefined) {
     const title = [actualText, `가격 미해결: ${reason}`, priceSource ? `가격출처 ${priceSource}` : '가격출처 없음'].join(' · ');
     return `<span class="order-amount missing" title="${escapeHtml(title)}"><span class="order-amount-primary">예상금액 확인 필요</span><span class="order-amount-secondary">${escapeHtml(orderPriceMissingActionText(row))}</span></span>`;
   }
+  const pricePresentation = orderPricePresentation(item, estimate);
   const title = [
     `예상 발주금액 ${formatWon(estimate.expected_order_amount)}`,
     `오늘 계산 발주량 ${fmt(estimate.recommended_order_qty, 1)}${orderUnitParts(item).orderUnit || '발주'}`,
     actualText,
-    `단가 ${formatWon(estimate.unit_price)}`,
+    ...pricePresentation.titleParts,
     chickenDetail,
     `가격출처 ${priceSource || '실발주 엑셀'}`,
     estimate.source_date ? `엑셀 ${estimate.source_date}` : '',
     estimate.source_file ? `파일 ${estimate.source_file}` : '',
     Number.isFinite(estimate.source_qty) && Number.isFinite(estimate.source_amount) ? `근거 수량 ${fmt(estimate.source_qty, 2)} / 금액 ${formatWon(estimate.source_amount)}` : ''
   ].filter(Boolean).join(' · ');
-  return `<span class="order-amount" title="${escapeHtml(title)}"><span class="order-amount-primary">예상 ${escapeHtml(formatWon(estimate.expected_order_amount))}</span><span class="order-amount-secondary">단가 ${escapeHtml(formatWon(estimate.unit_price))} · ${escapeHtml(shortPriceSource)}</span>${chickenWarning ? `<span class="order-amount-warning">${escapeHtml(chickenWarning)}</span>` : ''}</span>`;
+  return `<span class="order-amount" title="${escapeHtml(title)}"><span class="order-amount-primary">예상 ${escapeHtml(formatWon(estimate.expected_order_amount))}</span><span class="order-amount-secondary">${escapeHtml(pricePresentation.visible)} · ${escapeHtml(shortPriceSource)}</span>${chickenWarning ? `<span class="order-amount-warning">${escapeHtml(chickenWarning)}</span>` : ''}</span>`;
 }
 
 function summarizeUnifiedOrderAmounts(rows = []) {

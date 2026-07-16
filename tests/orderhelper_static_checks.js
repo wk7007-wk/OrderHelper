@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0703';/, 'APP_VERSION must match the KST simplified-alias-editor release time');
+mustMatch(/const APP_VERSION = '0717.0725';/, 'APP_VERSION must match the KST stock-unit-price release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -388,9 +388,12 @@ mustMatch(/가격 미해결: \$\{reason\}/, 'amount-card detail must preserve th
 mustMatch(/const priority = \['ALIAS_CONFLICT', 'DATA_CONFLICT'/, 'alias-conflict Korean reason must take priority over price evidence');
 mustMatch(/function priceEvidenceShortSourceText\(evidence\)/, 'employee amount card needs a short price-source helper');
 mustMatch(/return '최신 엑셀 기준';/, 'current Excel provenance must be shortened for employees');
+mustMatch(/function orderPricePresentation\(item, estimate\)/, 'employee amount card needs separate stock-unit and order-unit price labels');
+mustMatch(/order_unit_price: row\.unitPrice,[\s\S]*stock_unit_price: stockUnitPrice,[\s\S]*order_unit_to_stock_factor:/, 'expected amount contract must expose both price meanings and their factor');
+mustMatch(/visible: `\$\{stockLabel\} \$\{formatWon\(stockPrice\)\} · \$\{orderLabel\} \$\{formatWon\(orderPrice\)\}`/, 'converted items must show stock-unit and one-order-unit prices separately');
 mustMatch(/function orderPriceMissingActionText\(row\)/, 'missing amount cards need a short actionable reason');
 mustMatch(/order-amount-primary">예상금액 확인 필요<\/span><span class="order-amount-secondary">\$\{escapeHtml\(orderPriceMissingActionText\(row\)\)\}/, 'missing rows must show a short two-line employee card');
-mustMatch(/order-amount-primary">예상 \$\{escapeHtml\(formatWon\(estimate\.expected_order_amount\)\)\}<\/span><span class="order-amount-secondary">단가 \$\{escapeHtml\(formatWon\(estimate\.unit_price\)\)\} · \$\{escapeHtml\(shortPriceSource\)\}/, 'resolved rows must show expected amount and a short price line');
+mustMatch(/order-amount-primary">예상 \$\{escapeHtml\(formatWon\(estimate\.expected_order_amount\)\)\}<\/span><span class="order-amount-secondary">\$\{escapeHtml\(pricePresentation\.visible\)\} · \$\{escapeHtml\(shortPriceSource\)\}/, 'resolved rows must show expected amount and explicit stock/order price labels');
 mustMatch(/\.order-amount \{[^}]*display: grid;[^}]*flex: 1 0 100%;/, 'amount details must occupy one orderly full-width row');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g, resolvedOrderRow\)\}/, 'unit conversion and mapped resolver evidence must share the same row');
 mustMatch(/예상 발주금액 \$\{formatWon\(estimate\.expected_order_amount\)\}/, 'amount chip title must disclose expected order amount');

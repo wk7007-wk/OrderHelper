@@ -199,7 +199,7 @@ def main():
             assert resolver_probe["firstRenderCalls"] == 1 and resolver_probe["secondRenderCalls"] == 1, f"each render must call the full resolver once: {resolver_probe}"
             assert resolver_probe["noIndexRenderCalls"] == 1, f"row-index-free browser render must still resolve once: {resolver_probe}"
             for field in ("candidateAmountText", "staleAmountText", "noIndexAmountText"):
-                assert "단가 2,400원" in resolver_probe[field] and "최신 엑셀 기준" in resolver_probe[field], resolver_probe
+                assert "1발주 2,400원" in resolver_probe[field] and "최신 엑셀 기준" in resolver_probe[field], resolver_probe
                 assert all(term not in resolver_probe[field] for term in ("실발주", "가격출처", "미저장", "금액÷수량", "가격 미해결")), resolver_probe
             for field in ("candidateAmountTitle", "staleAmountTitle", "noIndexAmountTitle"):
                 assert "실발주 5BOX" in resolver_probe[field], resolver_probe

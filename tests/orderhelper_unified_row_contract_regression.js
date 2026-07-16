@@ -129,6 +129,7 @@ let result = targetRow();
 assert.strictEqual(result.row.matchStatus, 'MATCHED', 'confirmed alias and factor must resolve MATCHED');
 assert.strictEqual(result.row.orderQty, 3, 'stock need 25 at factor 10 must resolve three order units');
 assert.strictEqual(result.row.unitPrice, 2400, 'Excel amount 12,000 / order qty 5 must resolve unit price 2,400');
+assert.strictEqual(result.row.perStockUnitPrice, 240, 'one stock unit must use order-unit price divided by factor 10');
 assert.strictEqual(result.row.expectedAmount, 7200, 'recommended order 3 * unit price 2,400 must resolve 7,200');
 assert.strictEqual(result.row.unitPriceEvidence.formula, 'amount / actualOrderQty', 'unit-price evidence must disclose the exact Excel equation');
 assert.strictEqual(result.row.orderQtyEvidence.formula, 'ceilDiscrete(stockNeed / factor)', 'factor must be applied once in the stock-to-order equation');
@@ -137,6 +138,45 @@ assert.strictEqual(result.row.expectedAmountEvidence.sourceRunId, 'run-new', 'to
 assert.deepStrictEqual(result.row.issues, [], 'valid matched price row must have no issues');
 assert.strictEqual(result.rows.filter(row => row.matchStatus === 'ITEM_UNMATCHED' && row.itemKey === result.row.itemKey).length, 0, 'matched item must never also appear unmatched');
 assert.strictEqual(result.rows.reduce((sum, row) => sum + (Number.isFinite(row.expectedAmount) ? row.expectedAmount : 0), 0), 7200, 'today expected total must sum each resolver row once');
+
+const wingPackItem = api.MASTER.find(row => row.name === '냉동-핫윙,비비윙스');
+assert(wingPackItem, 'live factor-10 wing item missing');
+const wingPackRow = {
+  matchStatus: 'MATCHED',
+  factor: 10,
+  unitPrice: 123200,
+  perStockUnitPrice: 12320,
+  actualOrderQty: 1,
+  chickenPriceSanity: 'not_applicable',
+  issues: [],
+  priceEvidence: {
+    valid: true,
+    basis: 'SFA_ORDER_UNIT_DIRECT_PRICE',
+    provenance: 'SFA_PRICE_HISTORY',
+    actualUnit: 'BOX',
+    actualOrderQty: 1,
+    amount: 123200,
+    dateKey: '20260711',
+    fileName: '3개월 발주.xlsx',
+    runId: 'wing-pack-price-run',
+    equation: { actualUnitPrice: { formula: 'source' } },
+  },
+};
+const wingPackEstimate = plain(api.expectedOrderAmountForItem(wingPackItem, 13.8, wingPackRow));
+assert.strictEqual(wingPackEstimate.recommended_order_qty, 2, '13.8 stock units at factor 10 must recommend two boxes');
+assert.strictEqual(wingPackEstimate.order_unit_price, 123200, 'one-box price must stay explicit in the amount contract');
+assert.strictEqual(wingPackEstimate.unit_price, 123200, 'legacy unit_price must remain the one-order-unit price');
+assert.strictEqual(wingPackEstimate.stock_unit_price, 12320, 'employee stock-unit price must be one-box price divided by 10');
+assert.strictEqual(wingPackEstimate.order_unit_to_stock_factor, 10, 'price meanings must carry the conversion factor');
+assert.strictEqual(wingPackEstimate.expected_order_amount, 246400, 'two recommended boxes at 123,200 won must total 246,400 won');
+const wingPackHtml = api.renderOrderAmountSpan(wingPackItem, 13.8, wingPackRow);
+const wingPackVisible = wingPackHtml.replace(/<[^>]+>/g, '');
+assert(wingPackVisible.includes('예상 246,400원'), 'live scenario must keep the correct expected spend');
+assert(wingPackVisible.includes('개당 12,320원 · 1박스 123,200원 · 최근 3개월 발주 기준'), 'live scenario must separate each price from one-box price');
+assert(wingPackHtml.includes('재고 개당 가격 12,320원'), 'detail title must identify the stock-unit price');
+assert(wingPackHtml.includes('발주 1박스 가격 123,200원'), 'detail title must identify the one-box price');
+assert(wingPackHtml.includes('환산 1박스 = 재고 10개'), 'detail title must disclose the price conversion direction');
+assert(!wingPackHtml.includes('단가 123,200원'), 'one-box amount must never be mislabeled as an ambiguous unit price');
 
 setBaseState();
 api.setSfaAnalysisHistoryForCheck(ledger([{
@@ -300,7 +340,7 @@ assert.strictEqual(Object.keys(plain(api.getAliasMappingsForCheck())).length, 0,
 const exactMappedHtml = api.renderOrderAmountSpan(item, exactMappedRow.stockNeed, exactMappedRow);
 const exactMappedVisible = exactMappedHtml.replace(/<[^>]+>/g, '');
 assert(exactMappedVisible.includes('예상 7,200원'), 'employee card must lead with the expected amount');
-assert(exactMappedVisible.includes('단가 2,400원 · 최신 엑셀 기준'), 'employee card must keep only a short unit-price source');
+assert(exactMappedVisible.includes('박당 240원 · 1박스 2,400원 · 최신 엑셀 기준'), 'employee card must separate stock-unit price from one-box price');
 assert(!/실발주|가격출처|미저장|금액÷수량/.test(exactMappedVisible), 'technical price provenance must stay out of visible card text');
 assert(exactMappedHtml.includes('실발주 5BOX') && exactMappedHtml.includes('가격출처 최신 엑셀 정확매칭 후보(미저장)·금액÷수량'), 'full quantity and provenance must remain in the detail title');
 
