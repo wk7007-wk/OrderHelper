@@ -389,7 +389,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0306';
+const APP_VERSION = '0717.0323';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -427,7 +427,7 @@ const CONFIRMED_SAVE_QUEUE_STORAGE_KEY = 'bbq_confirmed_save_queue_v1';
 
 // PIN 잠금. PIN 변경 시 새 PIN의 SHA-256 해시로 교체.
 const PIN_HASH = '38083c7ee9121e17401883566a148aa5c2e2d55dc53bc4a94a026517dbff3c6b';
-// 0510 보안 강화 — 5회 시도 후 30초 lock. 아래 exact token hash 세 대만 passwordless이며 이름/DB 후보는 신뢰하지 않는다.
+// 0510 보안 강화 — 5회 시도 후 30초 lock. 아래 실접속 확인 exact token hash 두 대만 passwordless이며 이름/DB 후보는 신뢰하지 않는다.
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30000;
 const DESKTOP_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -435,12 +435,11 @@ const REGISTRATION_WINDOW_MAX_MS = 60 * 60 * 1000;
 const REGISTRATION_REQUEST_TIMEOUT_MS = 5000;
 const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
 const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object.freeze([
-  'd21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08',
-  'c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c',
-  '8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635'
+  '20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491',
+  'b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6'
 ]);
 const AUTH_GEO = { storeLat: 37.2528352, storeLng: 127.4900516, radiusM: 700, deviceKey: 'bbq_desk_auth_device_v1', allowedDeviceHashes: PASSWORDLESS_TRUSTED_DEVICE_HASHES,
-      allowedDevices:{"d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08":{"enabled":true,"label":"사장","updatedAt":"2026-06-26T18:39:12+00:00"},"c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c":{"enabled":true,"label":"메인피시","updatedAt":"2026-06-27T11:30:18+00:00","phoneLast4":"0000"},"8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635":{"enabled":true,"label":"factory-pc","source":"user_explicit_static_allowlist"}}, ipFactorReserved: true };
+      allowedDevices:{"20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491":{"enabled":true,"label":"personal-phone","source":"verified_registration_window","registeredAt":1784225928552},"b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6":{"enabled":true,"label":"factory-pc","source":"verified_registration_window","registeredAt":1784226154751}}, ipFactorReserved: true };
 let pinAttempts = 0;
 let pinLockUntil = 0;
 let orderHelperStarted = false;

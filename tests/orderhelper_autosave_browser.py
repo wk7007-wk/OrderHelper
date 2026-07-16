@@ -541,11 +541,11 @@ def main():
                         exactPredicates: hashes.map(isPasswordlessTrustedDeviceHash),
                     };
                 }""",
-                "8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635",
+                "b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6",
             )
             assert trusted_auth["restored"] is True and trusted_auth["locked"] is False, trusted_auth
             assert trusted_auth["pinValue"] == "" and trusted_auth["gpsCalls"] == 0, trusted_auth
-            assert len(trusted_auth["hashes"]) == 3 and all(trusted_auth["exactPredicates"]), trusted_auth
+            assert len(trusted_auth["hashes"]) == 2 and all(trusted_auth["exactPredicates"]), trusted_auth
 
             unknown_auth = auth_page.evaluate(
                 """async () => {
@@ -661,7 +661,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0306"
+            assert active_patch["body"]["appVersion"] == "0717.0323"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])

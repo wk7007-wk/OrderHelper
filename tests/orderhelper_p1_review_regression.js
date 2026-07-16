@@ -107,6 +107,9 @@ assert.deepStrictEqual(
 );
 
 async function verifyFirebaseCas() {
+  // Let the page's fire-and-forget initial registration-window probe finish
+  // against the harness default fetch before counting CAS-only requests.
+  await new Promise(resolve => setImmediate(resolve));
   const localPayload = { savedAt: 5000, stateRevision: 50, inventoryRevision: 50, sfaOrderLedger: rawLedger('local-run', 'local.xlsx', 1, 5000), aiUsageEvidence: {} };
   const remoteV1 = { savedAt: 4000, remoteOnly: 'preserve-me', sfaOrderLedger: rawLedger('remote-run', 'remote.xlsx', 2, 4000) };
   const remoteV2 = api.mergeFirebasePayloadLedger(remoteV1, { sfaOrderLedger: rawLedger('concurrent-run', 'concurrent.xlsx', 3, 4500) });
