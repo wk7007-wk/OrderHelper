@@ -389,7 +389,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0323';
+const APP_VERSION = '0717.0342';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -434,6 +434,7 @@ const DESKTOP_GRACE_MS = 24 * 60 * 60 * 1000;
 const REGISTRATION_WINDOW_MAX_MS = 60 * 60 * 1000;
 const REGISTRATION_REQUEST_TIMEOUT_MS = 5000;
 const AUTH_DEBUG = new URLSearchParams(location.search).get('authDebug') === '1' && ['', 'localhost', '127.0.0.1'].includes(location.hostname);
+const STOCK_FLOW_DEBUG = new URLSearchParams(location.search).get('stockDebug') === '1';
 const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object.freeze([
   '20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491',
   'b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6'
@@ -3622,7 +3623,6 @@ function updateOutputOrderForName(name, resolvedRowsByItemKey = null) {
     const amount = wrap?.querySelector('.order-amount');
     if (amount && resolvedRowsByItemKey) amount.outerHTML = renderOrderAmountSpan(item, g, resolvedRow);
   });
-  refreshNeedBadge(days);
 }
 
 function handleOutputCellInput(target) {
@@ -3633,10 +3633,10 @@ function handleOutputCellInput(target) {
   const value = target.value;
   if (field === 'stock') {
     setOutputStockTotalByItemKey(itemKey, value);
-    scheduleDeferredInputWork({ names: [name], recomputeUsage: true });
+    scheduleDeferredInputWork({ names: [name], recomputeUsage: true, draftScope: 'entries' });
   } else if (field === 'k' || field === 'l') {
     setOverrideValue(name, field, value);
-    scheduleDeferredInputWork({ names: [name] });
+    scheduleDeferredInputWork({ names: [name], draftScope: 'overrides' });
   } else {
     return false;
   }
@@ -4882,6 +4882,21 @@ function conversionCandidateReason(candidate) {
   return `${conversionSourceLabel(candidate.source)} · ${conversionDirectionText(candidate.factor)} · ${Math.round((candidate.score || 0) * 100)}%${candidate.reason ? ' · ' + candidate.reason : ''}`;
 }
 
+function conversionCandidateCanBeDefault(candidate, item) {
+  const factor = normalizeConversionFactor(candidate?.factor);
+  if (!factor) return false;
+  if (candidate.source === 'manualUnit' || candidate.source === 'same') return true;
+  // One comparison can suggest a ratio, but a fractional ratio such as
+  // 1.5 / 1 is not enough evidence to become an applied default.
+  if (candidate.source === 'compare') return Math.abs(factor - Math.round(factor)) < 0.0005;
+  if (candidate.source === 'usage') return Number(candidate.score || 0) >= 0.8;
+  if (['movement', 'item', 'unit'].includes(candidate.source)) {
+    const applied = conversionFactorForItem(item);
+    return Number.isFinite(applied) && Math.abs(applied - factor) < 0.0005;
+  }
+  return false;
+}
+
 function isUserSelectedAliasStatus(status) {
   return status === 'confirmed' || status === 'manual';
 }
@@ -4921,7 +4936,9 @@ function buildOrderAliasMatches(data = lastSfaCompareData) {
       ? actualCandidates.find(candidate => candidate.actualName === saved.actualName) || null
       : null;
     const defaultCandidate = candidates[0] || null;
-    const conversionDefault = conversionCandidates.find(candidate => candidate.source !== 'saved') || conversionCandidates[0] || null;
+    const conversionDefault = conversionCandidates.find(candidate =>
+      candidate.source !== 'saved' && conversionCandidateCanBeDefault(candidate, item)
+    ) || null;
     const savedConversionFactor = normalizeConversionFactor(saved?.conversionFactor);
     const savedConversionLocked = Boolean(savedConversionFactor && isUserSelectedAliasStatus(saved?.conversionStatus || ''));
     const actualName = savedActualLocked ? saved.actualName : (defaultCandidate?.actualName || '');
@@ -5117,7 +5134,7 @@ function buildSfaAnalysisReadModel(data = lastSfaCompareData) {
 
 function sfaStatusText(status) {
   if (status === 'confirmed') return '확정';
-  if (status === 'default') return '기본';
+  if (status === 'default') return '자동추정';
   if (status === 'candidate') return '후보';
   if (status === 'manual') return '수동';
   if (status === 'conflict') return '충돌';
@@ -5127,7 +5144,7 @@ function sfaStatusText(status) {
 function conversionStatusText(status) {
   if (status === 'manual') return '직접';
   if (status === 'confirmed') return '확정';
-  if (status === 'default') return '기본';
+  if (status === 'default') return '자동추정';
   if (status === 'candidate') return '후보';
   return '미확정';
 }
@@ -5329,9 +5346,9 @@ function inlineAliasCorrectionHtml(row) {
     ? `1발주=${fmt(row.effectiveConversionFactor, 3)}개`
     : '환산 미확정';
   const meta = [
-    row.defaultActualName ? `기본 ${row.defaultActualName}` : '',
+    row.defaultActualName ? `자동후보 ${row.defaultActualName}` : '',
     row.savedActualName ? `확정 ${row.savedActualName}` : '',
-    row.defaultConversionFactor ? `기본 1발주=${fmt(row.defaultConversionFactor, 3)}개` : '',
+    row.defaultConversionFactor ? `자동후보 1발주=${fmt(row.defaultConversionFactor, 3)}개` : '',
     row.savedConversionFactor ? `저장 1발주=${fmt(row.savedConversionFactor, 3)}개` : '',
     row.conversionReason || row.reason || ''
   ].filter(Boolean).join(' · ');
@@ -5357,7 +5374,7 @@ function inlineAliasCorrectionHtml(row) {
         <input class="sfa-edit inline-alias-new-unit" type="text" data-alias-name="${escapeHtml(row.aliasName)}" placeholder="단위">
         <button class="inline-alias-new-button" type="button" data-alias-name="${escapeHtml(row.aliasName)}">별명 생성</button>
       </div>
-      <div class="inline-alias-meta">${escapeHtml(meta || '기본 후보를 분석 payload에 사용합니다. 선택은 확정, 숫자 입력은 직접값으로 저장됩니다.')}</div>
+      <div class="inline-alias-meta">${escapeHtml(meta || '자동추정 후보이며 아직 미확정입니다. 선택은 확정, 숫자 입력은 직접값으로 저장됩니다.')}</div>
     </div>
   </details>`;
 }
@@ -5392,7 +5409,7 @@ function aliasMatchRowHtml(row) {
   const meta = [
     row.aliasUnit ? `표시단위 ${row.aliasUnit}` : '',
     row.score ? `추천점수 ${Math.round(row.score * 100)}%` : '',
-    row.source === 'user' ? '사용자 확정' : '기본 선택',
+    row.source === 'user' ? '사용자 확정' : '자동 후보·미확정',
     '예: 1발주 = 10개이면 필요 25개는 3발주',
     conversionText
   ].filter(Boolean).join(' · ');
@@ -6332,8 +6349,10 @@ async function requestSfaOrderAnalysis() {
 function renderSaveState(label, tone = 'idle') {
   const el = document.getElementById('saveState');
   if (!el) return;
+  const nextClass = `status-pill ${tone}`;
+  if (el.textContent === label && el.className === nextClass) return;
   el.textContent = label;
-  el.className = `status-pill ${tone}`;
+  el.className = nextClass;
   updateStickyOffsets();
 }
 
@@ -6463,6 +6482,7 @@ function stockEventLabel(e, phase) {
 }
 
 function logStockEvent(e, phase) {
+  if (!STOCK_FLOW_DEBUG) return;
   const msg = stockEventLabel(e, phase);
   console.info('[stock-key]', msg);
   pushDebugLog('키 ' + msg, 'warn');
@@ -6711,6 +6731,7 @@ function emptyDeferredInputWork() {
     allNames: false,
     recomputeUsage: false,
     updateSales: false,
+    updateBadge: false,
     saveReason: 'auto'
   };
 }
@@ -6732,23 +6753,27 @@ function cancelFrameTask(handle) {
   else clearTimeout(handle.id);
 }
 
-function markDeferredInputDirty(reason = 'auto') {
+function markDeferredInputDirty(reason = 'auto', draftScope = 'all') {
   if (suppressAutoSave) return;
+  const scopes = new Set(Array.isArray(draftScope) ? draftScope : [draftScope]);
+  const persistAll = scopes.has('all');
   stateRevision = nextMonotonicRevision(stateRevision);
   const orderDaysEl = document.getElementById('orderDays');
   if (orderDaysEl) localStorage.setItem('bbq_orderDays', orderDaysEl.value);
   // input 이벤트에서 먼저 최소 draft를 동기 저장한다. 무거운 계산은 다음 frame으로 미뤄도
   // 앱 background/종료 전에 입력값과 pending marker는 반드시 남는다.
-  localStorage.setItem('bbq_entries', JSON.stringify(entries));
-  localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
-  localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
+  if (persistAll || scopes.has('entries')) localStorage.setItem('bbq_entries', JSON.stringify(entries));
+  if (persistAll || scopes.has('overrides')) localStorage.setItem('bbq_overrides', JSON.stringify(overrides));
+  if (persistAll || scopes.has('sales')) localStorage.setItem('bbq_dailySales', JSON.stringify(dailySales));
   localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
   localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
   localStorage.setItem(PENDING_SYNC_REVISION_STORAGE_KEY, String(stateRevision));
-  if (baseSales == null) localStorage.removeItem('bbq_baseSales');
-  else {
-    localStorage.setItem('bbq_baseSales', JSON.stringify(baseSales));
-    localStorage.setItem('bbq_baseSalesVersion', BASE_SALES_STORAGE_VERSION);
+  if (persistAll || scopes.has('base')) {
+    if (baseSales == null) localStorage.removeItem('bbq_baseSales');
+    else {
+      localStorage.setItem('bbq_baseSales', JSON.stringify(baseSales));
+      localStorage.setItem('bbq_baseSalesVersion', BASE_SALES_STORAGE_VERSION);
+    }
   }
   localDirty = true;
   renderSaveState('로컬 입력됨 · Enter 저장', 'dirty');
@@ -6769,9 +6794,10 @@ function runDeferredInputWork() {
   if (work.updateSales) updateSalesAvg();
   if (work.recomputeUsage) recomputeUsageAnalysis();
   const names = work.allNames ? orderItemList().map(item => item.name) : Array.from(work.names);
+  const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
+  if (work.updateBadge) refreshNeedBadge(days);
   if (work.recomputeUsage) names.forEach(name => updateDailyAnalysisForName(name));
   if (!names.length) return;
-  const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
   const resolvedRows = resolveUnifiedOrderRows(lastSfaCompareData, null, days);
   const resolvedRowsByItemKey = new Map(resolvedRows.map(row => [row.itemKey, row]));
   names.forEach(name => updateDerivedOrderForName(name, resolvedRowsByItemKey));
@@ -6784,11 +6810,14 @@ function scheduleDeferredInputWork(options = {}) {
   deferredInputWork.saveReason = options.saveReason || deferredInputWork.saveReason || 'auto';
   deferredInputWork.recomputeUsage = deferredInputWork.recomputeUsage || Boolean(options.recomputeUsage);
   deferredInputWork.updateSales = deferredInputWork.updateSales || Boolean(options.updateSales);
+  deferredInputWork.updateBadge = deferredInputWork.updateBadge || Boolean(options.updateBadge) || Boolean(options.allNames) || Boolean(options.names?.length);
   deferredInputWork.allNames = deferredInputWork.allNames || Boolean(options.allNames);
   (options.names || []).forEach(name => {
     if (name) deferredInputWork.names.add(name);
   });
-  markDeferredInputDirty(options.saveReason || deferredInputWork.saveReason || 'auto');
+  if (options.persistDraft !== false) {
+    markDeferredInputDirty(options.saveReason || deferredInputWork.saveReason || 'auto', options.draftScope || 'all');
+  }
   if (deferredInputWorkHandle) return;
   gridPerf.scheduledFrames += 1;
   const handle = scheduleFrameTask(runDeferredInputWork);
@@ -6802,6 +6831,21 @@ function flushDeferredInputWork() {
     deferredInputWorkHandle = null;
   }
   runDeferredInputWork();
+}
+
+function commitStockInputAfterFocus(target, reason) {
+  const entry = entries.find(row => row.id === target?.dataset?.id);
+  const name = entry?.name || '';
+  setTimeout(() => {
+    scheduleDeferredInputWork({
+      names: name ? [name] : [],
+      recomputeUsage: true,
+      updateBadge: true,
+      persistDraft: false,
+      saveReason: reason
+    });
+    flushAutoSave(reason);
+  }, 0);
 }
 
 function bindCellInputs() {
@@ -6821,11 +6865,11 @@ function bindCellInputs() {
         ent.stock = stock == null || !Number.isFinite(stock) ? null : stock;
         markInventoryMutation();
         updateDerivedOrderForName(ent.name);
-        scheduleDeferredInputWork({ names: [ent.name], recomputeUsage: true });
+        scheduleDeferredInputWork({ updateBadge: true, draftScope: 'entries' });
       } else if (f === 'zone') {
         ent.zone = v;
         markInventoryMutation();
-        scheduleDeferredInputWork({ saveReason: 'auto' });
+        scheduleDeferredInputWork({ saveReason: 'auto', draftScope: 'entries' });
       } else {
         // k or l (overrides per name)
         const n = ent.name;
@@ -6835,7 +6879,7 @@ function bindCellInputs() {
         else overrides[n][f] = num;
         if (Object.keys(overrides[n]).length === 0) delete overrides[n];
         updateDerivedOrderForName(n);
-        scheduleDeferredInputWork({ names: [n] });
+        scheduleDeferredInputWork({ updateBadge: true, draftScope: 'overrides' });
       }
     });
     inp.addEventListener('change', e => {
@@ -6852,7 +6896,6 @@ function bindCellInputs() {
         if (stockEnterHandledTargets.has(e.target)) {
           return;
         }
-        flushAutoSave('stockChange');
         setTimeout(() => {
           if (flowEpoch !== stockFlowEpoch) return;
           if (shouldFallbackAdvanceFromChange(e.target, currentId)) {
@@ -6860,6 +6903,7 @@ function bindCellInputs() {
           } else {
             sortStockRowsAndKeepFlow(currentId, 'change');
           }
+          commitStockInputAfterFocus(e.target, 'stockChange');
         }, 0);
         return;
       }
@@ -6883,6 +6927,8 @@ function bindCellInputs() {
       if (e.target.dataset.field === 'stock') {
         stockEnterHandledTargets.add(e.target);
         advanceStockInput(e.target.dataset.id, 'keydown');
+        commitStockInputAfterFocus(e.target, 'enter');
+        return;
       } else {
         e.target.blur();
       }
@@ -7142,7 +7188,7 @@ function bindBaseSalesInput() {
     const v = e.target.value;
     const n = v === '' ? null : parseFloat(v);
     baseSales = Number.isFinite(n) && n > 0 ? n : null;
-    scheduleDeferredInputWork({ allNames: true, updateSales: true });
+    scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'base' });
   });
   inp.addEventListener('change', () => flushAutoSave());
   inp.addEventListener('keydown', e => {
@@ -7178,7 +7224,7 @@ function renderSalesInputs() {
       const v = e.target.value;
       const num = v === '' ? null : parseFloat(v);
       dailySales[parseInt(e.target.dataset.idx)] = num;
-      scheduleDeferredInputWork({ allNames: true, updateSales: true });
+      scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'sales' });
     });
     inp.addEventListener('change', () => flushAutoSave());
     inp.addEventListener('keydown', e => {

@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0323';/, 'APP_VERSION must match the KST verified-device release time');
+mustMatch(/const APP_VERSION = '0717.0342';/, 'APP_VERSION must match the KST input-latency release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -285,8 +285,9 @@ mustMatch(/const inlineAliasRowsByName = new Map\(buildOrderAliasMatches\(lastSf
 mustMatch(/data-item-name="\$\{escapeHtml\(item\.name\)\}"/, 'input row name cell must keep item identity while showing inline correction controls');
 mustMatch(/bindInlineAliasControls\(\);\s*bindInlineSiteControls\(\);\s*updateStickyOffsets\(\);/, 'single grid must bind inline alias and site controls after rendering rows');
 mustMatch(/const allowedStatuses = new Set\(\['candidate', 'default', 'confirmed', 'manual'\]\);/, 'alias mapping sanitizer must preserve default status');
-mustMatch(/if \(status === 'default'\) return '기본';/, 'alias default status must be visible in UI');
+mustMatch(/if \(status === 'default'\) return '자동추정';/, 'alias default status must be clearly marked as an automatic estimate');
 mustMatch(/function conversionStatusText\(status\)/, 'conversion status label helper missing');
+mustMatch(/function conversionCandidateCanBeDefault\(candidate, item\)[\s\S]*candidate\.source === 'compare'[\s\S]*Math\.abs\(factor - Math\.round\(factor\)\) < 0\.0005/, 'single-compare fractional ratios must remain review-only candidates');
 mustMatch(/effectiveOrderAliasMappings,/, 'SFA request payload must include effective alias mappings');
 mustMatch(/if \(source === 'usage'\) return '실사용량 비교';/, 'usage-based conversion source label missing');
 mustMatch(/function conversionDirectionText\(factor, orderUnit = '발주단위', checkUnit = '체크\/재고'\)/, 'conversion direction helper missing');
@@ -349,7 +350,7 @@ mustMatch(/document\.querySelectorAll\(`tr\[data-item-key="\$\{itemKey\}"\]`\)/,
 mustMatch(/function scheduleDeferredInputWork\(options = \{\}\)/, 'input edits must use deferred calculation scheduler');
 mustMatch(/const resolvedRows = resolveUnifiedOrderRows\(lastSfaCompareData, null, days\);\s*const resolvedRowsByItemKey = new Map\(resolvedRows\.map\(row => \[row\.itemKey, row\]\)\);\s*names\.forEach\(name => updateDerivedOrderForName\(name, resolvedRowsByItemKey\)\);\s*renderOrderAmountSummary\(resolvedRows\);/, 'one deferred frame must share one resolver map across all dirty names and the total');
 mustMatch(/let deferredInputRevision = 0;/, 'deferred input work must track a latest revision token');
-mustMatch(/localStorage\.setItem\('bbq_entries', JSON\.stringify\(entries\)\);[\s\S]*localStorage\.setItem\(PENDING_SYNC_REVISION_STORAGE_KEY, String\(stateRevision\)\);/, 'input events must persist a durable local draft before deferred work');
+mustMatch(/scopes\.has\('entries'\)\) localStorage\.setItem\('bbq_entries', JSON\.stringify\(entries\)\);[\s\S]*localStorage\.setItem\(PENDING_SYNC_REVISION_STORAGE_KEY, String\(stateRevision\)\);/, 'input events must persist the changed durable draft before deferred work');
 mustNotMatch(/markDeferredInputDirty\([\s\S]*?scheduleAutoSave\(reason\)/, 'draft input must not schedule a remote save');
 mustMatch(/const work = deferredInputWork;\s*deferredInputWork = emptyDeferredInputWork\(\);\s*if \(revision !== deferredInputRevision\) return;/, 'deferred input work must not apply stale calculations over newer input');
 mustMatch(/const SAVE_REQUEST_TIMEOUT_MS = 20000;/, 'Firebase autosave must have a bounded request timeout');
@@ -359,9 +360,11 @@ mustMatch(/fetch\(currentUrl, \{ method: 'PUT',[\s\S]*body, signal: controller\.
 mustMatch(/controller\.abort\(\);/, 'a failed save target must abort its sibling before releasing single-flight');
 mustMatch(/function retryConfirmedRemotePending\(reason = 'recovery'\)/, 'durable confirmed save retry helper missing');
 mustMatch(/window\.addEventListener\('online', \(\) => retryConfirmedRemotePending\('online'\)\);/, 'online recovery must retry only a confirmed save');
-mustMatch(/setOutputStockTotalByItemKey\(itemKey, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true \}\);/, 'output stock edits must use the same stable item key and defer usage/order refresh');
-mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\] \}\);/, 'output buffer/daily edits must defer order refresh');
-mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*updateDerivedOrderForName\(ent\.name\);\s*scheduleDeferredInputWork\(\{ names: \[ent\.name\], recomputeUsage: true \}\);/, 'stock input must patch its output immediately before deferred heavy work');
+mustMatch(/setOutputStockTotalByItemKey\(itemKey, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true, draftScope: 'entries' \}\);/, 'output stock edits must use the same stable item key and persist only the changed draft scope');
+mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], draftScope: 'overrides' \}\);/, 'output buffer/daily edits must persist only override drafts');
+mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*updateDerivedOrderForName\(ent\.name\);\s*scheduleDeferredInputWork\(\{ updateBadge: true, draftScope: 'entries' \}\);/, 'stock input must patch its row immediately without scheduling 90-day analysis per digit');
+mustMatch(/function logStockEvent\(e, phase\) \{\s*if \(!STOCK_FLOW_DEBUG\) return;/, 'stock key debug persistence must be disabled outside explicit diagnostics');
+mustMatch(/function commitStockInputAfterFocus\(target, reason\)[\s\S]*persistDraft: false,[\s\S]*flushAutoSave\(reason\);/, 'stock completion must move focus before heavy analysis and confirmed save');
 mustMatch(/function flushAutoSave\(reason\) \{\s*flushDeferredInputWork\(\);\s*if \(!reason \|\| reason === 'auto'\) return false;\s*return saveToFB\(reason\);/, 'flushAutoSave must reject draft/auto calls and persist scheduled input before explicit commit');
 mustMatch(/async function flushCurrentBeforeSfaAnalysisRequest\(\) \{\s*flushDeferredInputWork\(\);/, 'SFA request save gate must flush pending input work first');
 mustMatch(/if \(!confirmCurrentSave\('sfaAnalysis'\)\) return false;\s*return waitForSaveIdle\(\);/, 'SFA request must wait for an Enter-equivalent confirmed save');
@@ -467,7 +470,7 @@ mustMatch(/if \(!options\.allowDuringGridEdit && activeGridCellInput\(\)\) \{\s*
 mustMatch(/if \(stockEnterHandledTargets\.has\(e\.target\)\) \{\s*return;\s*\}/, 'all stale changes from the exact Enter-handled DOM input must stay suppressed');
 mustNotMatch(/skipStockRenderOnceId/, 'global entry-id dedupe can suppress the wrong replacement input');
 mustMatch(/th \{ position: sticky; top: 0;/, 'mobile table header must stay at the table-wrap origin instead of being offset into body rows');
-mustMatch(/모바일 숫자키보드의 Next[\s\S]*flushAutoSave\('stockChange'\);/, 'mobile Next/change must commit stock without requiring a keydown Enter event');
+mustMatch(/모바일 숫자키보드의 Next[\s\S]*commitStockInputAfterFocus\(e\.target, 'stockChange'\);/, 'mobile Next/change must commit stock after moving focus without requiring Enter');
 mustMatch(/advanceStockInput\(e\.target\.dataset\.id, 'keydown'\)/, 'keydown Enter must use shared helper');
 mustMatch(/advanceStockInput\(currentId, 'change'\)/, 'change fallback must use shared helper');
 mustMatch(/sortStockRowsAndKeepFlow\(currentId, 'change'\)/, 'change with already-correct focus must preserve current DOM flow');
@@ -916,6 +919,18 @@ assert.strictEqual(aliasDraft.effectiveConversionFactor, 2, 'alias draft should 
 let effectiveAliases = api.effectiveOrderAliasMappingsForPayload(compareOnlyData);
 assert.strictEqual(effectiveAliases[cheeseAlias.aliasName].actualName, 'BBQ치즈볼', 'effective alias payload should use default actual name when no confirmed mapping exists');
 assert.strictEqual(effectiveAliases[cheeseAlias.aliasName].conversionFactor, 2, 'effective alias payload should use default conversion when no manual conversion exists');
+const fractionalCompareData = {
+  ...compareOnlyData,
+  comparison: {
+    ...compareOnlyData.comparison,
+    matched: compareOnlyData.comparison.matched.map(row => ({ ...row, expected_stock_need: 7.5 }))
+  }
+};
+const fractionalAlias = api.buildOrderAliasMatches(fractionalCompareData)
+  .find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');
+assert(fractionalAlias.conversionCandidates.some(row => row.factor === 1.5 && row.source === 'compare'), 'a fractional one-compare ratio must remain visible for review');
+assert.strictEqual(fractionalAlias.conversionDefault.source, 'same', 'a fractional one-compare ratio must not displace the safe same-unit default');
+assert.strictEqual(fractionalAlias.effectiveConversionFactor, 1, 'unconfirmed fractional compare evidence must not become the applied effective factor');
 api.setAliasMappingsForCheck({ [cheeseAlias.aliasName]: { actualName: 'BBQ치즈볼', actualUnit: 'BOX' } });
 aliasRows = api.buildOrderAliasMatches(compareOnlyData);
 cheeseAlias = aliasRows.find(row => row.aliasName === '냉동-치즈볼-BBQ치즈볼(크림)');

@@ -9,11 +9,12 @@
 
 ## 절대 기준
 - SFA 자동입력은 품목명, 단위, 별칭, 환산 규칙이 확정된 뒤에만 진행한다.
-- 계산식과 사용자 입력 기록은 화면 정리 때문에 숨기거나 잃지 않는다. 수치 입력 이벤트는 값 반영과 local draft 보존을 먼저 끝내고 계산/DOM 갱신을 최신 revision 기준으로 스케줄링해 입력을 막지 않는다. 재고칸의 Enter 또는 모바일 Next가 만든 `change`는 입력 완료로 원격 확정하고, 완료 전 `input` draft와 다른 필드의 일반 blur/change는 원격 전송하지 않는다.
+- 계산식과 사용자 입력 기록은 화면 정리 때문에 숨기거나 잃지 않는다. 수치 입력 이벤트는 해당 값과 변경된 local draft 범위만 먼저 보존하고 현재 행 계산만 즉시 패치한다. 디버그 로그·전체 resolver·90일 사용량 분석·확정 payload 생성은 매 숫자 입력에서 실행하지 않고 Enter/모바일 Next로 포커스를 옮긴 뒤 수행한다. 완료 전 `input` draft와 다른 필드의 일반 blur/change는 원격 전송하지 않는다.
 - 입력값과 출력 계산은 별도 화면이 아니라 같은 행에 둔다. 표의 stable `itemKey`와 구역별 stable `entryKey`는 유지하고 `구역 입력순`/`최초 SFA 발주순`은 동일 DOM/data의 정렬 컨텍스트만 바꾼다. 입력순에서는 재고 Enter 뒤 미입력→입력완료→숨김 순으로 다시 정렬하고 다음 미입력 재고칸에 포커스를 유지하며, SFA순에서는 행 순서를 고정하고 다음 칸만 이동한다. `/current`와 `/history/{date}`에는 원본 `entries`와 함께 `inventoryByItemKey`, `stateRevision`, `inventoryRevision`을 저장하고, 저장 중 새 입력이나 포커스 중 대기한 원격 current가 최신 revision을 덮지 못하게 한다.
 - 완료 확정본은 localStorage `bbq_confirmed_save_queue_v1`의 immutable `active + queued latest`로 보존한다. `/current`와 같은 KST `/history/{date}`가 모두 성공해야 제거하며 timeout/부분실패/재시작은 확정 당시 입력 snapshot·date를 유지한다. 전송 전 두 node를 ETag로 다시 읽어 다른 client의 ledger event를 합치고, 한 CAS attempt 안에서는 동일 merged body를 두 node에 쓴다. 완료되지 않은 draft는 online/visibility/startup만으로 원격 전송하지 않는다.
 - 모바일 키보드 Enter/다음 동작은 실제 직원폰 흐름 기준으로 본다.
 - 사용자는 단위를 보지 않는다. `orderUnitToStockFactor=10`의 뜻은 발주수량 10이 아니라 `1발주 단위 = 재고/사용량 10개`다. 발주량은 `ceil(필요 개수 / factor)`로 계산해 25개 필요면 3발주, 실제 2발주는 재고/사용량 20개로 환산한다. factor 방향을 UI, correction payload, AI evidence에서 뒤집지 않는다.
+- `기본` 대신 `자동추정`으로 표시하고 미확정임을 함께 알린다. 단일 최신비교의 `필요량 ÷ 실발주량`이 1.5처럼 소수로 나온 경우는 환산 후보에는 남기되 자동 적용 기본값으로 쓰지 않는다. 사용자 확정, 동일단위, 정수 묶음 후보 또는 충분히 반복된 실사용 근거만 자동 기본값이 될 수 있다.
 - 체크단위와 발주단위가 다르면 과거 재고 변동값, 날짜별 `필요기준-체크재고` 실사용량 추정값, SFA 실발주량으로 품목별 `orderUnitToStockFactor`를 추정해 발주량에 반영한다.
 - 하루사용량 입력/계산은 수동값을 기준으로 한다. `이전 남은재고 + 실발주 입고량 - 다음 남은재고 = 실사용량` 분석값은 엑셀분석 참고/리포트이며, 수동값과 발주 계산을 자동 덮어쓰지 않는다.
 - 엑셀분석으로 기록된 실발주 이력은 실사용 참고 배지/툴팁에 즉시 반영한다. `current/overrides/*/l` 수동 하루사용량은 자동 할당하거나 덮어쓰지 않는다.
@@ -76,8 +77,8 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 배포판 기준: `20260717-07` / `0717.0323` / verified personal-phone and factory-PC exact hashes. 등록창은 후보 2개 확인 직후 닫았고 메인PC·과거 후보 hash는 passwordless 목록에서 제거했다. unknown PIN+factor, 입력 DOM/모바일 header, Excel 가격·원문·pair CAS와 기존 stable key·revision·수동값 보호는 유지한다.
-- 완료 포인터: `20260717-07 Finalize two verified passwordless devices`; 이전 포인터 `20260717-06 Bounded registration-window hash capture`, `20260717-05 Passwordless exact-hash trusted devices`.
+- 최신 배포판 기준: `20260717-08` / `0717.0342` / low-latency stock input and honest conversion defaults. 매 숫자 입력의 debug/전체 resolver/90일 분석을 제거하고, 포커스 이동 뒤 확정 저장한다. 단일 비교 소수 환산은 후보 전용이며 `기본` 표시는 `자동추정`으로 바꿨다. 개인폰·공장PC exact hash 두 개와 기존 저장/CAS/수동값 보호는 유지한다.
+- 완료 포인터: `20260717-08 Low-latency input and fractional conversion candidate guard`; 이전 포인터 `20260717-07 Finalize two verified passwordless devices`, `20260717-06 Bounded registration-window hash capture`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, `node tests/orderhelper_single_grid_ledger_regression.js`, `node tests/orderhelper_p1_review_regression.js`, `node tests/orderhelper_autosave_regression.js`, `python3 tests/orderhelper_autosave_browser.py`, inline JS syntax, `git diff --check`. 로컬 Playwright는 Firebase를 interception해 ETag pair-CAS, IME/change/Enter, stored-XSS, delegated listener를 검증한다. 실제 공장 PC/SiteBot worker·live 배포 검증은 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, 과거 producer가 버린 금액은 원본 Excel 재분석 없이는 복구할 수 없음, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.

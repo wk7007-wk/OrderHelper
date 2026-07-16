@@ -195,7 +195,7 @@ def main():
             assert resolver_probe["afterCandidateAliasCount"] == 0, "exact mappedName price evidence must not save an alias"
             assert resolver_probe["staleAliasPreserved"] == "브라우저 과거 저장 별명", "stale saved alias must remain user-owned while mappedName recovers price"
             assert resolver_probe["burstResolverCallsBeforeFrame"] == 0, f"150 stock inputs must not run price resolver synchronously: {resolver_probe}"
-            assert resolver_probe["burstResolverCallsAfterFrame"] == 1, f"150 stock inputs must share one frame-batched price resolver: {resolver_probe}"
+            assert resolver_probe["burstResolverCallsAfterFrame"] == 0, f"draft stock typing must not run the full price resolver before completion: {resolver_probe}"
             assert resolver_probe["immediateNeed"] == resolver_probe["expectedNeedText"], f"need must patch immediately: {resolver_probe}"
             assert resolver_probe["immediateOrder"] == resolver_probe["expectedOrder"], f"order quantity must patch immediately: {resolver_probe}"
             show_alias_review(page)

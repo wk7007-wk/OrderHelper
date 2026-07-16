@@ -141,10 +141,20 @@ def main():
             fixture = page.evaluate(
                 """() => {
                     const input = document.querySelector('input.cell[data-field="stock"]');
+                    window.__draftRecomputeCount = 0;
+                    window.__draftOriginalRecompute = recomputeUsageAnalysis;
+                    window.__draftDebugBefore = debugLogs.length;
+                    window.__draftResolverBefore = gridPerf.resolverRuns;
+                    recomputeUsageAnalysis = (...args) => {
+                        window.__draftRecomputeCount += 1;
+                        return window.__draftOriginalRecompute(...args);
+                    };
+                    const started = performance.now();
                     for (let value = 1; value <= 10; value += 1) {
                         input.value = String(value);
                         input.dispatchEvent(new Event('input', { bubbles: true }));
                     }
+                    const inputDurationMs = performance.now() - started;
                     window.dispatchEvent(new Event('online'));
                     document.dispatchEvent(new Event('visibilitychange'));
                     const local = JSON.parse(localStorage.getItem('bbq_entries') || '[]');
@@ -153,14 +163,28 @@ def main():
                         itemKey: input.dataset.itemKey,
                         localStock: local.find(row => row.id === input.dataset.id)?.stock,
                         pending: Number(localStorage.getItem('bbq_pending_sync_revision') || 0),
-                        status: document.getElementById('saveState').textContent
+                        status: document.getElementById('saveState').textContent,
+                        inputDurationMs
                     };
                 }"""
             )
             page.wait_for_timeout(1600)
+            draft_perf = page.evaluate(
+                """() => {
+                    const result = {
+                        recomputeCount: window.__draftRecomputeCount,
+                        debugDelta: debugLogs.length - window.__draftDebugBefore,
+                        resolverDelta: gridPerf.resolverRuns - window.__draftResolverBefore,
+                    };
+                    recomputeUsageAnalysis = window.__draftOriginalRecompute;
+                    return result;
+                }"""
+            )
             assert writes == [], "ten draft stock inputs plus online/visibility must produce PUT 0"
             assert fixture["localStock"] == 10 and fixture["pending"] > 0
             assert fixture["status"] == "로컬 입력됨 · Enter 저장"
+            assert fixture["inputDurationMs"] < 100, fixture
+            assert draft_perf == {"recomputeCount": 0, "debugDelta": 0, "resolverDelta": 0}, draft_perf
 
             page.reload(wait_until="domcontentloaded")
             page.evaluate("startOrderHelperApp(); document.activeElement?.blur()")
@@ -661,7 +685,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0323"
+            assert active_patch["body"]["appVersion"] == "0717.0342"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])
