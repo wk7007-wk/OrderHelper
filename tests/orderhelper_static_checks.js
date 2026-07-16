@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0434';/, 'APP_VERSION must match the KST in-app-browser trust release time');
+mustMatch(/const APP_VERSION = '0717.0447';/, 'APP_VERSION must match the KST employee-safe auth-copy release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -41,13 +41,20 @@ mustMatch(/const SFA_PRICE_HISTORY_PATH = `\$\{FB_PATH\}\/sfaPriceHistory\/lates
 mustMatch(/const DESKTOP_ACCESS_PATH = `\$\{FB_PATH\}\/desktopAccess`;/, 'desktop access Firebase path missing');
 mustMatch(/const DESKTOP_GRACE_MS = 24 \* 60 \* 60 \* 1000;/, 'desktop grace window must be explicitly 24 hours');
 mustMatch(/radiusM: 700/, 'GPS auth radius must be temporarily 700m');
-mustMatch(/매장 GPS 700m/, 'auth UI must disclose the temporary 700m GPS radius');
+mustMatch(/등록된 단말은 자동으로 열립니다\. 처음 사용하는 단말은 PIN을 입력하거나 관리자에게 문의하세요\./, 'employee auth UI must show only actionable guidance');
+mustNotMatch(/등록된 개인폰·메인PC·공장PC|PIN \+ 승인 데스크탑|GPS 확인 실패\. 데스크탑 후보로 기록됨|단말ID \$\{/, 'employee auth UI must not expose device, GPS, candidate, or hash diagnostics');
+mustMatch(/function authUserMessage\(error\)[\s\S]*관리자에게 등록을 요청해 주세요\./, 'auth failures must use employee-safe guidance');
+mustMatch(/catch \(e\) \{\s*setPinMessage\(authUserMessage\(e\)\);/, 'raw auth errors must not be rendered to employees');
+mustMatch(/id="desktopAccessBtn"[^>]*hidden aria-hidden="true"/, 'employee UI must hide the desktop-access diagnostics button');
+mustMatch(/id="desktopAccessPanel" hidden aria-hidden="true"/, 'employee UI must hide the desktop-access diagnostics panel');
+mustMatch(/function renderDesktopAccessPanel\(\)[\s\S]*if \(!AUTH_DEBUG\) \{[\s\S]*body\.replaceChildren\(\);/, 'live employee DOM must not render desktop-access records');
+mustMatch(/async function toggleDesktopAccessPanel\(\) \{\s*if \(!AUTH_DEBUG\) return;/, 'live employee UI must not open the desktop-access panel');
 mustMatch(/const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object\.freeze\(\[[\s\S]*20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491[\s\S]*b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6[\s\S]*3478b8091ca76988cdc84079f963c4c224b1d440d2748439bf9ca0a61952c6d3[\s\S]*\]\);/, 'passwordless access must be limited to the three freshly verified token hashes');
 mustMatch(/"3478b8091ca76988cdc84079f963c4c224b1d440d2748439bf9ca0a61952c6d3":\{"enabled":true,"label":"factory-pc-codex-in-app","source":"verified_registration_window","registeredAt":1784230390832\}/, 'Codex in-app browser trust metadata must remain tied to the verified exact hash');
 mustNotMatch(/d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08|c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c|8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635/, 'stale personal, main-PC, and unverified factory hashes must be removed');
 mustMatch(/function isPasswordlessTrustedDeviceHash\(hash\)/, 'exact static trusted-device hash predicate missing');
 mustMatch(/if \(isPasswordlessTrustedDeviceHash\(id\)\) \{[\s\S]*unlockOrderHelper\(\);[\s\S]*return true;/, 'trusted restore must unlock before PIN, network, or GPS factors');
-mustMatch(/미등록 단말: PIN \+ 승인 데스크탑\/매장 GPS 700m 필요/, 'unknown-device PIN and factor fallback must remain visible');
+mustMatch(/등록되지 않은 단말입니다\. PIN을 입력하거나 관리자에게 등록을 요청해 주세요\./, 'unknown-device guidance must remain actionable without diagnostics');
 mustNotMatch(/device\.name[\s\S]{0,120}isPasswordlessTrustedDeviceHash/, 'device labels must never authorize passwordless entry');
 mustMatch(/const REGISTRATION_WINDOW_MAX_MS = 60 \* 60 \* 1000;/, 'registration window must be capped at one hour');
 mustMatch(/function activeRegistrationWindow\(source, now = Date\.now\(\)\)/, 'strict registration-window validator missing');
@@ -57,7 +64,7 @@ mustMatch(/function registrationCandidatePath\(windowId, hash\)[\s\S]*\^\[a-f0-9
 mustMatch(/deviceNameTrust: 'display_only'/, 'registration candidate names must be marked display-only');
 mustMatch(/method: 'PATCH',[\s\S]*body: JSON\.stringify\(payload\)/, 'registration candidates must use a bounded PATCH payload');
 mustNotMatch(/payload\s*=\s*\{[\s\S]{0,900}\btoken\s*:/, 'registration candidate payload must never contain the raw token');
-mustMatch(/id="registrationAccessStatus" hidden>임시 등록 접속<\/span>/, 'temporary registration access must be visible after unlock');
+mustMatch(/id="registrationAccessStatus" hidden>임시 접속<\/span>/, 'temporary registration access must remain visible without diagnostics');
 mustMatchPy(/--validate-local-sfa-history/, 'local SFA history mapping validation flag missing');
 mustMatchPy(/local_sfa_backfill_low_confidence_rows/, 'local SFA mapping validation must expose low-confidence row count');
 mustMatch(/function advanceStockInput\(currentId, source = 'manual'\)/, 'stock enter helper missing');
@@ -164,7 +171,7 @@ mustMatch(/name:"신선육\(10호\)-뼈한마리",unit:"박\/박스"/, 'fresh me
 mustMatch(/function requestSfaOrderAnalysis\(\)/, 'SFA analysis request button handler missing');
 mustMatch(/id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis\(\)"/, 'SFA analysis request button missing');
 mustMatch(/id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel\(\)">오차보기<\/button>/, 'SFA compare result button missing');
-mustMatch(/id="desktopAccessBtn" type="button" onclick="toggleDesktopAccessPanel\(\)">접근관리<\/button>/, 'desktop access management button missing');
+mustMatch(/id="desktopAccessBtn" type="button" onclick="toggleDesktopAccessPanel\(\)" hidden aria-hidden="true">접근관리<\/button>/, 'desktop access management button must remain local-debug only');
 mustMatch(/id="desktopAccessPanel"/, 'desktop access panel missing');
 mustMatch(/id="sfaComparePanel"/, 'SFA compare panel missing');
 mustMatch(/data-tab="match" onclick="setSfaAnalysisTab\('match'\)">1:1 매칭<\/button>/, '1:1 matching tab missing');

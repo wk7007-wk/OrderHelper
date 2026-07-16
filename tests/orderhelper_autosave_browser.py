@@ -556,6 +556,9 @@ def main():
                     document.body.classList.add('auth-locked');
                     document.getElementById('pinOverlay').classList.remove('authed');
                     const restored = await restoreAuthIfPossible();
+                    await toggleDesktopAccessPanel();
+                    const accessButton = document.getElementById('desktopAccessBtn');
+                    const accessPanel = document.getElementById('desktopAccessPanel');
                     return {
                         restored,
                         locked: document.body.classList.contains('auth-locked'),
@@ -563,12 +566,19 @@ def main():
                         gpsCalls: window.__gpsCalls,
                         hashes,
                         exactPredicates: hashes.map(isPasswordlessTrustedDeviceHash),
+                        accessButtonHidden: accessButton.hidden,
+                        accessPanelHidden: accessPanel.hidden,
+                        accessPanelClassHidden: accessPanel.classList.contains('hidden'),
+                        accessBodyText: document.getElementById('desktopAccessBody').textContent,
                     };
                 }""",
                 "b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6",
             )
             assert trusted_auth["restored"] is True and trusted_auth["locked"] is False, trusted_auth
             assert trusted_auth["pinValue"] == "" and trusted_auth["gpsCalls"] == 0, trusted_auth
+            assert trusted_auth["accessButtonHidden"] is True, trusted_auth
+            assert trusted_auth["accessPanelHidden"] is True and trusted_auth["accessPanelClassHidden"] is True, trusted_auth
+            assert trusted_auth["accessBodyText"] == "", trusted_auth
             assert trusted_auth["hashes"] == [
                 "20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491",
                 "b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6",
@@ -594,7 +604,19 @@ def main():
             )
             assert unknown_auth["restored"] is False and unknown_auth["locked"] is True, unknown_auth
             assert unknown_auth["activeId"] == "pinInput" and unknown_auth["gpsCalls"] == 0, unknown_auth
-            assert "미등록 단말" in unknown_auth["message"], unknown_auth
+            assert unknown_auth["message"] == "등록되지 않은 단말입니다. PIN을 입력하거나 관리자에게 등록을 요청해 주세요.", unknown_auth
+            assert "GPS" not in unknown_auth["message"] and "단말ID" not in unknown_auth["message"], unknown_auth
+            friendly_pin_failure = auth_page.evaluate(
+                """async () => {
+                    hashPin = async () => PIN_HASH;
+                    verifyAuthFactor = async () => { throw new Error('DESKTOP_REGISTRATION_REQUIRED'); };
+                    document.getElementById('pinInput').value = '0000';
+                    await checkPin();
+                    return document.getElementById('pinError').textContent;
+                }"""
+            )
+            assert friendly_pin_failure == "이 단말은 아직 등록되지 않았습니다. 관리자에게 등록을 요청해 주세요.", friendly_pin_failure
+            assert "GPS" not in friendly_pin_failure and "3478" not in friendly_pin_failure, friendly_pin_failure
             auth_page.close()
 
             registration_state = {"mode": "disabled", "window_gets": 0, "patches": [], "window_start": 0, "window_end": 0}
@@ -665,6 +687,7 @@ def main():
                             locked: document.body.classList.contains('auth-locked'),
                             statusHidden: status.hidden,
                             statusText: status.textContent,
+                            statusTitle: status.title,
                         };
                     }""",
                     {"token": token, "hashValue": hash_value},
@@ -677,7 +700,8 @@ def main():
                 "restored": True,
                 "locked": False,
                 "statusHidden": False,
-                "statusText": "임시 등록 접속",
+                "statusText": "임시 접속",
+                "statusTitle": "관리자가 허용한 임시 접속입니다.",
             }, active_registration
             assert len(registration_state["patches"]) == before_patches + 1, registration_state
             active_patch = registration_state["patches"][-1]
@@ -689,7 +713,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0434"
+            assert active_patch["body"]["appVersion"] == "0717.0447"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])

@@ -23,6 +23,7 @@
 
 ## UI/동선 기준
 - 구역/품목/재고/여유/일사용/필요량/추천발주·분석·금액은 한 표에서 본다. 발주가 필요한 각 품목 행에는 실발주 수량, 단가, 오늘 예상액, 가격 출처 또는 한국어 누락 사유를 표시하고, 상단 총액은 유효 금액만 합산해 가격 미해결 건수와 분리한다. 미입력, 입력완료, 숨김, 정렬 전환은 입력 동선을 방해하지 않고 정렬 뒤에도 값·포커스·caret을 복구한다.
+- 직원 인증 화면에는 단말 hash, GPS 반경·거리, 후보 기록 결과, 등록창 ID·만료시각 같은 내부 진단 정보를 표시하지 않는다. 내부 인증 증거와 후보 기록은 유지하되 화면에는 자동 진입 여부와 PIN 입력·관리자 문의처럼 사용자가 할 일만 짧은 한국어로 안내한다. 기기 hash·IP·user-agent·승인/개방 제어를 담은 `접근관리` 패널은 live 직원 화면에서 숨기고 로컬 `authDebug` 검증에서만 연다.
 - 발주 품목 출력순서는 최초 SFA 순서를 기준으로 고정한다. 저장되어 있던 사용자 지정 `outputOrder`는 읽어도 적용하지 않는다.
 - 본 페이지/SFA 비교 패널은 `1:1 매칭`, `단위 보정`, `미매칭`, `입출력`을 한 화면에서 전환해 확인한다.
 - SFA 품목명/규격/단위 기반 후보 산정, 확정/후보/미매칭/충돌 상태 표시, 내부 품목 수동 확정, CSV/탭/JSON 입력과 JSON export를 제공한다.
@@ -77,8 +78,8 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 배포판 기준: `20260717-09` / `0717.0434` / verified factory-PC Codex in-app browser exact hash. 개인폰·공장PC 일반 브라우저·공장PC Codex 앱 내 브라우저 exact hash 세 개만 자동 진입하며, 기존 low-latency stock input·소수 환산 후보 방어·저장/CAS/수동값 보호는 유지한다.
-- 완료 포인터: `20260717-09 Trust factory-PC Codex in-app browser exact hash`; 이전 포인터 `20260717-08 Low-latency input and fractional conversion candidate guard`, `20260717-07 Finalize two verified passwordless devices`.
+- 최신 배포판 기준: `20260717-10` / `0717.0447` / employee-safe auth copy. 공장PC Codex 앱 내 브라우저 exact hash를 포함한 세 단말만 자동 진입하며, 직원 화면에서는 hash·GPS·후보/등록창 진단 정보를 숨긴다. 기존 low-latency stock input·소수 환산 후보 방어·저장/CAS/수동값 보호는 유지한다.
+- 완료 포인터: `20260717-10 Hide employee-facing auth diagnostics`; 이전 포인터 `20260717-09 Trust factory-PC Codex in-app browser exact hash`, `20260717-08 Low-latency input and fractional conversion candidate guard`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, `node tests/orderhelper_single_grid_ledger_regression.js`, `node tests/orderhelper_p1_review_regression.js`, `node tests/orderhelper_autosave_regression.js`, `python3 tests/orderhelper_autosave_browser.py`, inline JS syntax, `git diff --check`. 로컬 Playwright는 Firebase를 interception해 ETag pair-CAS, IME/change/Enter, stored-XSS, delegated listener를 검증한다. 실제 공장 PC/SiteBot worker·live 배포 검증은 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, 과거 producer가 버린 금액은 원본 Excel 재분석 없이는 복구할 수 없음, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.

@@ -260,7 +260,7 @@
 
 <div class="pin-overlay" id="pinOverlay">
   <h2>BBQ 발주</h2>
-  <div class="pin-note">등록된 개인폰·메인PC·공장PC는 자동 진입합니다. 다른 단말은 PIN + 승인 데스크탑, 임시 개방, 또는 매장 GPS 700m가 필요합니다.</div>
+  <div class="pin-note">등록된 단말은 자동으로 열립니다. 처음 사용하는 단말은 PIN을 입력하거나 관리자에게 문의하세요.</div>
   <input type="password" inputmode="numeric" pattern="[0-9]*" id="pinInput" maxlength="4" placeholder="PIN" autocomplete="off">
   <input class="device-name" type="text" id="deviceNameInput" maxlength="32" placeholder="단말명" autocomplete="off">
   <button onclick="checkPin()">확인</button>
@@ -285,9 +285,9 @@
   </span>
   <button id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis()">엑셀분석</button>
   <button id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel()">오차보기</button>
-  <button id="desktopAccessBtn" type="button" onclick="toggleDesktopAccessPanel()">접근관리</button>
+  <button id="desktopAccessBtn" type="button" onclick="toggleDesktopAccessPanel()" hidden aria-hidden="true">접근관리</button>
   <span class="status-pill idle" id="sfaStatus">엑셀 대기</span>
-  <span class="status-pill registration" id="registrationAccessStatus" hidden>임시 등록 접속</span>
+  <span class="status-pill registration" id="registrationAccessStatus" hidden>임시 접속</span>
   <button class="primary" onclick="flushAutoSave('manual')">저장</button>
   <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
@@ -316,7 +316,7 @@
   <div class="sfa-list" id="sfaCompareBody"></div>
 </div>
 
-<div class="sfa-panel hidden" id="desktopAccessPanel">
+<div class="sfa-panel hidden" id="desktopAccessPanel" hidden aria-hidden="true">
   <div class="sfa-panel-head">
     <span class="sfa-panel-title">데스크탑 접근</span>
     <span class="sfa-panel-meta" id="desktopAccessMeta">상태 확인 전</span>
@@ -389,7 +389,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0434';
+const APP_VERSION = '0717.0447';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -448,6 +448,21 @@ let orderHelperStarted = false;
 let desktopAccessState = { devices: {}, grace: {} };
 let desktopAccessVisible = false;
 
+function configureDesktopAccessUi() {
+  const button = document.getElementById('desktopAccessBtn');
+  const panel = document.getElementById('desktopAccessPanel');
+  if (button) {
+    button.hidden = !AUTH_DEBUG;
+    button.setAttribute?.('aria-hidden', String(!AUTH_DEBUG));
+  }
+  if (panel && !AUTH_DEBUG) {
+    panel.hidden = true;
+    panel.setAttribute?.('aria-hidden', 'true');
+    panel.classList.add('hidden');
+  }
+}
+configureDesktopAccessUi();
+
 async function hashPin(pin) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
@@ -456,6 +471,13 @@ function setPinMessage(msg, ok=false) {
   const el = document.getElementById('pinError');
   el.textContent = msg;
   el.classList.toggle('ok', ok);
+}
+function authUserMessage(error) {
+  const code = String(error?.message || '');
+  if (code === 'DESKTOP_REGISTRATION_REQUIRED' || code === 'GPS_OUTSIDE_STORE') {
+    return '이 단말은 아직 등록되지 않았습니다. 관리자에게 등록을 요청해 주세요.';
+  }
+  return '인증할 수 없습니다. 잠시 후 다시 시도하거나 관리자에게 문의해 주세요.';
 }
 function readAuthDevice() {
   try { return JSON.parse(localStorage.getItem(AUTH_GEO.deviceKey) || 'null'); } catch { return null; }
@@ -682,7 +704,7 @@ async function verifyGps() {
   if (!geoConfigured()) throw new Error('매장 GPS 기준 설정 필요');
   const pos = await getPosition();
   const meter = distanceM(pos.coords.latitude, pos.coords.longitude, AUTH_GEO.storeLat, AUTH_GEO.storeLng);
-  if (meter > AUTH_GEO.radiusM) throw new Error(`매장 ${AUTH_GEO.radiusM}m 반경 밖입니다 (${Math.round(meter)}m)`);
+  if (meter > AUTH_GEO.radiusM) throw new Error('GPS_OUTSIDE_STORE');
   return 'gps';
 }
 async function verifyAuthFactor() {
@@ -701,19 +723,10 @@ async function verifyAuthFactor() {
     if (isLikelyDesktopClient() || String(e?.message || '').includes('GPS')) {
       await recordDesktopAuthCandidate(device, hash, e?.message || 'gps_unavailable', state).catch(err => console.warn('[desktopAccess] candidate write failed', err));
       if (isDesktopGraceActive(state)) return 'desktop-grace';
-      throw new Error(`GPS 확인 실패. 데스크탑 후보로 기록됨: ${hash.slice(0, 12)}`);
+      throw new Error('DESKTOP_REGISTRATION_REQUIRED');
     }
     throw e;
   }
-}
-function factorLabel(factor) {
-  if (factor === 'device') return '인증 단말';
-  if (factor === 'desktop') return '승인 데스크탑';
-  if (factor === 'desktop-grace') return '임시 데스크탑';
-  if (factor === 'gps') return 'GPS';
-  if (factor === 'debug') return '개발 GPS 우회';
-  if (factor === 'ip') return '허용 IP';
-  return 'factor';
 }
 function desktopAccessTimeText(ms) {
   const n = Number(ms || 0);
@@ -729,6 +742,12 @@ function renderDesktopAccessPanel() {
   const meta = document.getElementById('desktopAccessMeta');
   const body = document.getElementById('desktopAccessBody');
   if (!meta || !body) return;
+  if (!AUTH_DEBUG) {
+    meta.textContent = '';
+    if (body.replaceChildren) body.replaceChildren();
+    else body.innerHTML = '';
+    return;
+  }
   const state = desktopAccessState || { devices: {}, grace: {} };
   const graceActive = isDesktopGraceActive(state);
   const expiresAt = Number(state.grace?.expiresAt || 0);
@@ -775,16 +794,24 @@ function bindDesktopAccessActions(body = document.getElementById('desktopAccessB
   });
 }
 async function toggleDesktopAccessPanel() {
+  if (!AUTH_DEBUG) return;
   desktopAccessVisible = !desktopAccessVisible;
   const panel = document.getElementById('desktopAccessPanel');
   if (!panel) return;
+  panel.hidden = !desktopAccessVisible;
+  panel.setAttribute?.('aria-hidden', String(!desktopAccessVisible));
   panel.classList.toggle('hidden', !desktopAccessVisible);
   if (desktopAccessVisible) await loadDesktopAccessState(false);
   updateStickyOffsets();
 }
 function hideDesktopAccessPanel() {
   desktopAccessVisible = false;
-  document.getElementById('desktopAccessPanel')?.classList.add('hidden');
+  const panel = document.getElementById('desktopAccessPanel');
+  if (panel) {
+    panel.hidden = true;
+    panel.setAttribute?.('aria-hidden', 'true');
+    panel.classList.add('hidden');
+  }
   updateStickyOffsets();
 }
 async function currentDesktopHashAndDevice() {
@@ -870,8 +897,8 @@ function showRegistrationAccessStatus(windowState) {
   const status = document.getElementById('registrationAccessStatus');
   if (!status) return;
   status.hidden = false;
-  status.textContent = '임시 등록 접속';
-  status.title = `등록창 ${windowState.windowId} · 만료 ${desktopAccessTimeText(windowState.expiresAt)}`;
+  status.textContent = '임시 접속';
+  status.title = '관리자가 허용한 임시 접속입니다.';
 }
 async function checkPin() {
   const inp = document.getElementById('pinInput');
@@ -890,15 +917,15 @@ async function checkPin() {
   const h = await hashPin(inp.value);
   if (h === PIN_HASH) {
     try {
-      const factor = await verifyAuthFactor();
+      await verifyAuthFactor();
       pinAttempts = 0;
       localStorage.removeItem('bbq_desk_auth_until');
       sessionStorage.removeItem('bbq_desk_auth');
-      setPinMessage(`인증됨 (${factorLabel(factor)})`, true);
+      setPinMessage('인증되었습니다.', true);
       inp.value = '';
       unlockOrderHelper();
     } catch (e) {
-      setPinMessage(e.message || '인증 실패');
+      setPinMessage(authUserMessage(e));
       inp.value = '';
     }
   } else {
@@ -923,7 +950,7 @@ async function restoreAuthIfPossible() {
   const device = ensureAuthDevice();
   const id = await deviceHashText(device);
   if (isPasswordlessTrustedDeviceHash(id)) {
-    setPinMessage(`등록 단말 자동 인증됨 · 단말ID ${id.slice(0, 12)}`, true);
+    setPinMessage('등록된 단말입니다. 자동으로 연결합니다.', true);
     unlockOrderHelper();
     void captureRegistrationCandidateIfActive(device, id, false);
     return true;
@@ -931,7 +958,7 @@ async function restoreAuthIfPossible() {
   try {
     const captured = await captureRegistrationCandidateIfActive(device, id, true);
     if (captured) {
-      setPinMessage(`임시 등록 접속 · 단말ID ${id.slice(0, 12)}`, true);
+      setPinMessage('임시 등록으로 연결합니다.', true);
       unlockOrderHelper();
       showRegistrationAccessStatus({ windowId: captured.windowId, expiresAt: captured.registrationExpiresAt });
       return true;
@@ -939,8 +966,8 @@ async function restoreAuthIfPossible() {
   } catch (error) {
     console.warn('[registrationWindow] restore kept locked', error);
   }
-  if (AUTH_DEBUG) setPinMessage(`개발 검증 모드: PIN은 필요, GPS만 우회. 단말ID ${id}`, true);
-  else setPinMessage(`미등록 단말: PIN + 승인 데스크탑/매장 GPS 700m 필요. 단말ID ${id}`);
+  if (AUTH_DEBUG) setPinMessage('개발 검증 모드입니다. PIN을 입력해 주세요.', true);
+  else setPinMessage('등록되지 않은 단말입니다. PIN을 입력하거나 관리자에게 등록을 요청해 주세요.');
   document.getElementById('pinInput').focus();
   return false;
 }
