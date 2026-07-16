@@ -24,6 +24,7 @@
 - 웹 UI 변경은 Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence로 확인한다.
 - 외부 사이트 live 조작/발주/주문 write는 read-only preflight와 분리된 별도 safety flow 없이는 진행하지 않는다.
 - 라이브 반영 확인: `https://wk7007-wk.github.io/OrderHelper/` 에서 `APP_VERSION` 문자열 확인.
+- 이 저장소는 빌드가 필요 없는 순수 정적 사이트다. 루트 `.nojekyll`로 Jekyll 변환과 불필요한 GitHub metadata 조회를 건너뛰고 원본 파일을 그대로 Pages에 배포한다.
 - Termux 감시만 바뀐 경우 OrderHelper 웹 배포는 필요 없다. PC/SiteBot 실행 경계와 Firebase 상태 경로만 검증한다.
 - CLI 감시는 누락/정체/불일치 보고, `/unitInference/latest` 리포트 업로드, 코드/문서/배포 보정 역할이다. 엑셀 실발주 이력은 참고 배지/툴팁에 즉시 반영하지만, 발주 품목, 단위, 하루사용량 수동값, 환산, SFA 실발주 원본은 자동 확정하지 않는다.
 - `orderSiteMappings`, `orderAliasMappings`, `orderUnitCorrections`, `orderManualItems`는 원천 SFA 행을 바꾸지 않는 사용자 보정 상태다. 로컬 저장소와 `/current`/`history` payload에 분리 저장하고 엑셀분석 요청 payload에도 포함한다. `orderManualItems`는 MASTER에 없는 사이트/SFA 항목을 원명 또는 임의명으로 추가한 내부 target 목록이다. `orderAliasMappingDrafts`는 후보/default와 사용자 `unlinked` 상태 read model이고, `effectiveOrderAliasMappings`는 `unlinked`를 제외한 `confirmed/manual` 우선 후 default를 분석 입력으로 쓰는 read model이다.
