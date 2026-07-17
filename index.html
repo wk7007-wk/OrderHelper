@@ -143,14 +143,16 @@
   th { position: sticky; top: 0; z-index: 6; background: #0f3460; font-size: 11px; color: #ccc; font-weight: 600; }
   #thead th:nth-child(1), #tbody td:nth-child(1) { position: sticky; left: 0; width: 106px; min-width: 106px; max-width: 106px; }
   #thead th:nth-child(2), #tbody td:nth-child(2) { position: sticky; left: 106px; width: 220px; min-width: 220px; max-width: 220px; }
-  #thead th:nth-child(-n+2) { z-index: 8; }
-  #tbody td:nth-child(-n+2) { z-index: 3; background: #1a1a2e; }
+  #thead th:nth-child(3), #tbody td:nth-child(3) { position: sticky; left: 326px; width: 78px; min-width: 78px; max-width: 78px; }
+  #thead th:nth-child(-n+3) { z-index: 8; }
+  #tbody td:nth-child(-n+3) { z-index: 3; background: #1a1a2e; }
   tr.need td { background: rgba(233, 69, 96, 0.08); }
   td.qty { text-align: right; font-variant-numeric: tabular-nums; }
   td.name { max-width: 280px; white-space: normal; }
   td input.cell { background: #0f3460; color: #fff; border: 1px solid #0f3460; border-radius: 4px; padding: 4px 6px; width: 60px; text-align: right; font-size: 13px; }
   td input.cell:focus { outline: none; border-color: #e94560; }
   td input.cell.zone { width: 90px; text-align: left; }
+  #thead th[data-column="stock"], #tbody td[data-column="stock"] { width: 78px; min-width: 78px; max-width: 78px; text-align: center; }
   #thead th[data-column="need"], #tbody td.need-qty { width: 76px; min-width: 76px; max-width: 76px; text-align: center; }
   #thead th[data-column="order"], #tbody td.order-qty { width: 400px; min-width: 360px; max-width: 420px; text-align: left; white-space: normal; }
   #thead th[data-column="order"] { color: #fff; }
@@ -264,6 +266,8 @@
     .grid-sort-control { order: 2; }
     #thead th:nth-child(1), #tbody td:nth-child(1) { width: 98px; min-width: 98px; max-width: 98px; }
     #thead th:nth-child(2), #tbody td:nth-child(2) { left: 98px; width: 180px; min-width: 180px; max-width: 180px; }
+    #thead th:nth-child(3), #tbody td:nth-child(3) { left: 278px; width: 72px; min-width: 72px; max-width: 72px; }
+    #thead th[data-column="stock"], #tbody td[data-column="stock"] { width: 72px; min-width: 72px; max-width: 72px; }
     #thead th[data-column="need"], #tbody td.need-qty { width: 72px; min-width: 72px; max-width: 72px; }
     #thead th[data-column="order"], #tbody td.order-qty { width: 340px; min-width: 340px; max-width: 340px; }
     .sfa-io-grid { grid-template-columns: 1fr; }
@@ -370,9 +374,9 @@
       <tr id="thead">
         <th id="thZone" data-column="zone">구역</th>
         <th data-column="name">품목명</th>
+        <th data-column="stock">재고</th>
         <th data-column="need">필요량</th>
         <th data-column="order">추천발주 · 예상금액</th>
-        <th data-column="stock">재고</th>
         <th data-column="k">여유</th>
         <th data-column="l">일사용</th>
         <th data-column="unit">단위</th>
@@ -401,7 +405,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0823';
+const APP_VERSION = '0717.0907';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -6756,9 +6760,9 @@ function renderHeader() {
   thead.innerHTML = `
     <th id="thZone" data-column="zone">구역</th>
     <th data-column="name">품목명</th>
+    <th data-column="stock">재고</th>
     <th data-column="need">필요량</th>
     <th data-column="order">추천발주 · 예상금액</th>
-    <th data-column="stock">재고</th>
     <th data-column="k">여유</th>
     <th data-column="l">일사용</th>
     <th data-column="unit">단위</th>
@@ -7364,9 +7368,9 @@ function render(options = {}) {
     tr.innerHTML = `
       <td data-column="zone"><input class="cell zone" type="text" list="zoneOptions" autocomplete="off" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="zone" value="${escapeHtml(ent.zone || '')}"></td>
       <td class="name" data-column="name" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}${inlineSiteControls}</td>
+      <td data-column="stock"><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="stock" value="${escapeHtml(ent.stock == null ? '' : ent.stock)}"></td>
       ${needCell}
       ${orderCell}
-      <td data-column="stock"><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="stock" value="${escapeHtml(ent.stock == null ? '' : ent.stock)}"></td>
       ${KL}
       <td data-column="unit">${escapeHtml(item.unit || '')}</td>
       <td class="actions" data-column="actions">

@@ -582,11 +582,14 @@ def main():
                     const needCell = row.querySelector('td.need-qty');
                     const orderCell = row.querySelector('td.order-qty');
                     const orderContent = orderCell.querySelector('.order-cell');
+                    const nameCell = row.querySelector('td[data-column="name"]');
                     const stockCell = row.querySelector('td[data-column="stock"]');
+                    const nameRect = nameCell.getBoundingClientRect();
+                    const needRect = needCell.getBoundingClientRect();
                     const orderRect = orderCell.getBoundingClientRect();
                     const orderContentRect = orderContent.getBoundingClientRect();
                     const stockRect = stockCell.getBoundingClientRect();
-                    const expectedKeys = ['zone', 'name', 'need', 'order', 'stock', 'k', 'l', 'unit', 'actions'];
+                    const expectedKeys = ['zone', 'name', 'stock', 'need', 'order', 'k', 'l', 'unit', 'actions'];
                     return {
                         wrapTop: wrap.top,
                         headers,
@@ -604,13 +607,15 @@ def main():
                             Array.from(candidate.querySelectorAll(':scope > td')).map(cell => cell.dataset.column).join(',') === expectedKeys.join(',')
                         ),
                         orderContained: orderContentRect.left >= orderRect.left - 1 && orderContentRect.right <= orderRect.right + 1,
-                        orderBeforeStock: orderRect.right <= stockRect.left + 1,
+                        stockNextToName: Math.abs(nameRect.right - stockRect.left) <= 1,
+                        stockBeforeNeed: stockRect.right <= needRect.left + 1,
+                        stockSticky: getComputedStyle(stockCell).position === 'sticky',
                     };
                 }"""
             )
-            assert mobile_header["headerKeys"] == ["zone", "name", "need", "order", "stock", "k", "l", "unit", "actions"], mobile_header
-            assert mobile_header["headerTexts"] == ["구역", "품목명", "필요량", "추천발주 · 예상금액", "재고", "여유", "일사용", "단위", ""], mobile_header
-            assert mobile_header["cellKeys"] == ["zone", "name", "need", "order", "stock", "k", "l", "unit", "actions"], mobile_header
+            assert mobile_header["headerKeys"] == ["zone", "name", "stock", "need", "order", "k", "l", "unit", "actions"], mobile_header
+            assert mobile_header["headerTexts"] == ["구역", "품목명", "재고", "필요량", "추천발주 · 예상금액", "여유", "일사용", "단위", ""], mobile_header
+            assert mobile_header["cellKeys"] == ["zone", "name", "stock", "need", "order", "k", "l", "unit", "actions"], mobile_header
             assert abs(mobile_header["headers"][0]["top"] - mobile_header["wrapTop"]) <= 1, mobile_header
             for header, cell in zip(mobile_header["headers"], mobile_header["cells"]):
                 assert abs(header["x"] - cell["x"]) < 1 and abs(header["right"] - cell["right"]) < 1, mobile_header
@@ -618,7 +623,9 @@ def main():
             assert mobile_header["orderTextAlign"] == "left" and mobile_header["orderVerticalAlign"] == "middle", mobile_header
             assert mobile_header["orderDisplay"] == "flex" and mobile_header["orderJustify"] == "flex-start", mobile_header
             assert mobile_header["regularRowsAligned"] is True, mobile_header
-            assert mobile_header["orderContained"] is True and mobile_header["orderBeforeStock"] is True, mobile_header
+            assert mobile_header["orderContained"] is True, mobile_header
+            assert mobile_header["stockNextToName"] is True and mobile_header["stockBeforeNeed"] is True, mobile_header
+            assert mobile_header["stockSticky"] is True, mobile_header
 
             focus_race = mobile_page.evaluate(
                 """async () => {
@@ -871,7 +878,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0823"
+            assert active_patch["body"]["appVersion"] == "0717.0907"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])
