@@ -24,6 +24,7 @@
 
 ## UI/동선 기준
 - 구역/품목/재고/여유/일사용/필요량/추천발주·예상금액은 한 표에서 본다. 발주가 필요한 각 품목의 기본 카드는 `예상 N원`과 가격 한 줄만 표시한다. 환산 품목은 `개당 N원 · 1박스 N원 · 최근 3개월 발주 기준`처럼 재고 1단위 가격과 발주 1단위 가격을 분리하며, 예상액은 추천 발주수량 × 발주 1단위 가격으로 계산한다. 계산이 안 되면 `예상금액 확인 필요`와 직원이 할 일을 짧게 보여준다. 실발주 수량, 상세 가격 출처, 산식, 파일·날짜·근거 수량은 데이터와 카드 title에 보존하되 기본 화면에는 나열하지 않는다. 상단 총액은 유효 금액만 합산해 `가격 확인 필요` 건수와 분리한다. 미입력, 입력완료, 숨김, 정렬 전환은 입력 동선을 방해하지 않고 정렬 뒤에도 값·포커스·caret을 복구한다.
+- 오늘 발주가 0인 행도 확인된 단가는 `봉당 N원 · 최근 3개월 발주 기준`처럼 한 줄로 남기고, 근거가 정말 없을 때만 `단가 확인 필요`로 표시한다. `미확인`만 단독 표시해 단가 누락으로 오해하게 하지 않는다. 구역 칸은 기존 입력값을 선택 목록으로 제공하면서 새 구역을 계속 수기로 입력할 수 있어야 한다.
 - 직원 인증 화면에는 단말 hash, GPS 반경·거리, 후보 기록 결과, 등록창 ID·만료시각 같은 내부 진단 정보를 표시하지 않는다. 내부 인증 증거와 후보 기록은 유지하되 화면에는 자동 진입 여부와 PIN 입력·관리자 문의처럼 사용자가 할 일만 짧은 한국어로 안내한다. 기기 hash·IP·user-agent·승인/개방 제어를 담은 `접근관리` 패널은 live 직원 화면에서 숨기고 로컬 `authDebug` 검증에서만 연다.
 - 저장 성공·대기·오류는 상단 `saveState`와 `lastSaved` 한 줄로만 안내한다. 연속 입력 때 쌓이는 내부 저장 로그는 8개 제한을 유지하되 직원 화면 DOM에는 렌더링하지 않는다.
 - 발주 입력 표는 `구역 → 품목명 → 필요량 → 추천발주·분석·금액 → 재고 → 여유 → 일사용 → 단위 → 작업` 순서를 유지한다. 구역·품목명만 sticky로 두고 필요량·추천발주를 재고보다 먼저 보여 발주 판단을 우선한다.
@@ -82,8 +83,8 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 배포판 기준: `20260717-20` / `0717.0753` / clarify real package units. `냉동-떡볶이(16개)`는 재고·체크 `개`, 발주 `박스`, `1박스 = 재고 16개`, 가격은 박스 가격으로 계산하며 예상액은 추천 박스 수 × 박스 가격이다. 사용자 수량 보정은 확정으로 표시하되 발주명 후보는 별도로 확인한다. 이름 연결·숫자 보정 2단계, `연결 안 함`, order-first grid, compact save status, exact hash 자동 진입, 저장/CAS/수동값 보호는 유지한다.
-- 완료 포인터: `20260717-20 Clarify package units and confirmed quantity`; 이전 포인터 `20260717-19 Separate stock-unit and order-unit prices`, `20260717-18 Simplify alias editor to name + quantity`.
+- 최신 배포판 기준: `20260717-21` / `0717.0823` / show idle unit prices and split rectangular containers. 발주 0행도 확인된 단가를 compact card로 표시하고 실제 누락만 `단가 확인 필요`로 구분한다. 구역은 기존값 선택과 수기 입력을 함께 지원한다. `직사각용기1(190,감자)`와 `직사각용기2(230,치즈스틱)`는 별도 품목·별도 실발주명·별도 가격으로 처리하며, 과거 합본 재고는 1호에 한 번만 이관하고 2호를 빈 재고로 추가해 중복하지 않는다. SFA의 20G 소포장/58G 조리용 시즈닝은 규격을 지우지 않고 각각 25g/58g 체크 품목에 고정 연결하며, `JHP종이봉투(대)`는 대/소 통합 체크 품목의 우선 원명으로 쓴다. 기존 이름 연결·숫자 보정 2단계, `연결 안 함`, order-first grid, compact save status, exact hash 자동 진입, 저장/CAS/수동값 보호는 유지한다.
+- 완료 포인터: `20260717-21 Show idle unit prices and split rectangular containers`; 이전 포인터 `20260717-20 Clarify package units and confirmed quantity`, `20260717-19 Separate stock-unit and order-unit prices`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, `node tests/orderhelper_single_grid_ledger_regression.js`, `node tests/orderhelper_p1_review_regression.js`, `node tests/orderhelper_autosave_regression.js`, `python3 tests/orderhelper_autosave_browser.py`, inline JS syntax, `git diff --check`. 로컬 Playwright는 Firebase를 interception해 ETag pair-CAS, IME/change/Enter, stored-XSS, delegated listener를 검증한다. 실제 공장 PC/SiteBot worker·live 배포 검증은 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, 과거 producer가 버린 금액은 원본 Excel 재분석 없이는 복구할 수 없음, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.

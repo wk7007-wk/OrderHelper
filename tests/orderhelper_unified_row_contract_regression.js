@@ -214,6 +214,42 @@ const tteokPackVisible = tteokPackHtml.replace(/<[^>]+>/g, '');
 assert(tteokPackVisible.includes('예상 160,000원'), 'employee card must show the two-box expected spend');
 assert(tteokPackVisible.includes('개당 5,000원 · 1박스 80,000원 · 최근 3개월 발주 기준'), 'employee card must separate each price from the box price');
 assert(tteokPackHtml.includes('환산 1박스 = 재고 16개'), 'detail title must say one box equals 16 checked pieces');
+const noNeedPriceHtml = api.renderOrderAmountSpan(tteokPackItem, 0, tteokPackRow);
+const noNeedPriceVisible = noNeedPriceHtml.replace(/<[^>]+>/g, '');
+assert(noNeedPriceHtml.includes('order-amount price-only'), 'no-order rows must retain known price evidence in a compact card');
+assert(noNeedPriceVisible.includes('개당 5,000원 · 1박스 80,000원'), 'no-order rows must show the same stock/order unit prices');
+assert(noNeedPriceVisible.includes('최근 3개월 발주 기준'), 'no-order rows must retain a short price source');
+assert(!noNeedPriceVisible.includes('예상 0원'), 'no-order price cards must not add a noisy zero-total label');
+const noNeedMissingHtml = api.renderOrderAmountSpan(tteokPackItem, 0, {
+  matchStatus: 'ITEM_UNMATCHED',
+  factor: 16,
+  unitPrice: null,
+  priceEvidence: null,
+  issues: [{ code: 'PRICE_SOURCE_MISSING', message: '가격 근거가 없습니다.' }],
+});
+assert(noNeedMissingHtml.includes('order-amount price-only missing') && noNeedMissingHtml.includes('단가 확인 필요'), 'a true no-order price gap must be explicit instead of an ambiguous unconfirmed badge');
+
+const rectangularOne = '직사각용기1(190,감자)';
+const rectangularTwo = '직사각용기2(230,치즈스틱)';
+const legacyRectangularName = '직사각용기1(190,감자),2(230,치즈스틱)';
+api.setEntriesForCheck([
+  { id: 'rect-1', entryKey: 'rect-1', name: rectangularOne, zone: '창고', stock: 1 },
+  { id: 'rect-2', entryKey: 'rect-2', name: rectangularTwo, zone: '창고', stock: 1 },
+]);
+api.setOverridesForCheck({});
+api.setUnitCorrectionsForCheck({});
+api.setAliasMappingsForCheck({});
+api.setSfaPriceHistoryForCheck({ version: 1, canonicalSource: 'sfaAnalysisRuns', advisoryOnly: true, items: {} });
+const rectangularRows = plain(api.resolveUnifiedOrderRows(null, ledger([
+  { runId: 'rect-run', eventId: 'rect-run#1', eventAt: now, dateKey: '20260711', originalName: 'BBQ직사각용기1호', mappedName: legacyRectangularName, actualOrderQty: 1, quantity: 1, amount: 15620, unit: 'BOX' },
+  { runId: 'rect-run', eventId: 'rect-run#2', eventAt: now, dateKey: '20260704', originalName: 'BBQ직사각용기2호', mappedName: legacyRectangularName, actualOrderQty: 1, quantity: 1, amount: 13420, unit: 'BOX' },
+]), 2, now));
+const rectangularOneRow = rectangularRows.find(row => row.internalName === rectangularOne);
+const rectangularTwoRow = rectangularRows.find(row => row.internalName === rectangularTwo);
+assert.strictEqual(rectangularOneRow.unitPrice, 15620, 'container 1 must use only the number-1 box price');
+assert.strictEqual(rectangularTwoRow.unitPrice, 13420, 'container 2 must use only the number-2 box price');
+assert.deepStrictEqual(rectangularOneRow.actualAliases, ['BBQ직사각용기1호'], 'container 1 must expose only its own fixed actual name');
+assert.deepStrictEqual(rectangularTwoRow.actualAliases, ['BBQ직사각용기2호'], 'container 2 must expose only its own fixed actual name');
 
 setBaseState();
 api.setSfaAnalysisHistoryForCheck(ledger([{

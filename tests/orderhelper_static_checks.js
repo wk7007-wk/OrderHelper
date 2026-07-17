@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0753';/, 'APP_VERSION must match the KST package-unit clarification release time');
+mustMatch(/const APP_VERSION = '0717.0823';/, 'APP_VERSION must match the KST zero-need price and split-container release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -384,6 +384,9 @@ mustMatch(/renderOrderAnalysisSpan\(item, g\)/, 'output order cell must show con
 mustMatch(/function renderOrderAmountSpan\(item, stockNeed, resolvedRow = undefined\)/, 'output order amount renderer missing');
 mustMatch(/ITEM_UNLINKED: 'ITEM_UNLINKED'/, 'unified order-row contract must represent explicit unlink');
 mustMatch(/if \(row\?\.matchStatus === UNIFIED_ORDER_MATCH_STATUSES\.ITEM_UNLINKED\) return '<span class="order-amount empty"><\/span>';/, 'unlinked rows must not render price evidence');
+mustMatch(/const hasNeed = numericNeed > 0;/, 'price renderer must distinguish no-order rows from invalid rows');
+mustMatch(/if \(!hasNeed\) return `<span class="order-amount price-only missing"/, 'no-order rows with missing evidence must show a compact unit-price warning');
+mustMatch(/if \(!hasNeed\) \{[\s\S]*class="order-amount price-only"[\s\S]*pricePresentation\.visible/, 'no-order rows with known prices must keep a compact unit-price card');
 mustMatch(/row\?\.matchStatus !== UNIFIED_ORDER_MATCH_STATUSES\.ITEM_UNLINKED/, 'top amount summary must exclude intentionally unlinked rows');
 mustMatch(/실발주 \$\{fmt\(actualQty, 2\)\}\$\{actualUnit\}/, 'amount-card detail must preserve actual SFA order quantity');
 mustMatch(/가격 미해결: \$\{reason\}/, 'amount-card detail must preserve the full Korean missing reason');
@@ -394,9 +397,11 @@ mustMatch(/function orderPricePresentation\(item, estimate\)/, 'employee amount 
 mustMatch(/order_unit_price: row\.unitPrice,[\s\S]*stock_unit_price: stockUnitPrice,[\s\S]*order_unit_to_stock_factor:/, 'expected amount contract must expose both price meanings and their factor');
 mustMatch(/visible: `\$\{stockLabel\} \$\{formatWon\(stockPrice\)\} · \$\{orderLabel\} \$\{formatWon\(orderPrice\)\}`/, 'converted items must show stock-unit and one-order-unit prices separately');
 mustMatch(/function orderPriceMissingActionText\(row\)/, 'missing amount cards need a short actionable reason');
-mustMatch(/order-amount-primary">예상금액 확인 필요<\/span><span class="order-amount-secondary">\$\{escapeHtml\(orderPriceMissingActionText\(row\)\)\}/, 'missing rows must show a short two-line employee card');
+mustMatch(/order-amount-primary">예상금액 확인 필요<\/span><span class="order-amount-secondary">\$\{escapeHtml\(action\)\}/, 'missing rows must show a short two-line employee card');
+mustMatch(/if \(!Number\.isFinite\(row\?\.unitPrice\)\) return '단가 확인 필요';/, 'true unit-price gaps must use an unambiguous employee label');
 mustMatch(/order-amount-primary">예상 \$\{escapeHtml\(formatWon\(estimate\.expected_order_amount\)\)\}<\/span><span class="order-amount-secondary">\$\{escapeHtml\(pricePresentation\.visible\)\} · \$\{escapeHtml\(shortPriceSource\)\}/, 'resolved rows must show expected amount and explicit stock/order price labels');
 mustMatch(/\.order-amount \{[^}]*display: grid;[^}]*flex: 1 0 100%;/, 'amount details must occupy one orderly full-width row');
+mustMatch(/\.order-amount\.price-only \{[^}]*display: inline-flex;[^}]*flex: 0 1 auto;[^}]*width: auto;/, 'no-order price evidence must stay compact');
 mustMatch(/renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g, resolvedOrderRow\)\}/, 'unit conversion and mapped resolver evidence must share the same row');
 mustMatch(/예상 발주금액 \$\{formatWon\(estimate\.expected_order_amount\)\}/, 'amount chip title must disclose expected order amount');
 mustMatch(/가격출처 \$\{priceSource \|\| '실발주 엑셀'\}/, 'amount chip must disclose the Korean price source');
@@ -468,7 +473,17 @@ mustMatch(/name:"레몬보이",unit:"봉\/봉",policy:"여유",buffer:1,daily:0/
 mustMatch(/name:"고추,가위,소금,종이호일,레몬보이,검정봉투"/, 'existing combined Lemonboy misc item must remain');
 mustMatch(/name:"BBQ양념치킨소스",unit:"팩\/팩",policy:"여유",buffer:1\.5,daily:2/, 'kitchen sauce name must match current SFA order name');
 mustMatch(/name:"\(컵소스\)BBQ양념치킨소스\(배달용\)",unit:"봉\/봉",policy:"여유",buffer:0\.3,daily:0\.3/, 'delivery sauce name must match current SFA order name');
+mustMatch(/name:"직사각용기1\(190,감자\)",unit:"묶\/묶음"[\s\S]*name:"직사각용기2\(230,치즈스틱\)",unit:"묶\/묶음"/, 'rectangular container 1 and 2 must be separate inventory items');
 mustMatch(/const ITEM_NAME_ALIASES = \{[\s\S]*"BBQ시크릿양념소스\(주방용\)": "BBQ양념치킨소스"[\s\S]*"BBQ시크릿양념소스\(배달용\)": "\(컵소스\)BBQ양념치킨소스\(배달용\)"/, 'old BBQ secret sauce names must migrate to current SFA names');
+mustMatch(/"직사각용기1\(190,감자\),2\(230,치즈스틱\)": "직사각용기1\(190,감자\)"/, 'legacy combined rectangular-container inventory must migrate once to item 1');
+mustMatch(/const SFA_ACTUAL_ITEM_ALIASES = Object\.freeze\(\{[\s\S]*"BBQ직사각용기1호": "직사각용기1\(190,감자\)"[\s\S]*"BBQ직사각용기2호": "직사각용기2\(230,치즈스틱\)"[\s\S]*"JHP종이봉투\(대\)": "JHP종이봉투\(대\)or\(소\)"[\s\S]*"BBQ뿜치킹시즈닝\(58G,조리용\)": "BBQ뿜치킹시즈닝\(58g\)"[\s\S]*"BBQ뿜치킹시즈닝\(20G,소포장별도판매용\)": "BBQ뿜치킹시즈닝\(25g\)"/, 'fixed actual-order names must split containers, connect JHP large bags, and keep both seasoning sizes distinct');
+mustMatch(/const LEGACY_ORDER_ACTUAL_ALIAS_MIGRATIONS = Object\.freeze\(\{[\s\S]*"BBQ뿜치킹시즈닝\(25g\)"[\s\S]*"BBQ뿜치킹시즈닝\(58G,조리용\)": "BBQ뿜치킹시즈닝\(20G,소포장별도판매용\)"/, 'legacy small-seasoning alias must migrate away from the 58G cooking product');
+mustMatch(/migrateActualAliasName\(aliasName, value\.actualName \|\| value\.targetName \|\| ''\)/, 'stored alias hydration must apply the bounded legacy actual-name migration');
+mustMatch(/const fixedTargetName = canonicalItemNameForActual\(value\.siteName \|\| ''\);\s*if \(fixedTargetName\) targetName = fixedTargetName;/, 'stored source mappings must follow fixed actual-name splits instead of preserving old combined targets');
+mustMatch(/<datalist id="zoneOptions"><\/datalist>/, 'zone input needs one shared suggestion list');
+mustMatch(/function zoneSuggestionValues\(source = entries\)/, 'zone suggestions must be derived from saved and typed rows');
+mustMatch(/list="zoneOptions" autocomplete="off"/, 'zone input must retain free text while offering existing values');
+mustMatch(/\.map\(zone => `<option value="\$\{escapeHtml\(zone\)\}"><\/option>`\)/, 'zone suggestions must be escaped before rendering');
 mustMatch(/function migrateRuntimeItemNames\(\)/, 'runtime item name migration helper missing');
 mustMatch(/entries = migrateEntriesByName\(entries\);/, 'entries must migrate old item names');
 mustMatch(/overrides = migrateNamedObject\(overrides\);/, 'overrides must migrate old item names');
@@ -523,7 +538,7 @@ mustMatch(/function recommendedDays\(\) \{\s*const d = new Date\(\)\.getDay\(\);
 mustMatch(/setOrderDaysValue\(savedDaysRule === ORDER_DAYS_RULE_VERSION \? \(savedDays \|\| rec\) : rec\);/, 'old site-local recommendation values must be refreshed after rule changes');
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{safeEntryId\}" data-entry-key="\$\{safeEntryKey\}" data-item-key="\$\{escapeHtml\(itemKeyForName\(item\.name\)\)\}" data-field="k"/, 'k field must keep escaped stable row identity and be skipped by next navigation');
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{safeEntryId\}" data-entry-key="\$\{safeEntryKey\}" data-item-key="\$\{escapeHtml\(itemKeyForName\(item\.name\)\)\}" data-field="l"/, 'l field must keep escaped stable row identity and be skipped by next navigation');
-mustMatch(/class="cell zone" type="text" tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');
+mustMatch(/class="cell zone" type="text"[^>]*tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');
 mustMatch(/<button class="add" tabindex="-1"/, 'row action buttons must be skipped by keyboard next navigation');
 mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must move within the current DOM order');
 mustMatch(/function renderAndFocusStock\([^)]*\)[\s\S]*if \(gridSortMode === 'input'\) \{[\s\S]*reorderRenderedGridRows\(\)[\s\S]*queueMicrotask\(focusNext\);/, 'stock Enter must reorder existing rows without replacing the focused tbody');
@@ -693,6 +708,10 @@ this.__OrderHelperApi = {
   formatWon,
   firebasePayloadIsNewer,
   compareGridRows,
+  zoneSuggestionValues,
+  canonicalItemNameForActual,
+  fixedActualAliasesForItem,
+  migrateActualAliasName,
   gridFocusSnapshot,
   restoreGridFocus,
   setEntriesForCheck(value) { entries = sanitizeEntries(value); },
@@ -892,6 +911,33 @@ assert.strictEqual(api.shouldApplyIncomingCurrent({ savedAt: 999, stateRevision:
 assert.strictEqual(api.shouldApplyIncomingCurrent({ savedAt: 201, stateRevision: 201, inventoryRevision: 151 }), true, 'newer current revision should be accepted');
 assert.strictEqual(api.shouldApplyIncomingCurrent({ savedAt: 200, stateRevision: 200, inventoryRevision: 150 }), false, 'same revision/savedAt must be deduplicated');
 assert.strictEqual(api.normalizeSiteItemName('BBQ치즈볼(크림)'), 'BBQ치즈볼', 'site item normalizer should remove parenthesized spec');
+assert.deepStrictEqual(
+  plain(api.zoneSuggestionValues([{ zone: '창고' }, { zone: ' 주방 ' }, { zone: '창고' }, { zone: '' }])),
+  ['주방', '창고'],
+  'zone suggestions must trim, deduplicate, and sort existing/manual values'
+);
+assert.strictEqual(api.canonicalItemNameForActual('BBQ직사각용기1호'), '직사각용기1(190,감자)', 'container 1 actual name must map only to item 1');
+assert.strictEqual(api.canonicalItemNameForActual('BBQ직사각용기2호'), '직사각용기2(230,치즈스틱)', 'container 2 actual name must map only to item 2');
+assert.strictEqual(api.canonicalItemNameForActual('JHP종이봉투(대)'), 'JHP종이봉투(대)or(소)', 'JHP large-bag SFA row must connect to the combined check item');
+assert.strictEqual(api.canonicalItemNameForActual('BBQ뿜치킹시즈닝(20G,소포장별도판매용)'), 'BBQ뿜치킹시즈닝(25g)', 'renamed 20G small-pack SFA source must connect to the existing small-seasoning item');
+assert.strictEqual(api.canonicalItemNameForActual('BBQ뿜치킹시즈닝(58G,조리용)'), 'BBQ뿜치킹시즈닝(58g)', '58G cooking seasoning must remain connected to the distinct 58g item');
+assert.strictEqual(api.migrateActualAliasName('BBQ뿜치킹시즈닝(25g)', 'BBQ뿜치킹시즈닝(58G,조리용)'), 'BBQ뿜치킹시즈닝(20G,소포장별도판매용)', 'legacy small-seasoning alias must move to the distinct small-pack actual name');
+assert.strictEqual(api.migrateActualAliasName('BBQ뿜치킹시즈닝(25g)', 'BBQ뿜치킹시즈닝(58g)'), 'BBQ뿜치킹시즈닝(20G,소포장별도판매용)', 'legacy small-seasoning internal-name alias must also move to the distinct small-pack actual name');
+api.setAliasMappingsForCheck({
+  'BBQ뿜치킹시즈닝(25g)': { actualName: 'BBQ뿜치킹시즈닝(58G,조리용)', actualUnit: 'BON', status: 'confirmed' },
+});
+assert.strictEqual(api.getAliasMappingsForCheck()['BBQ뿜치킹시즈닝(25g)'].actualName, 'BBQ뿜치킹시즈닝(20G,소포장별도판매용)', 'stored legacy alias must hydrate as the non-conflicting small-pack source');
+api.setAliasMappingsForCheck({});
+api.setSiteMappingsForCheck({
+  'legacy-small-seasoning|BON': { targetName: 'BBQ뿜치킹시즈닝(58g)', siteName: 'BBQ뿜치킹시즈닝(20G,소포장별도판매용)', siteUnit: 'BON' },
+});
+assert.strictEqual(api.getSiteMappingsForCheck()['legacy-small-seasoning|BON'].targetName, 'BBQ뿜치킹시즈닝(25g)', 'stored source mapping must migrate the renamed small pack away from the 58G item');
+api.setSiteMappingsForCheck({});
+const fixedAliasRows = api.buildOrderAliasMatches({ comparison: { matched: [], missing: [], extra: [] } });
+assert.strictEqual(fixedAliasRows.find(row => row.aliasName === 'BBQ뿜치킹시즈닝(25g)').effectiveActualName, 'BBQ뿜치킹시즈닝(20G,소포장별도판매용)', 'small seasoning must use its fixed 20G SFA name even before a new analysis run');
+assert.strictEqual(fixedAliasRows.find(row => row.aliasName === 'BBQ뿜치킹시즈닝(58g)').effectiveActualName, 'BBQ뿜치킹시즈닝(58G,조리용)', '58g seasoning must use its distinct fixed SFA name');
+assert.strictEqual(fixedAliasRows.find(row => row.aliasName === 'JHP종이봉투(대)or(소)').effectiveActualName, 'JHP종이봉투(대)', 'JHP check item must prefer its fixed large-bag SFA row over unrelated bag candidates');
+assert.strictEqual(api.collectActualOrderCandidates(null).filter(row => row.actualName.includes('뿜치킹시즈닝')).length, 2, 'different seasoning sizes must remain distinct actual-order candidates');
 assert(api.scoreSiteToMaster('BBQ치즈볼', '냉동-치즈볼-BBQ치즈볼(크림)') >= 0.84, 'site/master score should find obvious candidate');
 const siteData = {
   ok: true,

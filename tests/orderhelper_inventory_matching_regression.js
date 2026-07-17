@@ -24,6 +24,38 @@ assert.strictEqual(api.displayStockTotalForCheck(canonicalName), null, 'output i
 assert.strictEqual(plain(api.inventoryByItemKeyForPayload())[api.itemKeyForName(canonicalName)].total, null, 'current/history keyed read model must preserve an all-blank inventory total');
 api.setEntriesForCheck(entries);
 
+const legacyRectangularName = '직사각용기1(190,감자),2(230,치즈스틱)';
+const rectangularOne = '직사각용기1(190,감자)';
+const rectangularTwo = '직사각용기2(230,치즈스틱)';
+api.setEntriesForCheck([{ id: 'legacy-rect', name: legacyRectangularName, zone: '창고', stock: 1 }]);
+const migratedRectangularEntries = plain(api.entriesForCheck());
+assert.deepStrictEqual(
+  migratedRectangularEntries.map(row => [row.name, row.zone, row.stock]),
+  [[rectangularOne, '창고', 1]],
+  'legacy combined container stock must migrate once to item 1 without duplicating it into item 2'
+);
+assert(api.MASTER.some(item => item.name === rectangularOne), 'rectangular container 1 must remain an independent master item');
+assert(api.MASTER.some(item => item.name === rectangularTwo), 'rectangular container 2 must be added as an independent master item');
+api.setEntriesForCheck(entries);
+
+api.setAliasMappingsForCheck({});
+const rectangularAliasRows = api.buildOrderAliasMatches({
+  items: [
+    { name: 'BBQ직사각용기1호', qty: 1, unit: 'BOX', amount: 15620, row_index: 401 },
+    { name: 'BBQ직사각용기2호', qty: 1, unit: 'BOX', amount: 13420, row_index: 402 },
+  ],
+  comparison: {
+    matched: [
+      { row_index: 401, sfa_name: 'BBQ직사각용기1호', sfa_qty: 1, sfa_unit: 'BOX', sfa_amount: 15620, expected_name: legacyRectangularName, score: 0.99 },
+      { row_index: 402, sfa_name: 'BBQ직사각용기2호', sfa_qty: 1, sfa_unit: 'BOX', sfa_amount: 13420, expected_name: legacyRectangularName, score: 0.99 },
+    ],
+    missing: [],
+    extra: [],
+  },
+});
+assert.strictEqual(rectangularAliasRows.find(row => row.aliasName === rectangularOne).actualName, 'BBQ직사각용기1호', 'container 1 must select only the number-1 actual order name');
+assert.strictEqual(rectangularAliasRows.find(row => row.aliasName === rectangularTwo).actualName, 'BBQ직사각용기2호', 'container 2 must select only the number-2 actual order name');
+
 const rawA = { name: '같은 이름(대)', unit: 'BOX', qty: 0, row_index: 201 };
 const rawB = { name: '같은이름', unit: 'BOX', qty: 1, row_index: 202 };
 assert.strictEqual(api.normalizeSiteItemName(rawA.name), api.normalizeSiteItemName(rawB.name), 'fixture must reproduce a normalized-name collision');

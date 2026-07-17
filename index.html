@@ -166,6 +166,9 @@
   .order-amount.missing { border-color: rgba(249, 115, 22, 0.45); background: rgba(249, 115, 22, 0.12); color: #fed7aa; }
   .order-amount.missing .order-amount-primary { color: #ffedd5; }
   .order-amount.missing .order-amount-secondary { color: #fdba74; }
+  .order-amount.price-only { display: inline-flex; flex: 0 1 auto; width: auto; min-height: 18px; align-items: center; gap: 5px; padding: 2px 6px; }
+  .order-amount.price-only .order-amount-primary { font-size: 10px; }
+  .order-amount.price-only .order-amount-secondary { font-size: 9px; }
   .order-amount.empty { display: none; }
   .daily-cell { display: inline-flex; align-items: center; gap: 6px; }
   .daily-analysis { display: inline-flex; align-items: center; min-height: 18px; margin-left: 4px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(14, 165, 233, 0.12); color: #7dd3fc; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
@@ -359,6 +362,7 @@
 <div class="input-tools" id="inputTools">
   <button type="button" onclick="resetStocks()">재고 리셋</button>
 </div>
+<datalist id="zoneOptions"></datalist>
 
 <div class="table-wrap">
   <table>
@@ -397,7 +401,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0753';
+const APP_VERSION = '0717.0823';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -1056,7 +1060,8 @@ const MASTER = [
   {sfaSeq:56,name:"치킨간지",unit:"박스/박스",policy:"",buffer:0.2,daily:0.1},
   {sfaSeq:56,name:"알루미늄캔(뚜껑포함)",unit:"",policy:"",buffer:0.5,daily:0.1},
   {sfaSeq:58,name:"내프킨,냅킨",unit:"박스/박스",policy:"",buffer:1,daily:0},
-  {sfaSeq:58,name:"직사각용기1(190,감자),2(230,치즈스틱)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.1},
+  {sfaSeq:58,name:"직사각용기1(190,감자)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.1},
+  {sfaSeq:58.1,name:"직사각용기2(230,치즈스틱)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.1},
   {sfaSeq:59,name:"물티슈(500)",unit:"",policy:"전부",buffer:1,daily:0},
   {sfaSeq:59,name:"소독저(젓가락)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.2},
   {sfaSeq:60,name:"안신스티커,BBQ테이프(N)",unit:"",policy:"",buffer:1,daily:0},
@@ -1081,7 +1086,25 @@ const MASTER = [
 const ITEM_NAME_ALIASES = {
   "BBQ시크릿양념소스(주방용)": "BBQ양념치킨소스",
   "BBQ시크릿양념소스(배달용)": "(컵소스)BBQ양념치킨소스(배달용)",
+  "직사각용기1(190,감자),2(230,치즈스틱)": "직사각용기1(190,감자)",
 };
+
+// 직사각용기는 과거 내부 품목 하나에 1호·2호가 함께 매핑됐다.
+// 원본 실발주명은 명확하므로 두 품목으로 고정 분리하되 과거 재고는 1호에 한 번만 이관한다.
+const SFA_ACTUAL_ITEM_ALIASES = Object.freeze({
+  "BBQ직사각용기1호": "직사각용기1(190,감자)",
+  "BBQ직사각용기2호": "직사각용기2(230,치즈스틱)",
+  "JHP종이봉투(대)": "JHP종이봉투(대)or(소)",
+  "BBQ뿜치킹시즈닝(58G,조리용)": "BBQ뿜치킹시즈닝(58g)",
+  "BBQ뿜치킹시즈닝(20G,소포장별도판매용)": "BBQ뿜치킹시즈닝(25g)",
+});
+
+const LEGACY_ORDER_ACTUAL_ALIAS_MIGRATIONS = Object.freeze({
+  "BBQ뿜치킹시즈닝(25g)": Object.freeze({
+    "BBQ뿜치킹시즈닝(58G,조리용)": "BBQ뿜치킹시즈닝(20G,소포장별도판매용)",
+    "BBQ뿜치킹시즈닝(58g)": "BBQ뿜치킹시즈닝(20G,소포장별도판매용)",
+  }),
+});
 
 let entries = [];     // [{id, name, zone, stock}] — 한 품목이 N구역에 있으면 N entry
 let overrides = {};   // {name: {k?, l?}}  — 품목별 보정
@@ -1131,6 +1154,29 @@ let inventoryRevision = 0;
 
 function canonicalItemName(name) {
   return ITEM_NAME_ALIASES[name] || name;
+}
+
+function canonicalItemNameForActual(actualName) {
+  const normalized = normalizeSiteIdentityName(actualName);
+  if (!normalized) return '';
+  const match = Object.entries(SFA_ACTUAL_ITEM_ALIASES)
+    .find(([sourceName]) => normalizeSiteIdentityName(sourceName) === normalized);
+  return match ? canonicalItemName(match[1]) : '';
+}
+
+function fixedActualAliasesForItem(itemName) {
+  const canonical = canonicalItemName(itemName || '');
+  return Object.entries(SFA_ACTUAL_ITEM_ALIASES)
+    .filter(([, targetName]) => canonicalItemName(targetName) === canonical)
+    .map(([actualName]) => actualName);
+}
+
+function migrateActualAliasName(itemName, actualName) {
+  const migrations = LEGACY_ORDER_ACTUAL_ALIAS_MIGRATIONS[canonicalItemName(itemName || '')] || {};
+  const normalized = normalizeSiteIdentityName(actualName);
+  const match = Object.entries(migrations)
+    .find(([oldName]) => normalizeSiteIdentityName(oldName) === normalized);
+  return match ? match[1] : actualName;
 }
 
 function itemKeyForName(name) {
@@ -2152,6 +2198,8 @@ function sanitizeOrderSiteMappings(source = {}) {
   Object.entries(source || {}).forEach(([key, value]) => {
     if (!key || !value || typeof value !== 'object' || Array.isArray(value)) return;
     let targetName = normalizeManualOrderItemName(canonicalItemName(value.targetName || ''));
+    const fixedTargetName = canonicalItemNameForActual(value.siteName || '');
+    if (fixedTargetName) targetName = fixedTargetName;
     if (!targetName) return;
     if (!known.has(targetName)) {
       targetName = ensureManualOrderItem(targetName, value.targetUnit || value.siteUnit || '', 'mapping', value.siteName || '');
@@ -2189,7 +2237,7 @@ function sanitizeOrderAliasMappings(source = {}) {
     if (!known.has(aliasName)) return;
     const status = allowedStatuses.has(value.status) ? value.status : 'confirmed';
     const unlinked = status === 'unlinked';
-    const actualName = String(value.actualName || value.targetName || '').trim().slice(0, 160);
+    const actualName = String(migrateActualAliasName(aliasName, value.actualName || value.targetName || '')).trim().slice(0, 160);
     if (!actualName && !unlinked) return;
     const row = {
       aliasName,
@@ -3012,7 +3060,7 @@ function solveOrderLineEquation(inputs = {}, context = {}) {
 }
 
 function normalizedActualNameKey(value) {
-  return normalizeSiteItemName(String(value || '')).toLocaleLowerCase('ko-KR');
+  return normalizeSiteIdentityName(String(value || '')).toLocaleLowerCase('ko-KR');
 }
 
 function explicitActualAliasesForItem(itemName) {
@@ -3024,6 +3072,7 @@ function explicitActualAliasesForItem(itemName) {
     : '';
   const names = [];
   if (primary) names.push(primary);
+  fixedActualAliasesForItem(canonical).forEach(name => names.push(name));
   Object.values(orderSiteMappings || {}).forEach(mapping => {
     if (canonicalItemName(mapping?.targetName || '') !== canonical) return;
     const actualName = String(mapping.siteName || '').trim();
@@ -3057,7 +3106,8 @@ function candidateActualNamesForItem(itemName, ledger = sfaOrderLedgerForPayload
   const names = [];
   (ledger.records || []).forEach(record => {
     (record.items || []).forEach(event => {
-      if (canonicalItemName(event.mappedName || '') !== canonical) return;
+      const fixedName = canonicalItemNameForActual(event.originalName || event.aliasName || '');
+      if ((fixedName || canonicalItemName(event.mappedName || '')) !== canonical) return;
       const name = String(event.originalName || event.aliasName || '').trim();
       if (name) names.push(name);
     });
@@ -3301,7 +3351,7 @@ function currentExcelOrderLineCandidates(actualAliases, data = lastSfaCompareDat
       }
     }
     const actualName = siteItemName(row) || siteItemName(compareRow);
-    const mappedName = currentExcelMappedName(row, compareRow);
+    const mappedName = canonicalItemNameForActual(actualName) || currentExcelMappedName(row, compareRow);
     const aliasMatched = aliasKeys.has(normalizedActualNameKey(actualName));
     const mappedNameExact = Boolean(internalName) && mappedName === internalName;
     const mappedNameCandidate = !aliasMatched && mappedNameExact;
@@ -3547,7 +3597,7 @@ function expectedOrderAmountForItem(item, stockNeed, resolvedRow = undefined) {
 function orderAnalysisText(item, stockNeed) {
   if (isOrderAliasUnlinked(item.name)) return '연결 안 함';
   const actual = getActualOrder(item.name);
-  if (actual !== null) return '확인';
+  if (actual !== null) return 'SFA 확인';
   const parts = orderUnitParts(item);
   const manualFactor = manualUnitFactorForItem(item);
   if (manualFactor) return orderConversionDisplayText(item, manualFactor, '→');
@@ -3555,12 +3605,11 @@ function orderAnalysisText(item, stockNeed) {
   if (analysis?.source === 'movement' && Number.isFinite(analysis.factor)) {
     return orderConversionDisplayText(item, analysis.factor, '→');
   }
-  if (parts.same) return '미확인';
   if ((analysis?.source === 'item' || analysis?.source === 'unit') && Number.isFinite(analysis.factor)) {
     return orderConversionDisplayText(item, analysis.factor, '→');
   }
-  if (Number(stockNeed) > 0) return '미확인';
-  return '';
+  if (!(Number(stockNeed) > 0)) return '';
+  return parts.same ? 'SFA 미확인' : '단위 확인';
 }
 
 function orderAnalysisTitle(item, stockNeed) {
@@ -3676,10 +3725,12 @@ function orderPriceMissingActionText(row) {
   const codes = new Set((row?.issues || []).map(issue => issue?.code).filter(Boolean));
   if (codes.has('ALIAS_CONFLICT')) return '발주명 중복 확인 필요';
   if (codes.has('DATA_CONFLICT')) return '가격 근거 확인 필요';
-  if (codes.has('PRICE_JOIN_BUG') || codes.has('PRICE_SOURCE_MISSING') || codes.has('ITEM_UNMATCHED')) return '발주명·가격 연결 필요';
+  if (codes.has('PRICE_JOIN_BUG')) return '단가 연결 확인 필요';
+  if (codes.has('PRICE_SOURCE_MISSING')) return '단가 확인 필요';
+  if (codes.has('ITEM_UNMATCHED')) return '발주명 연결 필요';
   if (codes.has('UNIT_UNCONFIRMED')) return '발주 단위 확인 필요';
   if (codes.has('DERIVATION_BUG')) return '가격 계산 확인 필요';
-  if (!Number.isFinite(row?.unitPrice)) return '가격 자료 확인 필요';
+  if (!Number.isFinite(row?.unitPrice)) return '단가 확인 필요';
   if (!Number.isFinite(row?.expectedAmount)) return '발주 단위 확인 필요';
   return '가격 확인 필요';
 }
@@ -3706,10 +3757,12 @@ function chickenPriceWarningText(row) {
 }
 
 function renderOrderAmountSpan(item, stockNeed, resolvedRow = undefined) {
-  if (!Number.isFinite(Number(stockNeed)) || Number(stockNeed) <= 0) return '<span class="order-amount empty"></span>';
+  const numericNeed = Number(stockNeed);
+  if (!Number.isFinite(numericNeed)) return '<span class="order-amount empty"></span>';
+  const hasNeed = numericNeed > 0;
   const row = resolvedRow === undefined ? unifiedOrderRowForItem(item.name) : resolvedRow;
   if (row?.matchStatus === UNIFIED_ORDER_MATCH_STATUSES.ITEM_UNLINKED) return '<span class="order-amount empty"></span>';
-  const estimate = expectedOrderAmountForItem(item, stockNeed, row);
+  const estimate = expectedOrderAmountForItem(item, numericNeed, row);
   const actualQty = Number.isFinite(row?.actualOrderQty) ? row.actualOrderQty : null;
   const actualUnit = String(row?.priceEvidence?.actualUnit || orderUnitParts(item).orderUnit || '발주').trim();
   const actualText = actualQty === null ? '실발주 수량 미확인' : `실발주 ${fmt(actualQty, 2)}${actualUnit}`;
@@ -3720,9 +3773,23 @@ function renderOrderAmountSpan(item, stockNeed, resolvedRow = undefined) {
   if (!estimate) {
     const reason = orderPriceMissingReason(row);
     const title = [actualText, `가격 미해결: ${reason}`, priceSource ? `가격출처 ${priceSource}` : '가격출처 없음'].join(' · ');
-    return `<span class="order-amount missing" title="${escapeHtml(title)}"><span class="order-amount-primary">예상금액 확인 필요</span><span class="order-amount-secondary">${escapeHtml(orderPriceMissingActionText(row))}</span></span>`;
+    const action = orderPriceMissingActionText(row);
+    if (!hasNeed) return `<span class="order-amount price-only missing" title="${escapeHtml(title)}"><span class="order-amount-primary">${escapeHtml(action)}</span></span>`;
+    return `<span class="order-amount missing" title="${escapeHtml(title)}"><span class="order-amount-primary">예상금액 확인 필요</span><span class="order-amount-secondary">${escapeHtml(action)}</span></span>`;
   }
   const pricePresentation = orderPricePresentation(item, estimate);
+  if (!hasNeed) {
+    const title = [
+      actualText,
+      ...pricePresentation.titleParts,
+      chickenDetail,
+      `가격출처 ${priceSource || '실발주 엑셀'}`,
+      estimate.source_date ? `엑셀 ${estimate.source_date}` : '',
+      estimate.source_file ? `파일 ${estimate.source_file}` : '',
+      Number.isFinite(estimate.source_qty) && Number.isFinite(estimate.source_amount) ? `근거 수량 ${fmt(estimate.source_qty, 2)} / 금액 ${formatWon(estimate.source_amount)}` : ''
+    ].filter(Boolean).join(' · ');
+    return `<span class="order-amount price-only" title="${escapeHtml(title)}"><span class="order-amount-primary">${escapeHtml(pricePresentation.visible)}</span><span class="order-amount-secondary">${escapeHtml(shortPriceSource)}</span></span>`;
+  }
   const title = [
     `예상 발주금액 ${formatWon(estimate.expected_order_amount)}`,
     `오늘 계산 발주량 ${fmt(estimate.recommended_order_qty, 1)}${orderUnitParts(item).orderUnit || '발주'}`,
@@ -4647,7 +4714,7 @@ function actualOrderItemUnit(row) {
 }
 
 function actualOrderCandidateKey(name, unit = '') {
-  const nameKey = normalizeSiteItemName(name) || String(name || '').trim();
+  const nameKey = normalizeSiteIdentityName(name) || String(name || '').trim();
   const unitKey = normalizeOrderUnit(unit) || '-';
   return `${nameKey || '-'}|${unitKey}`;
 }
@@ -4675,7 +4742,7 @@ function addActualOrderCandidate(map, row, source, details = {}) {
   if (Number.isFinite(amount) && amount > 0) current.amountTotal += amount;
   current.evidenceCount += 1;
   if (source) current.sources.add(source);
-  const expectedName = canonicalItemName(details.expectedName || row?.expected_name || '');
+  const expectedName = canonicalItemNameForActual(actualName) || canonicalItemName(details.expectedName || row?.expected_name || '');
   if (expectedName && knownItemNameSet().has(expectedName)) current.expectedNames.add(expectedName);
   const dateKey = normalizeHistoryDateKey(details.dateKey || row?.orderDateKey || row?.orderDate || '');
   if (dateKey) current.dates.add(dateKey);
@@ -4686,6 +4753,9 @@ function addActualOrderCandidate(map, row, source, details = {}) {
 
 function collectActualOrderCandidates(data = lastSfaCompareData) {
   const map = new Map();
+  Object.entries(SFA_ACTUAL_ITEM_ALIASES).forEach(([actualName, expectedName]) => {
+    addActualOrderCandidate(map, { name: actualName }, '고정연결', { expectedName, score: 1 });
+  });
   const latestSource = data?.file?.name === '수동 입력' ? '수동입력' : '최근SFA';
   siteRowsFromSfaData(data).forEach(row => addActualOrderCandidate(map, row, latestSource, {
     dateKey: data?.historySummary?.selectedDate
@@ -4750,6 +4820,7 @@ function aliasCandidateReason(candidate) {
 
 function bestActualCandidatesForAlias(aliasName, candidates = collectActualOrderCandidates(), limit = 5) {
   const canonicalAlias = canonicalItemName(aliasName || '');
+  const fixedKeys = new Set(fixedActualAliasesForItem(canonicalAlias).map(normalizedActualNameKey));
   // 이미 다른 canonical 품목으로 매핑된 누적 행은 이 품목의 fuzzy 후보로 다시 전수검사하지 않는다.
   // 미매핑 후보와 이 품목의 직접 근거만 남겨 대형 ledger에서도 후보 의미와 성능을 함께 지킨다.
   const scopedCandidates = candidates.filter(candidate =>
@@ -4760,10 +4831,10 @@ function bestActualCandidatesForAlias(aliasName, candidates = collectActualOrder
     const score = knownExpected
       ? Math.max(0.98, Number(candidate.matchScore || 0))
       : scoreSiteToMaster(candidate.actualName, canonicalAlias);
-    return { ...candidate, score, reason: aliasCandidateReason(candidate) };
+    return { ...candidate, score, fixedAlias: fixedKeys.has(normalizedActualNameKey(candidate.actualName)), reason: aliasCandidateReason(candidate) };
   })
     .filter(candidate => candidate.score >= 0.45 || candidate.expectedNames?.includes(canonicalAlias))
-    .sort((a, b) => b.score - a.score || b.evidenceCount - a.evidenceCount || a.actualName.localeCompare(b.actualName, 'ko', { numeric: true }))
+    .sort((a, b) => Number(b.fixedAlias) - Number(a.fixedAlias) || b.score - a.score || b.evidenceCount - a.evidenceCount || a.actualName.localeCompare(b.actualName, 'ko', { numeric: true }))
     .slice(0, limit);
 }
 
@@ -6847,6 +6918,26 @@ function normalizedZone(zone) {
   return String(zone || '').trim();
 }
 
+function zoneSuggestionValues(source = entries) {
+  const unique = new Map();
+  (Array.isArray(source) ? source : []).forEach(entry => {
+    const zone = normalizedZone(entry?.zone);
+    if (!zone) return;
+    const key = zone.toLocaleLowerCase('ko-KR');
+    if (!unique.has(key)) unique.set(key, zone);
+  });
+  return Array.from(unique.values())
+    .sort((left, right) => left.localeCompare(right, 'ko', { numeric: true, sensitivity: 'base' }));
+}
+
+function renderZoneOptions(source = entries) {
+  const list = document.getElementById('zoneOptions');
+  if (!list) return;
+  list.innerHTML = zoneSuggestionValues(source)
+    .map(zone => `<option value="${escapeHtml(zone)}"></option>`)
+    .join('');
+}
+
 function compareInputRows(left, right) {
   const priorityDiff = inputRowPriority(left.entry, left.hidden) - inputRowPriority(right.entry, right.hidden);
   if (priorityDiff !== 0) return priorityDiff;
@@ -7206,6 +7297,7 @@ function render(options = {}) {
   tbody.innerHTML = '';
   renderHeader();
   renderSaveLogs();
+  renderZoneOptions(entries);
   updateGridSortButtons();
   const days = parseInt(document.getElementById('orderDays').value);
   recomputeUsageAnalysis();
@@ -7270,7 +7362,7 @@ function render(options = {}) {
       : '';
 
     tr.innerHTML = `
-      <td data-column="zone"><input class="cell zone" type="text" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="zone" value="${escapeHtml(ent.zone || '')}"></td>
+      <td data-column="zone"><input class="cell zone" type="text" list="zoneOptions" autocomplete="off" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="zone" value="${escapeHtml(ent.zone || '')}"></td>
       <td class="name" data-column="name" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}${inlineSiteControls}</td>
       ${needCell}
       ${orderCell}
