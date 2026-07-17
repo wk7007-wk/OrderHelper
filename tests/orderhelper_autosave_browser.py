@@ -582,6 +582,8 @@ def main():
                     const needCell = row.querySelector('td.need-qty');
                     const orderCell = row.querySelector('td.order-qty');
                     const orderContent = orderCell.querySelector('.order-cell');
+                    const needValue = needCell.querySelector('.need-output-value');
+                    const orderValue = orderCell.querySelector('.output-order-value');
                     const nameCell = row.querySelector('td[data-column="name"]');
                     const stockCell = row.querySelector('td[data-column="stock"]');
                     const nameRect = nameCell.getBoundingClientRect();
@@ -603,6 +605,8 @@ def main():
                         orderVerticalAlign: getComputedStyle(orderCell).verticalAlign,
                         orderDisplay: getComputedStyle(orderContent).display,
                         orderJustify: getComputedStyle(orderContent).justifyContent,
+                        needNumberCenterY: (needValue.getBoundingClientRect().top + needValue.getBoundingClientRect().bottom) / 2,
+                        orderNumberCenterY: (orderValue.getBoundingClientRect().top + orderValue.getBoundingClientRect().bottom) / 2,
                         regularRowsAligned: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).every(candidate =>
                             Array.from(candidate.querySelectorAll(':scope > td')).map(cell => cell.dataset.column).join(',') === expectedKeys.join(',')
                         ),
@@ -619,9 +623,10 @@ def main():
             assert abs(mobile_header["headers"][0]["top"] - mobile_header["wrapTop"]) <= 1, mobile_header
             for header, cell in zip(mobile_header["headers"], mobile_header["cells"]):
                 assert abs(header["x"] - cell["x"]) < 1 and abs(header["right"] - cell["right"]) < 1, mobile_header
-            assert mobile_header["needTextAlign"] == "center" and mobile_header["needVerticalAlign"] == "middle", mobile_header
-            assert mobile_header["orderTextAlign"] == "left" and mobile_header["orderVerticalAlign"] == "middle", mobile_header
+            assert mobile_header["needTextAlign"] == "center" and mobile_header["needVerticalAlign"] == "top", mobile_header
+            assert mobile_header["orderTextAlign"] == "left" and mobile_header["orderVerticalAlign"] == "top", mobile_header
             assert mobile_header["orderDisplay"] == "flex" and mobile_header["orderJustify"] == "flex-start", mobile_header
+            assert abs(mobile_header["needNumberCenterY"] - mobile_header["orderNumberCenterY"]) <= 1, mobile_header
             assert mobile_header["regularRowsAligned"] is True, mobile_header
             assert mobile_header["orderContained"] is True, mobile_header
             assert mobile_header["stockNextToName"] is True and mobile_header["stockBeforeNeed"] is True, mobile_header
@@ -878,7 +883,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0717.0907"
+            assert active_patch["body"]["appVersion"] == "0717.0918"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])

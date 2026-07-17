@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0907';/, 'APP_VERSION must match the KST stock-adjacent grid release time');
+mustMatch(/const APP_VERSION = '0717.0918';/, 'APP_VERSION must match the KST need/order number alignment release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -172,6 +172,8 @@ mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ position: stick
 mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ left: 278px;/, 'mobile stock column must stay sticky beside the item name');
 mustMatch(/#thead th\[data-column="need"\], #tbody td\.need-qty[\s\S]*text-align: center;/, 'need header and values must align in one centered column');
 mustMatch(/#thead th\[data-column="order"\], #tbody td\.order-qty[\s\S]*text-align: left;[\s\S]*\.order-cell \{ display: flex;[\s\S]*align-items: center;[\s\S]*justify-content: flex-start;/, 'recommended order details must align visibly within one row');
+mustMatch(/#tbody td\.need-qty, #tbody td\.order-qty \{ vertical-align: top; \}/, 'need and recommended-order cells must share the same top-aligned primary row');
+mustMatch(/\.need-output-value \{[^}]*min-height: 28px;[^}]*align-items: center;[^}]*\}[\s\S]*\.output-order-value \{[^}]*min-height: 28px;[^}]*align-items: center;[^}]*\}/, 'need and recommended-order numbers must use matching centered 28px slots');
 assert.strictEqual((html.match(/<table\b/g) || []).length, 1, 'input and output must share exactly one table');
 mustNotMatch(/id="modeBtn"|function toggleMode\(|let viewMode\s*=/, 'separate input/output view mode must be removed');
 mustMatch(/function normalizeOrderUnit\(unit\)/, 'unit alias normalizer missing');
