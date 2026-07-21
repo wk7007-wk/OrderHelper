@@ -584,14 +584,24 @@ def main():
                     const zoneInput = row.querySelector('input.cell[data-field="zone"]');
                     const stockInput = row.querySelector('input.cell[data-field="stock"]');
                     const detailToggle = row.querySelector('.mobile-row-toggle');
+                    const itemTitle = nameCell.querySelector('.item-title');
+                    const needValue = needCell.querySelector('.need-output-value');
+                    const toolButtons = Array.from(document.querySelectorAll('#inputTools > button'));
                     zoneInput.value = '냉장안쪽';
                     const rowRect = row.getBoundingClientRect();
                     const primaryCells = ['zone', 'name', 'stock', 'need', 'order'].map(key =>
                         row.querySelector(`td[data-column="${key}"]`).getBoundingClientRect()
                     );
                     const expectedKeys = ['zone', 'name', 'stock', 'need', 'order', 'k', 'l', 'unit', 'actions'];
+                    const contentCenters = [zoneInput, itemTitle, stockInput, needValue, orderValue, detailToggle]
+                        .map(element => {
+                            const rect = element.getBoundingClientRect();
+                            return rect.top + rect.height / 2;
+                        });
                     const collapsed = {
                         height: rowRect.height,
+                        contentCenterSpread: Math.max(...contentCenters) - Math.min(...contentCenters),
+                        detailToggleHeight: detailToggle.getBoundingClientRect().height,
                         secondaryHidden: [kCell, lCell, unitCell].every(cell => getComputedStyle(cell).display === 'none'),
                         aliasControlsHidden: !row.querySelector('.inline-alias-correction') || getComputedStyle(row.querySelector('.inline-alias-correction')).display === 'none',
                         orderDetailsHidden: Array.from(row.querySelectorAll('.order-analysis, .order-amount')).every(el => getComputedStyle(el).display === 'none'),
@@ -603,6 +613,9 @@ def main():
                         ariaExpanded: detailToggle.getAttribute('aria-expanded'),
                         classExpanded: row.classList.contains('mobile-expanded'),
                         orderWidth: orderCell.getBoundingClientRect().width,
+                        stockDirection: getComputedStyle(stockCell).flexDirection,
+                        needDirection: getComputedStyle(needCell).flexDirection,
+                        orderDirection: getComputedStyle(orderCell).flexDirection,
                     };
                     return {
                         headerKeys: headerCells.map(cell => cell.dataset.column),
@@ -632,6 +645,9 @@ def main():
                         zoneInputWidth: zoneInput.getBoundingClientRect().width,
                         zoneTextFits: zoneInput.scrollWidth <= zoneInput.clientWidth,
                         stockInputHeight: stockInput.getBoundingClientRect().height,
+                        headerHeights: headerCells.filter(cell => getComputedStyle(cell).display !== 'none').map(cell => cell.getBoundingClientRect().height),
+                        toolButtonsSingleRow: toolButtons.length === 2 && Math.abs(toolButtons[0].getBoundingClientRect().top - toolButtons[1].getBoundingClientRect().top) <= 1,
+                        toolButtonHeights: toolButtons.map(button => button.getBoundingClientRect().height),
                         regularRowsAligned: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).every(candidate =>
                             Array.from(candidate.querySelectorAll(':scope > td')).map(cell => cell.dataset.column).join(',') === expectedKeys.join(',')
                         ),
@@ -656,18 +672,25 @@ def main():
             assert mobile_list["orderDisplay"] == "flex", mobile_list
             assert mobile_list["regularRowsAligned"] is True, mobile_list
             assert mobile_list["stockPosition"] == "static", mobile_list
-            assert mobile_list["zoneInputHeight"] >= 36 and mobile_list["stockInputHeight"] >= 36, mobile_list
+            assert mobile_list["zoneInputHeight"] >= 40 and mobile_list["stockInputHeight"] >= 40, mobile_list
             assert mobile_list["zoneInputWidth"] >= 78 and mobile_list["zoneTextFits"] is True, mobile_list
+            assert all(height >= 30 for height in mobile_list["headerHeights"]), mobile_list
+            assert mobile_list["toolButtonsSingleRow"] is True and all(height >= 42 for height in mobile_list["toolButtonHeights"]), mobile_list
             assert mobile_list["orderFontSize"] >= 16 and mobile_list["nameFontSize"] >= 12, mobile_list
             assert mobile_list["nameWhiteSpace"] == "normal" and mobile_list["nameTextOverflow"] == "clip", mobile_list
             assert mobile_list["collapsed"]["height"] <= 72, mobile_list
+            assert mobile_list["collapsed"]["contentCenterSpread"] <= 1, mobile_list
+            assert mobile_list["collapsed"]["detailToggleHeight"] >= 40, mobile_list
             assert mobile_list["collapsed"]["secondaryHidden"] is True, mobile_list
             assert mobile_list["collapsed"]["aliasControlsHidden"] is True, mobile_list
             assert mobile_list["collapsed"]["orderDetailsHidden"] is True, mobile_list
             assert mobile_list["expanded"]["height"] > mobile_list["collapsed"]["height"], mobile_list
             assert mobile_list["expanded"]["secondaryVisible"] is True, mobile_list
             assert mobile_list["expanded"]["ariaExpanded"] == "true" and mobile_list["expanded"]["classExpanded"] is True, mobile_list
-            assert mobile_list["expanded"]["orderWidth"] >= 180, mobile_list
+            assert mobile_list["expanded"]["orderWidth"] >= 178, mobile_list
+            assert mobile_list["expanded"]["stockDirection"] == "column", mobile_list
+            assert mobile_list["expanded"]["needDirection"] == "column", mobile_list
+            assert mobile_list["expanded"]["orderDirection"] == "column", mobile_list
 
             focus_race = mobile_page.evaluate(
                 """async () => {
@@ -920,7 +943,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0722.0132"
+            assert active_patch["body"]["appVersion"] == "0722.0154"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])

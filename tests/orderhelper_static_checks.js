@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0722.0132';/, 'APP_VERSION must match the KST route-group mobile-list release time');
+mustMatch(/const APP_VERSION = '0722.0154';/, 'APP_VERSION must match the KST mobile alignment and UX release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -172,9 +172,14 @@ assert.strictEqual((html.match(stockAdjacentHeader) || []).length, 2, 'static an
 mustMatch(/<td class="name"[\s\S]{0,500}<td data-column="stock"><input class="cell"[\s\S]{0,500}data-field="stock"[\s\S]{0,200}<\/td>\s*\$\{needCell\}\s*\$\{orderCell\}/, 'every stored row must put the stock input directly after the item name');
 mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ position: sticky; left: 326px;/, 'desktop stock column must stay sticky beside the item name');
 mustMatch(/#tbody tr\[data-entry-key\] \{[\s\S]*grid-template-areas: "zone name stock need order actions";/, 'mobile rows must default to one compact list line with every core value on screen');
-mustMatch(/thead \{ position: sticky; top: 0;[\s\S]*display: block;[\s\S]*#thead \{[\s\S]*grid-template-columns: 84px minmax\(0, 1fr\) 50px 38px 44px 26px;/, 'mobile compact list must reserve enough width for the full zone value');
+mustMatch(/thead \{ position: sticky; top: 0;[\s\S]*display: block;[\s\S]*#thead \{[\s\S]*grid-template-columns: 84px minmax\(0, 1fr\) 52px 42px 46px 36px;/, 'mobile compact list must balance readable zone, numeric, and detail columns');
+mustMatch(/\.input-tools \{ display: grid; grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);[\s\S]*\.zone-manager \{ grid-column: 1 \/ -1;/, 'mobile inventory tools must share one compact row while the route editor spans the full width');
+mustMatch(/#tbody tr\[data-entry-key\] \{[\s\S]*min-height: 50px;[\s\S]*align-items: stretch;/, 'mobile rows must use one shared vertical track for every primary value');
+mustMatch(/#tbody td input\.cell \{[^}]*min-height: 40px;[^}]*box-sizing: border-box;/, 'mobile inputs must use a consistent balanced control height');
+mustMatch(/#tbody \.need-output-value \{[^}]*min-height: 40px;[^}]*align-items: center;[^}]*justify-content: center;/, 'mobile calculated values must share the input vertical center');
 mustMatch(/#tbody \.item-title \{[^}]*overflow: visible;[^}]*overflow-wrap: anywhere;[^}]*text-overflow: clip;[^}]*white-space: normal;/, 'mobile item names must wrap instead of clipping text');
-mustMatch(/#tbody tr\.mobile-expanded \{[\s\S]*grid-template-columns: 96px 56px minmax\(0, 1fr\) 42px;[\s\S]*"zone name name actions"[\s\S]*"stock need order actions"[\s\S]*"k l unit actions";/, 'mobile detail expansion must retain a wide zone field and the full editable card layout');
+mustMatch(/#tbody tr\.mobile-expanded \{[\s\S]*grid-template-columns: 96px 58px minmax\(0, 1fr\) 40px;[\s\S]*"zone name name actions"[\s\S]*"stock need order actions"[\s\S]*"k l unit actions";/, 'mobile detail expansion must retain a wide zone field and the full editable card layout');
+mustMatch(/#tbody tr\.mobile-expanded td\[data-column="stock"\],[\s\S]*flex-direction: column;[\s\S]*justify-content: flex-start;/, 'expanded mobile values must consistently place labels above controls');
 mustMatch(/#tbody \.inline-alias-correction,[\s\S]*#tbody \.inline-site-match \{ display: none; \}/, 'mobile compact rows must hide verbose matching controls until expanded');
 mustMatch(/#thead th\[data-column="need"\], #tbody td\.need-qty[\s\S]*text-align: center;/, 'need header and values must align in one centered column');
 mustMatch(/#thead th\[data-column="order"\], #tbody td\.order-qty[\s\S]*text-align: left;[\s\S]*\.order-cell \{ display: flex;[\s\S]*align-items: center;[\s\S]*justify-content: flex-start;/, 'recommended order details must align visibly within one row');
