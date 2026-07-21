@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0722.0106';/, 'APP_VERSION must match the KST compact mobile-list release time');
+mustMatch(/const APP_VERSION = '0722.0132';/, 'APP_VERSION must match the KST route-group mobile-list release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -172,8 +172,9 @@ assert.strictEqual((html.match(stockAdjacentHeader) || []).length, 2, 'static an
 mustMatch(/<td class="name"[\s\S]{0,500}<td data-column="stock"><input class="cell"[\s\S]{0,500}data-field="stock"[\s\S]{0,200}<\/td>\s*\$\{needCell\}\s*\$\{orderCell\}/, 'every stored row must put the stock input directly after the item name');
 mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ position: sticky; left: 326px;/, 'desktop stock column must stay sticky beside the item name');
 mustMatch(/#tbody tr\[data-entry-key\] \{[\s\S]*grid-template-areas: "zone name stock need order actions";/, 'mobile rows must default to one compact list line with every core value on screen');
-mustMatch(/thead \{ position: sticky; top: 0;[\s\S]*display: block;[\s\S]*#thead \{[\s\S]*grid-template-columns: 40px minmax\(0, 1fr\) 52px 40px 46px 28px;/, 'mobile compact list must keep a short visible column header');
-mustMatch(/#tbody tr\.mobile-expanded \{[\s\S]*"zone name name actions"[\s\S]*"stock need order actions"[\s\S]*"k l unit actions";/, 'mobile detail expansion must retain the full editable card layout');
+mustMatch(/thead \{ position: sticky; top: 0;[\s\S]*display: block;[\s\S]*#thead \{[\s\S]*grid-template-columns: 84px minmax\(0, 1fr\) 50px 38px 44px 26px;/, 'mobile compact list must reserve enough width for the full zone value');
+mustMatch(/#tbody \.item-title \{[^}]*overflow: visible;[^}]*overflow-wrap: anywhere;[^}]*text-overflow: clip;[^}]*white-space: normal;/, 'mobile item names must wrap instead of clipping text');
+mustMatch(/#tbody tr\.mobile-expanded \{[\s\S]*grid-template-columns: 96px 56px minmax\(0, 1fr\) 42px;[\s\S]*"zone name name actions"[\s\S]*"stock need order actions"[\s\S]*"k l unit actions";/, 'mobile detail expansion must retain a wide zone field and the full editable card layout');
 mustMatch(/#tbody \.inline-alias-correction,[\s\S]*#tbody \.inline-site-match \{ display: none; \}/, 'mobile compact rows must hide verbose matching controls until expanded');
 mustMatch(/#thead th\[data-column="need"\], #tbody td\.need-qty[\s\S]*text-align: center;/, 'need header and values must align in one centered column');
 mustMatch(/#thead th\[data-column="order"\], #tbody td\.order-qty[\s\S]*text-align: left;[\s\S]*\.order-cell \{ display: flex;[\s\S]*align-items: center;[\s\S]*justify-content: flex-start;/, 'recommended order details must align visibly within one row');
@@ -490,11 +491,16 @@ mustMatch(/const LEGACY_ORDER_ACTUAL_ALIAS_MIGRATIONS = Object\.freeze\(\{[\s\S]
 mustMatch(/migrateActualAliasName\(aliasName, value\.actualName \|\| value\.targetName \|\| ''\)/, 'stored alias hydration must apply the bounded legacy actual-name migration');
 mustMatch(/const fixedTargetName = canonicalItemNameForActual\(value\.siteName \|\| ''\);\s*if \(fixedTargetName\) targetName = fixedTargetName;/, 'stored source mappings must follow fixed actual-name splits instead of preserving old combined targets');
 mustMatch(/<datalist id="zoneOptions"><\/datalist>/, 'zone input needs one shared suggestion list');
+mustMatch(/id="zoneManagerToggle"[\s\S]*id="zoneManager"[\s\S]*id="zoneRouteList"/, 'zone route editor UI must remain available beside the inventory tools');
 mustMatch(/function zoneSuggestionValues\(source = entries\)/, 'zone suggestions must be derived from saved and typed rows');
+mustMatch(/function sanitizeZoneOrder\(source = zoneOrder, entrySource = entries\)/, 'zone route order needs a canonical deduplicated representation');
+mustMatch(/function moveZoneCategory\(zone, direction\)[\s\S]*\[zoneOrder\[index\], zoneOrder\[nextIndex\]\] = \[zoneOrder\[nextIndex\], zoneOrder\[index\]\]/, 'zone route buttons must move the entire category rank');
+mustMatch(/function renameZoneCategory\(zone, nextValue\)[\s\S]*entries\.forEach\(entry =>[\s\S]*entry\.zone = next;[\s\S]*rememberEntryZonePatch\(entry\)/, 'renaming one zone category must patch every dependent inventory row');
 mustMatch(/list="zoneOptions" autocomplete="off"/, 'zone input must retain free text while offering existing values');
 mustMatch(/\.map\(zone => `<option value="\$\{escapeHtml\(zone\)\}"><\/option>`\)/, 'zone suggestions must be escaped before rendering');
 mustMatch(/rememberEntryZonePatch\(ent\);\s*renderZoneOptions\(entries\);/, 'zone input must refresh local selection options immediately without waiting for remote ACK');
 mustMatch(/function mergeConfirmedEntryZonePatchPayload\(currentRemote, historyRemote, localPayload, patches\)/, 'remote-newer save conflicts need a bounded category-zone patch merge');
+mustMatch(/zoneOrder: sanitizeZoneOrder\(localPayload\?\.zoneOrder \|\| merged\.zoneOrder \|\| \[\], patched\.entries\)/, 'category conflict merge must retain the local route order beside the patched rows');
 mustMatch(/entryZonePatches\.length && \(currentResponse\?\.status === 412 \|\| historyResponse\?\.status === 412\)/, 'entry-zone pair-CAS conflicts must stop at the bounded retry even without a remote-newer merge');
 mustMatch(/conflictReason: entryZonePatchMerged \? 'entry_zone_patch_retry_exhausted' : 'entry_zone_patch_cas_conflict'[\s\S]*localPatchPreserved: true/, 'repeated pair-CAS conflicts must preserve the local category-zone queue with a clear status');
 mustMatch(/function migrateRuntimeItemNames\(\)/, 'runtime item name migration helper missing');
@@ -523,6 +529,7 @@ mustMatch(/dateKey, orderDays: days/, 'daily history payload must include KST da
 mustMatch(/function setOrderDaysValue\(value\)/, 'orderDays setter must exist for cross-device sync');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderDays'\)\) setOrderDaysValue\(data\.orderDays\);/, 'Firebase sync must apply orderDays to the selector');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'entries'\)\) entries = migrateEntriesByName\(data\.entries\);/, 'Firebase sync must apply empty entries payloads by ownership check');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'zoneOrder'\)\) zoneOrder = sanitizeZoneOrder\(data\.zoneOrder, entries\);/, 'Firebase sync must hydrate the shared zone route order');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'overrides'\)\) overrides = migrateNamedObject\(data\.overrides\);/, 'Firebase sync must apply cleared overrides payloads');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderSiteMappings'\)\) orderSiteMappings = sanitizeOrderSiteMappings\(data\.orderSiteMappings\);/, 'Firebase sync must apply order-site mapping corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderAliasMappings'\)\) orderAliasMappings = sanitizeOrderAliasMappings\(data\.orderAliasMappings\);/, 'Firebase sync must apply order alias mapping corrections');
@@ -537,10 +544,11 @@ mustMatch(/const flowEpoch = stockFlowEpoch;[\s\S]*if \(flowEpoch !== stockFlowE
 mustMatch(/function compareGridRows\(left, right, mode = gridSortMode\)/, 'single grid needs explicit input-zone and SFA sort contexts');
 mustMatch(/return mode === 'sfa' \? compareSfaRows\(left, right\) : compareInputRows\(left, right\);/, 'sort context must only change row order');
 mustMatch(/function inputRowPriority\(entry, hidden\)[\s\S]*if \(hidden\) return 2;[\s\S]*if \(isStockChecked\(entry\)\) return 1;[\s\S]*return 0;/, 'input sort must keep unchecked rows before completed and hidden rows');
-mustMatch(/function compareInputRows\(left, right\) \{[\s\S]*inputRowPriority\(left\.entry, left\.hidden\) - inputRowPriority\(right\.entry, right\.hidden\)/, 'input sorting must apply completion priority before zone order');
+mustMatch(/function compareInputRows\(left, right\) \{[\s\S]*const zoneRankDiff = zoneOrderIndex\(leftZone\) - zoneOrderIndex\(rightZone\);[\s\S]*const priorityDiff = inputRowPriority\(left\.entry, left\.hidden\) - inputRowPriority\(right\.entry, right\.hidden\);/, 'input sorting must keep each route category together before applying completion priority inside the group');
 mustMatch(/entries\.map\(\(ent, inputIndex\) =>/, 'input sorting must retain each row original input position');
 mustMatch(/return Number\(left\.inputIndex \|\| 0\) - Number\(right\.inputIndex \|\| 0\);/, 'same-zone input sorting must fall back to original input order');
 mustMatch(/localStorage\.setItem\('bbq_orderDays', orderDaysEl\.value\)/, 'saveLocal must persist orderDays locally');
+mustMatch(/localStorage\.setItem\(ZONE_ORDER_STORAGE_KEY, JSON\.stringify\(sanitizeZoneOrder\(zoneOrder, entries\)\)\)/, 'saveLocal must persist the editable zone route order');
 mustMatch(/localStorage\.setItem\(ORDER_DAYS_RULE_STORAGE_KEY, ORDER_DAYS_RULE_VERSION\)/, 'orderDays local persistence must mark the current recommendation rule');
 mustMatch(/const historyUrl = `\$\{FB_URL\}\$\{FB_PATH\}\/history\/\$\{commit\.dateKey\}\.json`;/, 'daily history path must use the confirmed commit date');
 mustNotMatch(/<th>순서<\/th>/, 'output order controls header must be removed');
@@ -725,6 +733,9 @@ this.__OrderHelperApi = {
   compareGridRows,
   zoneSuggestionValues,
   renderZoneOptions,
+  sanitizeZoneOrder,
+  setZoneOrderForCheck(value) { zoneOrder = sanitizeZoneOrder(value, []); },
+  getZoneOrderForCheck() { return zoneOrder; },
   canonicalItemNameForActual,
   fixedActualAliasesForItem,
   migrateActualAliasName,

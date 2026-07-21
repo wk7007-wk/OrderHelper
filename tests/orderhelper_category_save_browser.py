@@ -51,6 +51,7 @@ def install_fixture(page, zone="기존구역", revision=1000):
                 { id: 'zone-row', entryKey: 'zone-row', itemKey: itemKeyForName(first.name), name: first.name, zone, stock: null },
                 { id: 'zone-row-2', entryKey: 'zone-row-2', itemKey: itemKeyForName(second.name), name: second.name, zone: '보조', stock: null },
             ];
+            zoneOrder = sanitizeZoneOrder([], entries);
             stateRevision = revision;
             inventoryRevision = revision;
             localDirty = false;
@@ -158,6 +159,58 @@ def main():
             success_payload = json.loads(writes[0]["body"])
             assert success_payload["entries"][0]["zone"] == "즉시구역"
 
+            route_group = page.evaluate(
+                """() => {
+                    const first = MASTER[0];
+                    const second = MASTER.find(item => item.name !== first.name);
+                    entries = [
+                        { id: 'a1', entryKey: 'a1', itemKey: itemKeyForName(first.name), name: first.name, zone: 'Group A', stock: 1 },
+                        { id: 'b1', entryKey: 'b1', itemKey: itemKeyForName(first.name), name: first.name, zone: 'Group B', stock: 1 },
+                        { id: 'a2', entryKey: 'a2', itemKey: itemKeyForName(second.name), name: second.name, zone: 'Group A', stock: null },
+                        { id: 'b2', entryKey: 'b2', itemKey: itemKeyForName(second.name), name: second.name, zone: 'Group B', stock: null },
+                    ];
+                    zoneOrder = ['Group A', 'Group B'];
+                    pendingEntryZonePatches = new Map();
+                    localStorage.removeItem('bbq_confirmed_save_queue_v1');
+                    saveInFlight = true;
+                    render({ allowDuringGridEdit: true });
+                    const moved = moveZoneCategory('Group B', -1);
+                    const renamed = renameZoneCategory('Group B', 'Cold route');
+                    const queue = JSON.parse(localStorage.getItem('bbq_confirmed_save_queue_v1'));
+                    const payload = JSON.parse(queue.queued.body);
+                    const result = {
+                        moved,
+                        renamed,
+                        rowOrder: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).map(row => row.dataset.entryKey),
+                        zones: entries.map(entry => [entry.entryKey, entry.zone]),
+                        zoneOrder: [...zoneOrder],
+                        storedZoneOrder: JSON.parse(localStorage.getItem(ZONE_ORDER_STORAGE_KEY)),
+                        payloadZoneOrder: payload.zoneOrder,
+                        payloadZones: payload.entries.map(entry => [entry.entryKey, entry.zone]),
+                        pendingPatches: Array.from(pendingEntryZonePatches.values()).map(patch => patch.entryKey).sort(),
+                        bodyScrollWidth: document.body.scrollWidth,
+                        viewportWidth: window.innerWidth,
+                    };
+                    saveInFlight = false;
+                    localStorage.removeItem('bbq_confirmed_save_queue_v1');
+                    return result;
+                }"""
+            )
+            assert route_group["moved"] is True and route_group["renamed"] is True, route_group
+            assert route_group["rowOrder"] == ["b2", "b1", "a2", "a1"], route_group
+            assert route_group["zones"] == [
+                ["a1", "Group A"],
+                ["b1", "Cold route"],
+                ["a2", "Group A"],
+                ["b2", "Cold route"],
+            ], route_group
+            assert route_group["zoneOrder"] == ["Cold route", "Group A"], route_group
+            assert route_group["storedZoneOrder"] == route_group["zoneOrder"], route_group
+            assert route_group["payloadZoneOrder"] == route_group["zoneOrder"], route_group
+            assert route_group["payloadZones"] == route_group["zones"], route_group
+            assert route_group["pendingPatches"] == ["b1", "b2"], route_group
+            assert route_group["bodyScrollWidth"] <= route_group["viewportWidth"], route_group
+
             remote_revision = 9999999999999
             remote["current"] = {
                 "savedAt": remote_revision,
@@ -194,6 +247,7 @@ def main():
             merged_row = next(row for row in merged_payload["entries"] if row["entryKey"] == "zone-row")
             assert merged_row["zone"] == "충돌병합구역", merged_payload
             assert merged_row["stock"] == 8, "remote stock must be preserved during category merge"
+            assert merged_payload["zoneOrder"][-1] == "충돌병합구역", merged_payload
             assert merged_payload["remoteOnly"] in {"preserve-current", "preserve-history"}
             assert merged_payload["stateRevision"] > remote_revision
 

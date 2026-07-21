@@ -103,19 +103,20 @@ def main():
                         saveLogExists: Boolean(document.getElementById('saveLog')),
                         saveLogWrapExists: Boolean(document.querySelector('.save-log-wrap')),
                         toolsText: document.getElementById('inputTools').innerText.trim(),
+                        zoneManagerHidden: document.getElementById('zoneManager').classList.contains('hidden'),
                         saveStateText: saveState.textContent,
                         saveStateDisplay: getComputedStyle(saveState).display,
                     };
                 }"""
             )
-            assert compact_save_ui == {
-                "storedCount": 8,
-                "saveLogExists": False,
-                "saveLogWrapExists": False,
-                "toolsText": "재고 리셋",
-                "saveStateText": "동기화됨",
-                "saveStateDisplay": "flex",
-            }, compact_save_ui
+            assert compact_save_ui["storedCount"] == 8, compact_save_ui
+            assert compact_save_ui["saveLogExists"] is False, compact_save_ui
+            assert compact_save_ui["saveLogWrapExists"] is False, compact_save_ui
+            assert "재고 리셋" in compact_save_ui["toolsText"], compact_save_ui
+            assert "구역 동선 편집" in compact_save_ui["toolsText"], compact_save_ui
+            assert compact_save_ui["zoneManagerHidden"] is True, compact_save_ui
+            assert compact_save_ui["saveStateText"] == "동기화됨", compact_save_ui
+            assert compact_save_ui["saveStateDisplay"] == "flex", compact_save_ui
 
             mapping_copy = page.evaluate(
                 """() => {
@@ -583,6 +584,7 @@ def main():
                     const zoneInput = row.querySelector('input.cell[data-field="zone"]');
                     const stockInput = row.querySelector('input.cell[data-field="stock"]');
                     const detailToggle = row.querySelector('.mobile-row-toggle');
+                    zoneInput.value = '냉장안쪽';
                     const rowRect = row.getBoundingClientRect();
                     const primaryCells = ['zone', 'name', 'stock', 'need', 'order'].map(key =>
                         row.querySelector(`td[data-column="${key}"]`).getBoundingClientRect()
@@ -624,7 +626,11 @@ def main():
                         orderDisplay: getComputedStyle(orderContent).display,
                         orderFontSize: parseFloat(getComputedStyle(orderValue).fontSize),
                         nameFontSize: parseFloat(getComputedStyle(nameCell.querySelector('.item-title')).fontSize),
+                        nameWhiteSpace: getComputedStyle(nameCell.querySelector('.item-title')).whiteSpace,
+                        nameTextOverflow: getComputedStyle(nameCell.querySelector('.item-title')).textOverflow,
                         zoneInputHeight: zoneInput.getBoundingClientRect().height,
+                        zoneInputWidth: zoneInput.getBoundingClientRect().width,
+                        zoneTextFits: zoneInput.scrollWidth <= zoneInput.clientWidth,
                         stockInputHeight: stockInput.getBoundingClientRect().height,
                         regularRowsAligned: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).every(candidate =>
                             Array.from(candidate.querySelectorAll(':scope > td')).map(cell => cell.dataset.column).join(',') === expectedKeys.join(',')
@@ -651,8 +657,10 @@ def main():
             assert mobile_list["regularRowsAligned"] is True, mobile_list
             assert mobile_list["stockPosition"] == "static", mobile_list
             assert mobile_list["zoneInputHeight"] >= 36 and mobile_list["stockInputHeight"] >= 36, mobile_list
+            assert mobile_list["zoneInputWidth"] >= 78 and mobile_list["zoneTextFits"] is True, mobile_list
             assert mobile_list["orderFontSize"] >= 16 and mobile_list["nameFontSize"] >= 12, mobile_list
-            assert mobile_list["collapsed"]["height"] <= 52, mobile_list
+            assert mobile_list["nameWhiteSpace"] == "normal" and mobile_list["nameTextOverflow"] == "clip", mobile_list
+            assert mobile_list["collapsed"]["height"] <= 72, mobile_list
             assert mobile_list["collapsed"]["secondaryHidden"] is True, mobile_list
             assert mobile_list["collapsed"]["aliasControlsHidden"] is True, mobile_list
             assert mobile_list["collapsed"]["orderDetailsHidden"] is True, mobile_list
@@ -912,7 +920,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0722.0106"
+            assert active_patch["body"]["appVersion"] == "0722.0132"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])

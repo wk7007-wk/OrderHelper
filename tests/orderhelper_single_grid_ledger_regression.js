@@ -29,14 +29,28 @@ const completionSortFixture = [
 ];
 assert.deepStrictEqual(
   plain(api.gridRowsForCheck(completionSortFixture, 'input')),
-  ['unchecked-later', 'checked-first'],
-  'input context must move completed stock rows below unchecked rows'
+  ['checked-first', 'unchecked-later'],
+  'input context must keep different route groups together before completion priority'
 );
 assert.deepStrictEqual(
   plain(api.gridRowsForCheck(completionSortFixture, 'sfa')),
   ['checked-first', 'unchecked-later'],
   'SFA context must keep initial SFA order regardless of completion state'
 );
+
+api.setZoneOrderForCheck(['나', '가']);
+const groupedRouteFixture = [
+  { id: 'a-checked', entryKey: 'a-checked', name: firstSfa.name, zone: '가', stock: 1 },
+  { id: 'b-checked', entryKey: 'b-checked', name: laterSfa.name, zone: '나', stock: 1 },
+  { id: 'a-pending', entryKey: 'a-pending', name: laterSfa.name, zone: '가', stock: null },
+  { id: 'b-pending', entryKey: 'b-pending', name: firstSfa.name, zone: '나', stock: null },
+];
+assert.deepStrictEqual(
+  plain(api.gridRowsForCheck(groupedRouteFixture, 'input')),
+  ['b-pending', 'b-checked', 'a-pending', 'a-checked'],
+  'moving one route category must move every dependent row as one contiguous group'
+);
+api.setZoneOrderForCheck([]);
 
 const focusSource = {
   value: '12.3',
