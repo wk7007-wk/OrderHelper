@@ -7,6 +7,12 @@ const orderedMaster = api.MASTER.slice().sort((left, right) =>
 const firstSfa = orderedMaster[0];
 const laterSfa = orderedMaster.find(item => (item.sfaSeq || 9999) > (firstSfa.sfaSeq || 9999));
 assert(laterSfa, 'sort fixture needs two different initial SFA positions');
+const lastSfa = orderedMaster.findLast(item => (item.sfaSeq || 9999) > (laterSfa.sfaSeq || 9999));
+assert(lastSfa, 'priority sort fixture needs three different initial SFA positions');
+const stableSfaContext = api.sfaSortContextForCheck(
+  { [firstSfa.name]: 'confirmed', [laterSfa.name]: 'confirmed' },
+  { [firstSfa.name]: 1, [laterSfa.name]: 1 }
+);
 
 const sortFixture = [
   { id: 'later-zone-a', entryKey: 'later-zone-a', name: laterSfa.name, zone: '가', stock: 1 },
@@ -18,7 +24,7 @@ assert.deepStrictEqual(
   'input context must sort the same rows by category/zone'
 );
 assert.deepStrictEqual(
-  plain(api.gridRowsForCheck(sortFixture, 'sfa')),
+  plain(api.gridRowsForCheck(sortFixture, 'sfa', stableSfaContext)),
   ['first-zone-b', 'later-zone-a'],
   'order context must sort the same rows by initial SFA order'
 );
@@ -33,9 +39,32 @@ assert.deepStrictEqual(
   'input context must keep different route groups together before completion priority'
 );
 assert.deepStrictEqual(
-  plain(api.gridRowsForCheck(completionSortFixture, 'sfa')),
+  plain(api.gridRowsForCheck(completionSortFixture, 'sfa', stableSfaContext)),
   ['checked-first', 'unchecked-later'],
   'SFA context must keep initial SFA order regardless of completion state'
+);
+
+const sfaWorkPriorityFixture = [
+  { id: 'zero-first', entryKey: 'zero-first', name: firstSfa.name, zone: '가', stock: 1 },
+  { id: 'positive-later', entryKey: 'positive-later', name: laterSfa.name, zone: '가', stock: 1 },
+  { id: 'unmatched-last', entryKey: 'unmatched-last', name: lastSfa.name, zone: '가', stock: 1 },
+];
+const sfaWorkPriorityContext = api.sfaSortContextForCheck(
+  { [firstSfa.name]: 'confirmed', [laterSfa.name]: 'manual', [lastSfa.name]: 'unmatched' },
+  { [firstSfa.name]: 0, [laterSfa.name]: 2, [lastSfa.name]: 0 }
+);
+assert.deepStrictEqual(
+  plain(api.gridRowsForCheck(sfaWorkPriorityFixture, 'sfa', sfaWorkPriorityContext)),
+  ['unmatched-last', 'positive-later', 'zero-first'],
+  'SFA work order must be unmatched alias, positive order quantity, then zero quantity'
+);
+assert.deepStrictEqual(
+  plain(api.unmatchedInlineSiteRows([
+    { siteKey: 'linked', status: 'confirmed', targetName: firstSfa.name },
+    { siteKey: 'unmatched', status: 'unmatched', targetName: '' },
+  ])).map(row => row.siteKey),
+  ['unmatched'],
+  'only SFA source rows needing a master mapping belong in the top attention block'
 );
 
 api.setZoneOrderForCheck(['나', '가']);

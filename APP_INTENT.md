@@ -10,7 +10,7 @@
 ## 절대 기준
 - SFA 자동입력은 품목명, 단위, 별칭, 환산 규칙이 확정된 뒤에만 진행한다.
 - 계산식과 사용자 입력 기록은 화면 정리 때문에 숨기거나 잃지 않는다. 수치 입력 이벤트는 해당 값과 변경된 local draft 범위만 먼저 보존하고 현재 행 계산만 즉시 패치한다. 디버그 로그·전체 resolver·90일 사용량 분석·확정 payload 생성은 매 숫자 입력에서 실행하지 않고 Enter/모바일 Next로 포커스를 옮긴 뒤 수행한다. 완료 전 `input` draft와 다른 필드의 일반 blur/change는 원격 전송하지 않는다.
-- 입력값과 출력 계산은 별도 화면이 아니라 같은 행에 둔다. 표의 stable `itemKey`와 구역별 stable `entryKey`는 유지하고 `구역 입력순`/`최초 SFA 발주순`은 동일 DOM/data의 정렬 컨텍스트만 바꾼다. 입력순에서는 재고 Enter 뒤 미입력→입력완료→숨김 순으로 다시 정렬하고 다음 미입력 재고칸에 포커스를 유지하며, SFA순에서는 행 순서를 고정하고 다음 칸만 이동한다. `/current`와 `/history/{date}`에는 원본 `entries`와 함께 `inventoryByItemKey`, `stateRevision`, `inventoryRevision`을 저장하고, 저장 중 새 입력이나 포커스 중 대기한 원격 current가 최신 revision을 덮지 못하게 한다.
+- 입력값과 출력 계산은 별도 화면이 아니라 같은 행에 둔다. 표의 stable `itemKey`와 구역별 stable `entryKey`는 유지하고 `구역 입력순`/`SFA 발주순`은 동일 DOM/data의 정렬 컨텍스트만 바꾼다. 입력순에서는 재고 Enter 뒤 미입력→입력완료→숨김 순으로 다시 정렬하고 다음 미입력 재고칸에 포커스를 유지한다. SFA순은 매칭 필요→실제 표시 발주량 양수→발주 없음 순으로 작업 대상을 묶고 각 묶음 안에서는 최초 SFA 순서를 유지하며 다음 칸만 이동한다. `/current`와 `/history/{date}`에는 원본 `entries`와 함께 `inventoryByItemKey`, `stateRevision`, `inventoryRevision`을 저장하고, 저장 중 새 입력이나 포커스 중 대기한 원격 current가 최신 revision을 덮지 못하게 한다.
 - 완료 확정본은 localStorage `bbq_confirmed_save_queue_v1`의 immutable `active + queued latest`로 보존한다. `/current`와 같은 KST `/history/{date}`가 모두 성공해야 제거하며 timeout/부분실패/재시작은 확정 당시 입력 snapshot·date를 유지한다. 전송 전 두 node를 ETag로 다시 읽어 다른 client의 ledger event를 합치고, 한 CAS attempt 안에서는 동일 merged body를 두 node에 쓴다. 완료되지 않은 draft는 online/visibility/startup만으로 원격 전송하지 않는다.
 - 모바일 키보드 Enter/다음 동작은 실제 직원폰 흐름 기준으로 본다.
 - 사용자는 단위를 보지 않는다. `orderUnitToStockFactor=10`의 뜻은 발주수량 10이 아니라 `1발주 단위 = 재고/사용량 10개`다. 발주량은 `ceil(필요 개수 / factor)`로 계산해 25개 필요면 3발주, 실제 2발주는 재고/사용량 20개로 환산한다. factor 방향을 UI, correction payload, AI evidence에서 뒤집지 않는다.
@@ -91,6 +91,7 @@
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, 과거 producer가 버린 금액은 원본 Excel 재분석 없이는 복구할 수 없음, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.
 
 ## 2026-07-22 handoff
+- APP_VERSION 0722.0215 turns SFA ordering into a work queue: unmatched, conflicting, and unconfirmed aliases are first; positive effective order quantities are next; zero quantities and hidden rows move down. Initial SFA order remains stable inside each band. Unmatched SFA source rows render above the grid in SFA mode with the existing alias/new-item controls, while all sort inputs are cached once per render and persistence payloads remain unchanged.
 - APP_VERSION 0722.0204 keeps the same inventory grid semantics across devices. Mobile remains a vertically aligned compact list; PC fluidly expands the sticky zone/name/stock tracks, order evidence column, and route-group editor across the available viewport instead of leaving wide-screen space unused.
 - The detail toggle restores the full editable card (usage, daily amount, unit, row actions, matching controls, and amount evidence) only when requested; collapsed rows remain compact with no horizontal overflow.
 - Remaining verification pointer: live GitHub Pages reflection plus actual Codex in-app-browser list screenshot after deployment, without live order/payment/Firebase writes.

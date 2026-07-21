@@ -124,6 +124,53 @@ def main():
             page.route("**/*firebasedatabase.app/**", firebase_route)
             page.goto(origin, wait_until="domcontentloaded")
             install_fixture(page)
+            sfa_priority = page.evaluate(
+                """() => {
+                    const ordered = MASTER.slice().sort(defaultOutputCompare);
+                    const first = ordered[0];
+                    const second = ordered.find(item => item.name !== first.name);
+                    const third = ordered.find(item => item.name !== first.name && item.name !== second.name);
+                    const rows = [
+                        { entry: { id: 'zero-first', entryKey: 'zero-first', name: first.name, zone: '가' }, item: first, hidden: false, inputIndex: 0 },
+                        { entry: { id: 'positive-second', entryKey: 'positive-second', name: second.name, zone: '가' }, item: second, hidden: false, inputIndex: 1 },
+                        { entry: { id: 'unmatched-third', entryKey: 'unmatched-third', name: third.name, zone: '가' }, item: third, hidden: false, inputIndex: 2 },
+                    ];
+                    const context = {
+                        days: 3,
+                        aliasRowsByName: new Map([
+                            [first.name, { aliasName: first.name, status: 'confirmed' }],
+                            [second.name, { aliasName: second.name, status: 'manual' }],
+                            [third.name, { aliasName: third.name, status: 'unmatched' }],
+                        ]),
+                        orderQtyByItemKey: new Map([
+                            [itemKeyForName(first.name), 0],
+                            [itemKeyForName(second.name), 2],
+                            [itemKeyForName(third.name), 0],
+                        ]),
+                    };
+                    const priorityOrder = rows.slice()
+                        .sort((left, right) => compareGridRows(left, right, 'sfa', context))
+                        .map(row => row.entry.entryKey);
+
+                    const tbody = document.getElementById('tbody');
+                    tbody.insertAdjacentHTML('beforeend', '<tr class="inline-unmatched-row" data-site-key="browser-unmatched"><td>연결 필요</td></tr>');
+                    gridSortMode = 'sfa';
+                    const sfaReordered = reorderRenderedGridRows();
+                    const sfaFirst = tbody.firstElementChild?.dataset?.siteKey || '';
+                    gridSortMode = 'input';
+                    const inputReordered = reorderRenderedGridRows();
+                    const inputLast = tbody.lastElementChild?.dataset?.siteKey || '';
+                    return { priorityOrder, sfaReordered, sfaFirst, inputReordered, inputLast };
+                }"""
+            )
+            assert sfa_priority == {
+                "priorityOrder": ["unmatched-third", "positive-second", "zero-first"],
+                "sfaReordered": True,
+                "sfaFirst": "browser-unmatched",
+                "inputReordered": True,
+                "inputLast": "browser-unmatched",
+            }, sfa_priority
+            install_fixture(page)
             first_item_state.update(page.evaluate("""() => ({ name: MASTER[0].name, itemKey: itemKeyForName(MASTER[0].name) })"""))
             remote["current"] = {"savedAt": 900, "stateRevision": 900, "inventoryRevision": 900, "entries": []}
             remote["history"] = dict(remote["current"])

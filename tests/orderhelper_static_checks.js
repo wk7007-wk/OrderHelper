@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0722.0204';/, 'APP_VERSION must match the KST fluid desktop-width release time');
+mustMatch(/const APP_VERSION = '0722.0215';/, 'APP_VERSION must match the KST SFA work-priority release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -336,7 +336,7 @@ mustMatch(/applyOrderAliasSelection\(e\.target\.dataset\.aliasName, e\.target\.v
 mustMatch(/function saveInlineAliasFactorFromControl\(control\)[\s\S]*setOrderAliasConversion\(control\?\.dataset\.aliasName \|\| input\.dataset\.aliasName, input\.value \|\| '', 'manual'\);/, 'inline quantity save helper must confirm the displayed number');
 mustMatch(/\.inline-alias-factor-input[\s\S]*if \(!isExplicitAliasEnter\(event\)\) return;[\s\S]*saveInlineAliasFactorFromControl\(event\.currentTarget\);/, 'inline quantity Enter must be an explicit confirmed action');
 mustMatch(/\.inline-alias-factor-save[\s\S]*saveInlineAliasFactorFromControl\(event\.currentTarget\);/, 'inline quantity save button must use the same explicit save path');
-mustMatch(/const inlineAliasRowsByName = new Map\(buildOrderAliasMatches\(lastSfaCompareData\)\.map\(row => \[row\.aliasName, row\]\)\);/, 'input view must share alias match rows with alias review state');
+mustMatch(/const inlineAliasRows = buildOrderAliasMatches\(lastSfaCompareData\);\s*const inlineAliasRowsByName = new Map\(inlineAliasRows\.map\(row => \[row\.aliasName, row\]\)\);/, 'input view and cached SFA work sort must share alias match rows with alias review state');
 mustMatch(/data-item-name="\$\{escapeHtml\(item\.name\)\}"/, 'input row name cell must keep item identity while showing inline correction controls');
 mustMatch(/bindInlineAliasControls\(\);\s*bindInlineSiteControls\(\);\s*updateStickyOffsets\(\);/, 'single grid must bind inline alias and site controls after rendering rows');
 mustMatch(/const allowedStatuses = new Set\(\['candidate', 'default', 'confirmed', 'manual', 'unlinked'\]\);/, 'alias mapping sanitizer must preserve explicit unlink status');
@@ -550,8 +550,13 @@ mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Fi
 mustMatch(/function setGridSortMode\(mode\) \{[\s\S]*flushDeferredInputWork\(\);[\s\S]*gridSortMode = nextMode;[\s\S]*updateGridSortButtons\(\);[\s\S]*renderZoneOptions\(entries\);[\s\S]*if \(reorderRenderedGridRows\(\)\) \{[\s\S]*restoreGridFocus\(focusSnapshot\);[\s\S]*return;[\s\S]*render\(\{ focusSnapshot, allowDuringGridEdit: true \}\);/, 'sort context switch must use DOM row reorder before falling back to a full render');
 mustNotMatch(/flushAutoSave\('sortSwitch'\)/, 'sort-only UI changes must not confirm an unentered draft');
 mustMatch(/const flowEpoch = stockFlowEpoch;[\s\S]*if \(flowEpoch !== stockFlowEpoch\) return;/, 'sort switch must fence a stale blur-driven stock advance');
-mustMatch(/function compareGridRows\(left, right, mode = gridSortMode\)/, 'single grid needs explicit input-zone and SFA sort contexts');
-mustMatch(/return mode === 'sfa' \? compareSfaRows\(left, right\) : compareInputRows\(left, right\);/, 'sort context must only change row order');
+mustMatch(/function compareGridRows\(left, right, mode = gridSortMode, context = null\)/, 'single grid needs explicit input-zone and SFA work sort contexts');
+mustMatch(/return mode === 'sfa' \? compareSfaRows\(left, right, context\) : compareInputRows\(left, right\);/, 'sort context must only change row order');
+mustMatch(/function sfaAliasNeedsAttention\(aliasRow\)[\s\S]*aliasRow\.status !== 'unlinked' && !isUserSelectedAliasStatus\(aliasRow\.status\)/, 'SFA work sort must recognize unmatched, conflicting, and unconfirmed aliases');
+mustMatch(/function buildSfaWorkSortContext\([\s\S]*orderQtyByItemKey: new Map\(orderItemList\(\)\.map\(item => \[itemKeyForName\(item\.name\), outputOrderQty\(item, safeDays\)\]\)\)/, 'SFA work sort must cache effective order quantities once per sort');
+mustMatch(/function sfaWorkRowPriority\(row, context = null\)[\s\S]*if \(sfaAliasNeedsAttention\(aliasRow\)\) return 0;[\s\S]*return Number\(qty\) > 0 \? 1 : 2;/, 'SFA work sort must put alias attention first, positive order quantities second, and zero quantities last');
+mustMatch(/function compareSfaRows\(left, right, context = null\) \{\s*const priorityDiff = sfaWorkRowPriority\(left, context\) - sfaWorkRowPriority\(right, context\);[\s\S]*const itemDiff = defaultOutputCompare\(left\.item, right\.item\);/, 'SFA work priority must precede the stable initial SFA order');
+mustMatch(/if \(gridSortMode === 'sfa'\) appendInlineUnmatchedSiteRows\(tbody, inlineUnmatchedRows\);[\s\S]*orderedRows\.forEach[\s\S]*if \(gridSortMode !== 'sfa'\) appendInlineUnmatchedSiteRows\(tbody, inlineUnmatchedRows\);/, 'unmatched SFA source rows must render above the work list only in SFA mode');
 mustMatch(/function inputRowPriority\(entry, hidden\)[\s\S]*if \(hidden\) return 2;[\s\S]*if \(isStockChecked\(entry\)\) return 1;[\s\S]*return 0;/, 'input sort must keep unchecked rows before completed and hidden rows');
 mustMatch(/function compareInputRows\(left, right\) \{[\s\S]*const zoneRankDiff = zoneOrderIndex\(leftZone\) - zoneOrderIndex\(rightZone\);[\s\S]*const priorityDiff = inputRowPriority\(left\.entry, left\.hidden\) - inputRowPriority\(right\.entry, right\.hidden\);/, 'input sorting must keep each route category together before applying completion priority inside the group');
 mustMatch(/entries\.map\(\(ent, inputIndex\) =>/, 'input sorting must retain each row original input position');
@@ -740,6 +745,8 @@ this.__OrderHelperApi = {
   formatWon,
   firebasePayloadIsNewer,
   compareGridRows,
+  sfaWorkRowPriority,
+  unmatchedInlineSiteRows,
   zoneSuggestionValues,
   renderZoneOptions,
   sanitizeZoneOrder,
@@ -857,10 +864,17 @@ this.__OrderHelperApi = {
   getAiUsageAcceptedForCheck() { return aiUsageAccepted; },
   getAiUsageAdvisoryForCheck() { return aiUsageAdvisory; },
   aiUsageAdvisoryLatestIdentityForCheck() { return aiUsageAdvisoryLatestIdentity; },
-  gridRowsForCheck(value, mode = 'input') {
+  sfaSortContextForCheck(aliasStatuses = {}, orderQuantities = {}) {
+    return {
+      days: 3,
+      aliasRowsByName: new Map(Object.entries(aliasStatuses).map(([name, status]) => [canonicalItemName(name), { aliasName: canonicalItemName(name), status }])),
+      orderQtyByItemKey: new Map(Object.entries(orderQuantities).map(([name, qty]) => [itemKeyForName(name), Number(qty)]))
+    };
+  },
+  gridRowsForCheck(value, mode = 'input', context = null) {
     return (value || []).map((entry, inputIndex) => ({ entry, item: orderItemByName(entry.name), hidden: false, inputIndex }))
       .filter(row => row.item)
-      .sort((left, right) => compareGridRows(left, right, mode))
+      .sort((left, right) => compareGridRows(left, right, mode, context))
       .map(row => row.entry.entryKey || row.entry.id);
   },
   resetGridPerfForCheck() {

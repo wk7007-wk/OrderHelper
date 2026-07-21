@@ -536,7 +536,7 @@
   <span class="meta" id="cycleHint"></span>
   <span class="grid-sort-control" role="group" aria-label="표 정렬">
     <button id="sortInputBtn" class="active" type="button" onclick="setGridSortMode('input')">구역 입력순</button>
-    <button id="sortSfaBtn" type="button" onclick="setGridSortMode('sfa')">SFA 발주순</button>
+    <button id="sortSfaBtn" type="button" onclick="setGridSortMode('sfa')" title="매칭 필요 → 발주량 있음 → 발주 없음 순서">SFA 발주순</button>
   </span>
   <button id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis()">엑셀분석</button>
   <button id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel()">오차보기</button>
@@ -653,7 +653,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0722.0204';
+const APP_VERSION = '0722.0215';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -6047,6 +6047,14 @@ function inlineUnmatchedSiteRowHtml(row) {
   </tr>`;
 }
 
+function unmatchedInlineSiteRows(rows) {
+  return (rows || []).filter(row => row.status === 'unmatched' || !row.targetName);
+}
+
+function appendInlineUnmatchedSiteRows(tbody, rows) {
+  rows.forEach(row => tbody.insertAdjacentHTML('beforeend', inlineUnmatchedSiteRowHtml(row)));
+}
+
 function aliasMatchRowHtml(row) {
   const unlinked = row.status === 'unlinked';
   const candidateText = row.candidates.length
@@ -7216,21 +7224,28 @@ function reorderRenderedGridRows() {
   const renderedRows = Array.from(tbody.querySelectorAll('tr[data-entry-key]'));
   if (renderedRows.length !== entries.length) return false;
   const byEntryKey = new Map(renderedRows.map(row => [row.dataset.entryKey || '', row]));
+  const sfaSortContext = gridSortMode === 'sfa' ? buildSfaWorkSortContext() : null;
   const ordered = entries.map((entry, inputIndex) => {
     const item = orderItemByName(entry.name);
     return item ? { entry, item, hidden: isItemHidden(item.name), inputIndex } : null;
-  }).filter(Boolean).sort((left, right) => compareGridRows(left, right));
+  }).filter(Boolean).sort((left, right) => compareGridRows(left, right, gridSortMode, sfaSortContext));
   if (ordered.length !== renderedRows.length) return false;
   const trailingRows = Array.from(tbody.children).filter(row => !row.dataset?.entryKey);
+  const unmatchedRows = trailingRows.filter(row => row.classList?.contains('inline-unmatched-row'));
+  const otherTrailingRows = trailingRows.filter(row => !row.classList?.contains('inline-unmatched-row'));
+  const orderedDomRows = [];
   for (const { entry, hidden } of ordered) {
     const row = byEntryKey.get(entry.entryKey || entry.id || '');
     if (!row) return false;
     row.classList.toggle('row-hidden', hidden);
     row.classList.toggle('row-checked', !hidden && isStockChecked(entry));
     row.classList.toggle('row-pending', !hidden && !isStockChecked(entry));
-    tbody.appendChild(row);
+    orderedDomRows.push(row);
   }
-  trailingRows.forEach(row => tbody.appendChild(row));
+  const finalRows = gridSortMode === 'sfa'
+    ? [...unmatchedRows, ...orderedDomRows, ...otherTrailingRows]
+    : [...orderedDomRows, ...otherTrailingRows, ...unmatchedRows];
+  finalRows.forEach(row => tbody.appendChild(row));
   return true;
 }
 
@@ -7476,7 +7491,36 @@ function compareInputRows(left, right) {
   return Number(left.inputIndex || 0) - Number(right.inputIndex || 0);
 }
 
-function compareSfaRows(left, right) {
+function sfaAliasNeedsAttention(aliasRow) {
+  return Boolean(aliasRow && aliasRow.status !== 'unlinked' && !isUserSelectedAliasStatus(aliasRow.status));
+}
+
+function buildSfaWorkSortContext(days = currentOrderDaysValue(), aliasRows = null) {
+  const safeDays = Number.isFinite(Number(days)) && Number(days) > 0 ? Number(days) : recommendedDays();
+  const rows = Array.isArray(aliasRows) ? aliasRows : buildOrderAliasMatches(lastSfaCompareData);
+  return {
+    days: safeDays,
+    aliasRowsByName: new Map(rows.map(row => [canonicalItemName(row.aliasName), row])),
+    orderQtyByItemKey: new Map(orderItemList().map(item => [itemKeyForName(item.name), outputOrderQty(item, safeDays)]))
+  };
+}
+
+function sfaWorkRowPriority(row, context = null) {
+  if (row.hidden) return 3;
+  const itemName = canonicalItemName(row.item?.name || row.entry?.name || '');
+  const aliasRow = context?.aliasRowsByName?.get?.(itemName) || null;
+  if (sfaAliasNeedsAttention(aliasRow)) return 0;
+  const itemKey = itemKeyForName(itemName);
+  const cachedQty = context?.orderQtyByItemKey?.get?.(itemKey);
+  const qty = Number.isFinite(Number(cachedQty))
+    ? Number(cachedQty)
+    : outputOrderQty(row.item, context?.days || currentOrderDaysValue());
+  return Number(qty) > 0 ? 1 : 2;
+}
+
+function compareSfaRows(left, right, context = null) {
+  const priorityDiff = sfaWorkRowPriority(left, context) - sfaWorkRowPriority(right, context);
+  if (priorityDiff !== 0) return priorityDiff;
   const itemDiff = defaultOutputCompare(left.item, right.item);
   if (itemDiff !== 0) return itemDiff;
   const zoneDiff = normalizedZone(left.entry.zone).localeCompare(normalizedZone(right.entry.zone), 'ko', { numeric: true, sensitivity: 'base' });
@@ -7484,8 +7528,8 @@ function compareSfaRows(left, right) {
   return (left.entry.entryKey || left.entry.id || '').localeCompare(right.entry.entryKey || right.entry.id || '', 'en');
 }
 
-function compareGridRows(left, right, mode = gridSortMode) {
-  return mode === 'sfa' ? compareSfaRows(left, right) : compareInputRows(left, right);
+function compareGridRows(left, right, mode = gridSortMode, context = null) {
+  return mode === 'sfa' ? compareSfaRows(left, right, context) : compareInputRows(left, right);
 }
 
 function gridFocusSnapshot(target = document.activeElement) {
@@ -7853,14 +7897,19 @@ function render(options = {}) {
   const resolvedOrderRows = resolveUnifiedOrderRows(lastSfaCompareData, null, days);
   const resolvedOrderRowsByItemKey = new Map(resolvedOrderRows.map(row => [row.itemKey, row]));
   renderOrderAmountSummary(resolvedOrderRows);
+  const inlineAliasRows = buildOrderAliasMatches(lastSfaCompareData);
+  const inlineAliasRowsByName = new Map(inlineAliasRows.map(row => [row.aliasName, row]));
+  const sfaSortContext = gridSortMode === 'sfa' ? buildSfaWorkSortContext(days, inlineAliasRows) : null;
   // 입력값과 계산 결과는 항상 한 표에 유지하고, 정렬 컨텍스트만 전환한다.
   const orderedRows = entries.map((ent, inputIndex) => {
     const item = orderItemByName(ent.name);
     if (!item) return null;
     return { entry: ent, item, hidden: isItemHidden(item.name), inputIndex };
-  }).filter(Boolean).sort((left, right) => compareGridRows(left, right));
-  const inlineAliasRowsByName = new Map(buildOrderAliasMatches(lastSfaCompareData).map(row => [row.aliasName, row]));
+  }).filter(Boolean).sort((left, right) => compareGridRows(left, right, gridSortMode, sfaSortContext));
   const inlineSiteRows = buildOrderSiteMatches(lastSfaCompareData);
+  const inlineUnmatchedRows = unmatchedInlineSiteRows(inlineSiteRows);
+
+  if (gridSortMode === 'sfa') appendInlineUnmatchedSiteRows(tbody, inlineUnmatchedRows);
 
   const shownItems = new Set();
   orderedRows.forEach(({ entry: ent, item, hidden }) => {
@@ -7924,9 +7973,7 @@ function render(options = {}) {
     tbody.appendChild(tr);
   });
 
-  inlineSiteRows.filter(row => row.status === 'unmatched' || !row.targetName).forEach(row => {
-    tbody.insertAdjacentHTML('beforeend', inlineUnmatchedSiteRowHtml(row));
-  });
+  if (gridSortMode !== 'sfa') appendInlineUnmatchedSiteRows(tbody, inlineUnmatchedRows);
 
   bindCellInputs();
   bindGridRowActions(tbody);
