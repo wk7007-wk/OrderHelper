@@ -184,6 +184,7 @@
   td.actions { white-space: nowrap; }
   td.actions button { background: transparent; border: 1px solid #0f3460; color: #888; border-radius: 4px; padding: 2px 6px; margin-right: 2px; cursor: pointer; font-size: 11px; }
   td.actions button:hover { color: #e94560; border-color: #e94560; }
+  .mobile-row-toggle { display: none; }
   td.actions button.add { color: #27ae60; border-color: #27ae60; }
   td.output-actions { white-space: nowrap; text-align: center; }
   td.output-actions button { background: #0f3460; border: 1px solid #315a8d; color: #fff; border-radius: 4px; padding: 4px 7px; margin-right: 3px; cursor: pointer; font-size: 12px; }
@@ -272,23 +273,52 @@
     .sales-row #salesAvg { grid-column: 1 / -1; color: #aebbd0; font-size: 12px; line-height: 1.4; }
     .input-tools { padding: 8px 10px 10px; }
     .input-tools button { width: 100%; min-height: 42px; padding: 10px 12px; font-size: 14px; }
-    .table-wrap { overflow-x: hidden; padding: 8px; border-top: 1px solid #0f3460; }
+    .table-wrap { overflow-x: hidden; padding: 4px 6px 8px; border-top: 1px solid #0f3460; }
     table, tbody { display: block; width: 100%; min-width: 0; }
-    thead { display: none; }
-    #tbody { display: grid; gap: 10px; }
+    thead { position: sticky; top: 0; z-index: 20; display: block; width: 100%; background: #0f3460; }
+    #thead {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr) 52px 40px 46px 28px;
+      width: 100%;
+      min-height: 25px;
+      align-items: center;
+    }
+    #thead th {
+      position: static !important;
+      left: auto !important;
+      display: block;
+      width: auto !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      padding: 5px 2px;
+      overflow: hidden;
+      border-right: 1px solid rgba(148, 163, 184, 0.2);
+      font-size: 10px;
+      line-height: 1.2;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #thead th[data-column="k"],
+    #thead th[data-column="l"],
+    #thead th[data-column="unit"] { display: none; }
+    #thead th[data-column="need"],
+    #thead th[data-column="order"] { font-size: 0; }
+    #thead th[data-column="need"]::after { content: "필요"; font-size: 10px; }
+    #thead th[data-column="order"]::after { content: "발주"; font-size: 10px; }
+    #tbody { display: grid; gap: 3px; }
     #tbody tr[data-entry-key] {
       display: grid;
-      grid-template-columns: 82px 72px minmax(0, 1fr) 64px;
-      grid-template-areas:
-        "zone name name name"
-        "stock need order order"
-        "k l unit actions";
+      grid-template-columns: 40px minmax(0, 1fr) 52px 40px 46px 28px;
+      grid-template-areas: "zone name stock need order actions";
       width: 100%;
+      min-height: 44px;
+      align-items: stretch;
       overflow: hidden;
       border: 1px solid rgba(49, 90, 141, 0.72);
-      border-radius: 12px;
+      border-radius: 6px;
       background: #16213e;
-      box-shadow: 0 5px 16px rgba(3, 8, 20, 0.2);
+      box-shadow: none;
     }
     #tbody tr[data-entry-key] > td {
       position: static !important;
@@ -297,30 +327,31 @@
       width: auto !important;
       min-width: 0 !important;
       max-width: none !important;
-      padding: 8px;
+      padding: 3px;
       border-bottom: 0;
+      border-right: 1px solid rgba(49, 90, 141, 0.32);
       background: transparent !important;
       white-space: normal;
     }
     #tbody tr.row-pending { background: linear-gradient(135deg, rgba(112, 37, 70, 0.72), rgba(52, 30, 57, 0.82)); border-color: rgba(233, 69, 96, 0.46); }
     #tbody tr.row-checked { background: linear-gradient(135deg, rgba(15, 52, 96, 0.72), rgba(22, 33, 62, 0.94)); }
     #tbody tr.row-hidden { background: rgba(8, 14, 24, 0.86); border-color: rgba(49, 90, 141, 0.38); }
-    #tbody td[data-column="zone"] { grid-area: zone; display: flex !important; align-items: center; border-right: 1px solid rgba(49, 90, 141, 0.45); border-bottom: 1px solid rgba(49, 90, 141, 0.45); }
-    #tbody td[data-column="name"] { grid-area: name; border-bottom: 1px solid rgba(49, 90, 141, 0.45); }
-    #tbody td[data-column="stock"] { grid-area: stock; }
-    #tbody td[data-column="need"] { grid-area: need; text-align: center; }
-    #tbody td[data-column="order"] { grid-area: order; text-align: left; }
-    #tbody td[data-column="k"] { grid-area: k; }
-    #tbody td[data-column="l"] { grid-area: l; }
-    #tbody td[data-column="unit"] { grid-area: unit; }
-    #tbody td[data-column="actions"] { grid-area: actions; display: flex !important; align-items: flex-end; justify-content: flex-end; }
+    #tbody td[data-column="zone"] { grid-area: zone; display: flex !important; align-items: center; }
+    #tbody td[data-column="name"] { grid-area: name; display: flex; min-width: 0; align-items: center; }
+    #tbody td[data-column="stock"] { grid-area: stock; display: flex; align-items: center; }
+    #tbody td[data-column="need"] { grid-area: need; display: flex; align-items: center; text-align: center; }
+    #tbody td[data-column="order"] { grid-area: order; display: flex; align-items: center; text-align: center; }
+    #tbody tr[data-entry-key] > td[data-column="k"] { grid-area: k; display: none; }
+    #tbody tr[data-entry-key] > td[data-column="l"] { grid-area: l; display: none; }
+    #tbody tr[data-entry-key] > td[data-column="unit"] { grid-area: unit; display: none; }
+    #tbody td[data-column="actions"] { grid-area: actions; display: flex !important; align-items: center; justify-content: center; padding: 2px; border-right: 0; }
     #tbody td[data-column="stock"]::before,
     #tbody td[data-column="need"]::before,
     #tbody td[data-column="order"]::before,
     #tbody td[data-column="k"]::before,
     #tbody td[data-column="l"]::before,
     #tbody td[data-column="unit"]::before {
-      display: block;
+      display: none;
       margin-bottom: 5px;
       color: #93a4bb;
       font-size: 10px;
@@ -333,19 +364,23 @@
     #tbody td[data-column="k"]::before { content: "여유"; }
     #tbody td[data-column="l"]::before { content: "일사용"; }
     #tbody td[data-column="unit"]::before { content: "단위"; }
-    #tbody td.name { word-break: keep-all; overflow-wrap: anywhere; }
-    #tbody .item-title { color: #fff; font-size: 15px; font-weight: 900; line-height: 1.35; }
+    #tbody td.name { overflow: hidden; word-break: keep-all; }
+    #tbody .item-title { width: 100%; overflow: hidden; color: #fff; font-size: 12px; font-weight: 800; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+    #tbody .inline-alias-correction,
+    #tbody .inline-site-match { display: none; }
     #tbody .inline-alias-correction { margin-top: 6px; font-size: 11px; }
     #tbody .inline-alias-correction summary { min-height: 24px; flex-wrap: nowrap; }
     #tbody .inline-alias-summary-text,
     #tbody .inline-alias-factor-badge { display: none; }
     #tbody .inline-site-match { max-width: none; margin-top: 2px; font-size: 10px; }
     #tbody .inline-site-match summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #tbody td input.cell { width: 100%; min-height: 42px; padding: 8px 6px; font-size: 17px; }
-    #tbody td input.cell.zone { width: 100%; min-height: 42px; padding: 8px 4px; text-align: center; font-size: 13px; }
-    #tbody .need-output-value { min-height: 42px; font-size: 18px; font-weight: 900; }
-    #tbody .output-order-value { min-height: 42px; font-size: 20px; font-weight: 900; }
-    #tbody .order-cell { gap: 6px; }
+    #tbody td input.cell { width: 100%; min-height: 36px; padding: 5px 3px; font-size: 15px; }
+    #tbody td input.cell.zone { width: 100%; min-height: 36px; padding: 5px 2px; text-align: center; font-size: 11px; }
+    #tbody .need-output-value { min-height: 36px; font-size: 15px; font-weight: 900; }
+    #tbody .output-order-value { width: 100%; min-height: 36px; justify-content: center; font-size: 16px; font-weight: 900; }
+    #tbody .order-cell { gap: 0; flex-wrap: nowrap; justify-content: center; }
+    #tbody .order-analysis,
+    #tbody .order-amount { display: none !important; }
     #tbody .order-analysis { min-height: 22px; padding: 3px 7px; font-size: 11px; }
     #tbody .order-amount { gap: 2px; padding: 6px 8px; }
     #tbody .order-amount-primary { font-size: 12px; }
@@ -354,7 +389,39 @@
     #tbody .daily-cell { display: grid; gap: 5px; }
     #tbody .daily-analysis,
     #tbody .ai-usage-advisory { width: 100%; margin-left: 0; justify-content: center; }
-    #tbody td.actions button { min-width: 34px; min-height: 36px; padding: 7px; margin: 0 0 0 3px; font-size: 14px; }
+    #tbody td.actions > button:not(.mobile-row-toggle) { display: none; }
+    #tbody td.actions button.mobile-row-toggle { display: inline-flex; min-width: 24px; min-height: 34px; align-items: center; justify-content: center; padding: 4px 2px; margin: 0; color: #cbd5e1; font-size: 13px; }
+    #tbody tr.mobile-expanded {
+      grid-template-columns: 70px 62px minmax(0, 1fr) 44px;
+      grid-template-areas:
+        "zone name name actions"
+        "stock need order actions"
+        "k l unit actions";
+      border-radius: 10px;
+      box-shadow: 0 5px 16px rgba(3, 8, 20, 0.2);
+    }
+    #tbody tr.mobile-expanded > td { padding: 7px; border-bottom: 1px solid rgba(49, 90, 141, 0.32); }
+    #tbody tr.mobile-expanded td[data-column="name"] { display: block; }
+    #tbody tr.mobile-expanded > td[data-column="k"],
+    #tbody tr.mobile-expanded > td[data-column="l"],
+    #tbody tr.mobile-expanded > td[data-column="unit"] { display: block; }
+    #tbody tr.mobile-expanded td[data-column="actions"] { flex-direction: column; gap: 4px; border-bottom: 0; }
+    #tbody tr.mobile-expanded td.actions > button { display: inline-flex; min-width: 32px; min-height: 32px; align-items: center; justify-content: center; margin: 0; padding: 5px; font-size: 13px; }
+    #tbody tr.mobile-expanded .item-title { overflow: visible; font-size: 14px; line-height: 1.35; text-overflow: clip; white-space: normal; }
+    #tbody tr.mobile-expanded .inline-alias-correction,
+    #tbody tr.mobile-expanded .inline-site-match { display: block; }
+    #tbody tr.mobile-expanded td[data-column="stock"]::before,
+    #tbody tr.mobile-expanded td[data-column="need"]::before,
+    #tbody tr.mobile-expanded td[data-column="order"]::before,
+    #tbody tr.mobile-expanded td[data-column="k"]::before,
+    #tbody tr.mobile-expanded td[data-column="l"]::before,
+    #tbody tr.mobile-expanded td[data-column="unit"]::before { display: block; }
+    #tbody tr.mobile-expanded td input.cell { min-height: 40px; padding: 7px 5px; font-size: 16px; }
+    #tbody tr.mobile-expanded .need-output-value { min-height: 40px; font-size: 18px; }
+    #tbody tr.mobile-expanded .output-order-value { width: auto; min-height: 40px; justify-content: flex-start; font-size: 20px; }
+    #tbody tr.mobile-expanded .order-cell { gap: 6px; flex-wrap: wrap; justify-content: flex-start; }
+    #tbody tr.mobile-expanded .order-analysis:not(.empty) { display: inline-flex !important; }
+    #tbody tr.mobile-expanded .order-amount:not(.empty) { display: grid !important; }
     #tbody .inline-unmatched-row { display: grid; grid-template-columns: 82px minmax(0, 1fr); width: 100%; overflow: hidden; border: 1px solid rgba(249, 115, 22, 0.45); border-radius: 12px; background: rgba(249, 115, 22, 0.08); }
     #tbody .inline-unmatched-row > td { position: static !important; display: block; width: auto !important; min-width: 0 !important; max-width: none !important; padding: 8px; white-space: normal; background: transparent !important; }
     #tbody .inline-unmatched-row > td:nth-child(3) { grid-column: 1 / -1; }
@@ -512,7 +579,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0722.0055';
+const APP_VERSION = '0722.0106';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -7503,6 +7570,14 @@ function bindGridRowActions(tbody = document.getElementById('tbody')) {
     else if (action === 'snooze') snoozeItem(itemNameFromKey(button.dataset.itemKey || ''));
     else if (action === 'unsnooze') unsnoozeItem(itemNameFromKey(button.dataset.itemKey || ''));
     else if (action === 'accept-ai-usage') acceptAiUsageCandidate(itemNameFromKey(button.dataset.itemKey || ''));
+    else if (action === 'mobile-toggle') {
+      const row = button.closest('tr[data-entry-key]');
+      if (!row) return;
+      const expanded = row.classList.toggle('mobile-expanded');
+      button.setAttribute('aria-expanded', String(expanded));
+      button.textContent = expanded ? '▴' : '▾';
+      button.title = expanded ? '간단히 보기' : '상세 보기';
+    }
   });
 }
 
@@ -7600,6 +7675,7 @@ function render(options = {}) {
       ${KL}
       <td data-column="unit">${escapeHtml(item.unit || '')}</td>
       <td class="actions" data-column="actions">
+        <button class="mobile-row-toggle" tabindex="-1" type="button" data-grid-action="mobile-toggle" aria-expanded="false" title="상세 보기">▾</button>
         <button class="add" tabindex="-1" type="button" data-grid-action="add" data-entry-id="${safeEntryId}" title="같은 품목 행 추가">+</button>
         ${dupCount > 1 ? `<button tabindex="-1" type="button" data-grid-action="delete" data-entry-id="${safeEntryId}" title="이 행 삭제">×</button>` : ''}
         ${snoozeBtn}

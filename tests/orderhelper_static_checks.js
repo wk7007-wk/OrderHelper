@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0722.0055';/, 'APP_VERSION must match the KST mobile-card layout release time');
+mustMatch(/const APP_VERSION = '0722.0106';/, 'APP_VERSION must match the KST compact mobile-list release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -163,15 +163,18 @@ mustMatch(/function bindCellInputs\(\)/, 'single-grid cell event binding missing
 mustMatch(/function bindGridRowActions\(tbody = document\.getElementById\('tbody'\)\)/, 'stored row actions need one delegated listener');
 mustMatch(/tbody\.dataset\.gridActionsBound === '1'/, 're-rendered rows must not duplicate the delegated action listener');
 mustMatch(/data-grid-action="add" data-entry-id="\$\{safeEntryId\}"/, 'row actions must carry escaped data instead of dynamic inline handlers');
+mustMatch(/data-grid-action="mobile-toggle" aria-expanded="false" title="상세 보기">▾<\/button>/, 'mobile list rows need an explicit accessible detail toggle');
+mustMatch(/action === 'mobile-toggle'[\s\S]*row\.classList\.toggle\('mobile-expanded'\)[\s\S]*setAttribute\('aria-expanded', String\(expanded\)\)/, 'mobile detail toggle must expose and synchronize expanded state');
 mustNotMatch(/onclick="addRow\(|onclick="deleteRow\(/, 'stored row ids must never be interpolated into inline JavaScript');
 mustMatch(/value="\$\{escapeHtml\(ent\.zone \|\| ''\)\}"/, 'stored zone text must be escaped before HTML rendering');
 const stockAdjacentHeader = /<th id="thZone" data-column="zone">구역<\/th>\s*<th data-column="name">품목명<\/th>\s*<th data-column="stock">재고<\/th>\s*<th data-column="need">필요량<\/th>\s*<th data-column="order">추천발주 · 예상금액<\/th>\s*<th data-column="k">여유<\/th>\s*<th data-column="l">일사용<\/th>\s*<th data-column="unit">단위<\/th>\s*<th id="thAct" data-column="actions"><\/th>/g;
 assert.strictEqual((html.match(stockAdjacentHeader) || []).length, 2, 'static and dynamic headers must keep stock directly beside the item name');
 mustMatch(/<td class="name"[\s\S]{0,500}<td data-column="stock"><input class="cell"[\s\S]{0,500}data-field="stock"[\s\S]{0,200}<\/td>\s*\$\{needCell\}\s*\$\{orderCell\}/, 'every stored row must put the stock input directly after the item name');
 mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ position: sticky; left: 326px;/, 'desktop stock column must stay sticky beside the item name');
-mustMatch(/#tbody tr\[data-entry-key\] \{[\s\S]*grid-template-areas:[\s\S]*"zone name name name"[\s\S]*"stock need order order"[\s\S]*"k l unit actions";/, 'mobile rows must use a readable card grid that keeps core values on screen');
-mustMatch(/\.table-wrap \{ overflow-x: hidden;[\s\S]*thead \{ display: none; \}/, 'mobile card layout must remove horizontal table overflow and redundant headers');
-mustMatch(/#tbody \.inline-alias-summary-text,[\s\S]*#tbody \.inline-alias-factor-badge \{ display: none; \}/, 'mobile item cards must collapse verbose alias details until opened');
+mustMatch(/#tbody tr\[data-entry-key\] \{[\s\S]*grid-template-areas: "zone name stock need order actions";/, 'mobile rows must default to one compact list line with every core value on screen');
+mustMatch(/thead \{ position: sticky; top: 0;[\s\S]*display: block;[\s\S]*#thead \{[\s\S]*grid-template-columns: 40px minmax\(0, 1fr\) 52px 40px 46px 28px;/, 'mobile compact list must keep a short visible column header');
+mustMatch(/#tbody tr\.mobile-expanded \{[\s\S]*"zone name name actions"[\s\S]*"stock need order actions"[\s\S]*"k l unit actions";/, 'mobile detail expansion must retain the full editable card layout');
+mustMatch(/#tbody \.inline-alias-correction,[\s\S]*#tbody \.inline-site-match \{ display: none; \}/, 'mobile compact rows must hide verbose matching controls until expanded');
 mustMatch(/#thead th\[data-column="need"\], #tbody td\.need-qty[\s\S]*text-align: center;/, 'need header and values must align in one centered column');
 mustMatch(/#thead th\[data-column="order"\], #tbody td\.order-qty[\s\S]*text-align: left;[\s\S]*\.order-cell \{ display: flex;[\s\S]*align-items: center;[\s\S]*justify-content: flex-start;/, 'recommended order details must align visibly within one row');
 mustMatch(/#tbody td\.need-qty, #tbody td\.order-qty \{ vertical-align: top; \}/, 'need and recommended-order cells must share the same top-aligned primary row');

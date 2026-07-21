@@ -23,6 +23,7 @@
 - 엑셀/SFA 분석 결과가 새로 도착하면 화면 적용 시점에 최신 `entries`/`overrides`/`orderDays`/`orderAliasMappings`와 `sfaActualHistory`로 별명 draft/effective mapping, 환산 후보, inline 보정을 다시 계산한다. 저장된 `confirmed`/`manual` 값은 유지하고 `default`/draft만 최신화한다.
 
 ## UI/동선 기준
+- 모바일 기본 화면은 품목마다 `구역 · 품목 · 재고 · 필요 · 발주`가 한 줄에 보이는 compact list로 유지한다. 여유·일사용·단위·추가/숨김과 발주 연결·예상금액 상세는 행 끝 펼침 버튼에서만 카드 형태로 확장해, 기본 재고 입력 목록의 세로 스크롤을 늘리지 않는다.
 - 구역/품목/재고/여유/일사용/필요량/추천발주·예상금액은 한 표에서 본다. 발주가 필요한 각 품목의 기본 카드는 `예상 N원`과 가격 한 줄만 표시한다. 환산 품목은 `개당 N원 · 1박스 N원 · 최근 3개월 발주 기준`처럼 재고 1단위 가격과 발주 1단위 가격을 분리하며, 예상액은 추천 발주수량 × 발주 1단위 가격으로 계산한다. 계산이 안 되면 `예상금액 확인 필요`와 직원이 할 일을 짧게 보여준다. 실발주 수량, 상세 가격 출처, 산식, 파일·날짜·근거 수량은 데이터와 카드 title에 보존하되 기본 화면에는 나열하지 않는다. 상단 총액은 유효 금액만 합산해 `가격 확인 필요` 건수와 분리한다. 미입력, 입력완료, 숨김, 정렬 전환은 입력 동선을 방해하지 않고 정렬 뒤에도 값·포커스·caret을 복구한다.
 - 오늘 발주가 0인 행도 확인된 단가는 `봉당 N원 · 최근 3개월 발주 기준`처럼 한 줄로 남기고, 근거가 정말 없을 때만 `단가 확인 필요`로 표시한다. `미확인`만 단독 표시해 단가 누락으로 오해하게 하지 않는다. 구역 칸은 기존 입력값을 선택 목록으로 제공하면서 새 구역을 계속 수기로 입력할 수 있어야 한다.
 - 직원 인증 화면에는 단말 hash, GPS 반경·거리, 후보 기록 결과, 등록창 ID·만료시각 같은 내부 진단 정보를 표시하지 않는다. 내부 인증 증거와 후보 기록은 유지하되 화면에는 자동 진입 여부와 PIN 입력·관리자 문의처럼 사용자가 할 일만 짧은 한국어로 안내한다. 기기 hash·IP·user-agent·승인/개방 제어를 담은 `접근관리` 패널은 live 직원 화면에서 숨기고 로컬 `authDebug` 검증에서만 연다.
@@ -90,6 +91,6 @@
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, 과거 producer가 버린 금액은 원본 Excel 재분석 없이는 복구할 수 없음, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.
 
 ## 2026-07-22 handoff
-- APP_VERSION 0722.0055 preserves immediate category selection and bounded category-save conflict recovery while replacing the cramped mobile sticky table with readable on-screen cards.
-- At phone width, every item keeps zone/name, stock, need, recommended order, usage, unit, and actions inside one 390px card; verbose alias evidence stays available inside its details control instead of filling the default row.
-- Remaining verification pointer: live GitHub Pages reflection plus real in-app-browser mobile screenshot evidence, without live order/payment/Firebase writes.
+- APP_VERSION 0722.0106 keeps the mobile table readable while changing the default from a tall card to a one-line list: zone/name/stock/need/order plus a detail toggle.
+- The detail toggle restores the full editable card (usage, daily amount, unit, row actions, matching controls, and amount evidence) only when requested; collapsed rows remain about one input-height tall with no horizontal overflow.
+- Remaining verification pointer: live GitHub Pages reflection plus actual Codex in-app-browser list screenshot after deployment, without live order/payment/Firebase writes.

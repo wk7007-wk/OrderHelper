@@ -565,7 +565,7 @@ def main():
             mobile_page.route("**/*firebasedatabase.app/**", firebase_route)
             mobile_page.goto(origin, wait_until="domcontentloaded")
             mobile_page.evaluate("startOrderHelperApp(); unlockOrderHelper(); document.activeElement?.blur()")
-            mobile_header = mobile_page.evaluate(
+            mobile_list = mobile_page.evaluate(
                 """() => {
                     const wrap = document.querySelector('.table-wrap').getBoundingClientRect();
                     const headerCells = Array.from(document.querySelectorAll('#thead th'));
@@ -577,16 +577,31 @@ def main():
                     const orderValue = orderCell.querySelector('.output-order-value');
                     const nameCell = row.querySelector('td[data-column="name"]');
                     const stockCell = row.querySelector('td[data-column="stock"]');
+                    const kCell = row.querySelector('td[data-column="k"]');
+                    const lCell = row.querySelector('td[data-column="l"]');
+                    const unitCell = row.querySelector('td[data-column="unit"]');
                     const zoneInput = row.querySelector('input.cell[data-field="zone"]');
                     const stockInput = row.querySelector('input.cell[data-field="stock"]');
-                    const summary = row.querySelector('.inline-alias-correction > summary');
+                    const detailToggle = row.querySelector('.mobile-row-toggle');
                     const rowRect = row.getBoundingClientRect();
-                    const orderRect = orderCell.getBoundingClientRect();
-                    const orderContentRect = orderContent.getBoundingClientRect();
                     const primaryCells = ['zone', 'name', 'stock', 'need', 'order'].map(key =>
                         row.querySelector(`td[data-column="${key}"]`).getBoundingClientRect()
                     );
                     const expectedKeys = ['zone', 'name', 'stock', 'need', 'order', 'k', 'l', 'unit', 'actions'];
+                    const collapsed = {
+                        height: rowRect.height,
+                        secondaryHidden: [kCell, lCell, unitCell].every(cell => getComputedStyle(cell).display === 'none'),
+                        aliasControlsHidden: !row.querySelector('.inline-alias-correction') || getComputedStyle(row.querySelector('.inline-alias-correction')).display === 'none',
+                        orderDetailsHidden: Array.from(row.querySelectorAll('.order-analysis, .order-amount')).every(el => getComputedStyle(el).display === 'none'),
+                    };
+                    detailToggle.click();
+                    const expanded = {
+                        height: row.getBoundingClientRect().height,
+                        secondaryVisible: [kCell, lCell, unitCell].every(cell => getComputedStyle(cell).display !== 'none'),
+                        ariaExpanded: detailToggle.getAttribute('aria-expanded'),
+                        classExpanded: row.classList.contains('mobile-expanded'),
+                        orderWidth: orderCell.getBoundingClientRect().width,
+                    };
                     return {
                         headerKeys: headerCells.map(cell => cell.dataset.column),
                         headerTexts: headerCells.map(cell => cell.textContent.trim()),
@@ -607,42 +622,44 @@ def main():
                         needTextAlign: getComputedStyle(needCell).textAlign,
                         orderTextAlign: getComputedStyle(orderCell).textAlign,
                         orderDisplay: getComputedStyle(orderContent).display,
-                        orderJustify: getComputedStyle(orderContent).justifyContent,
-                        orderWidth: orderCell.getBoundingClientRect().width,
                         orderFontSize: parseFloat(getComputedStyle(orderValue).fontSize),
                         nameFontSize: parseFloat(getComputedStyle(nameCell.querySelector('.item-title')).fontSize),
                         zoneInputHeight: zoneInput.getBoundingClientRect().height,
                         stockInputHeight: stockInput.getBoundingClientRect().height,
-                        summaryHeight: summary?.getBoundingClientRect().height || 0,
-                        aliasDetailTextHidden: !row.querySelector('.inline-alias-summary-text') || getComputedStyle(row.querySelector('.inline-alias-summary-text')).display === 'none',
                         regularRowsAligned: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).every(candidate =>
                             Array.from(candidate.querySelectorAll(':scope > td')).map(cell => cell.dataset.column).join(',') === expectedKeys.join(',')
                         ),
-                        orderContained: orderContentRect.left >= orderRect.left - 1 && orderContentRect.right <= orderRect.right + 1,
                         stockPosition: getComputedStyle(stockCell).position,
+                        collapsed,
+                        expanded,
                     };
                 }"""
             )
-            assert mobile_header["headerKeys"] == ["zone", "name", "stock", "need", "order", "k", "l", "unit", "actions"], mobile_header
-            assert mobile_header["headerTexts"] == ["구역", "품목명", "재고", "필요량", "추천발주 · 예상금액", "여유", "일사용", "단위", ""], mobile_header
-            assert mobile_header["cellKeys"] == ["zone", "name", "stock", "need", "order", "k", "l", "unit", "actions"], mobile_header
-            assert mobile_header["headerDisplay"] == "none" and mobile_header["rowDisplay"] == "grid", mobile_header
-            assert mobile_header["rowWidth"] <= mobile_header["wrapWidth"] + 1, mobile_header
-            assert mobile_header["wrapScrollWidth"] <= mobile_header["wrapClientWidth"] + 1, mobile_header
-            assert mobile_header["primaryCellsVisible"] is True, mobile_header
-            assert mobile_header["gridAreas"] == {
+            assert mobile_list["headerKeys"] == ["zone", "name", "stock", "need", "order", "k", "l", "unit", "actions"], mobile_list
+            assert mobile_list["headerTexts"] == ["구역", "품목명", "재고", "필요량", "추천발주 · 예상금액", "여유", "일사용", "단위", ""], mobile_list
+            assert mobile_list["cellKeys"] == ["zone", "name", "stock", "need", "order", "k", "l", "unit", "actions"], mobile_list
+            assert mobile_list["headerDisplay"] == "block" and mobile_list["rowDisplay"] == "grid", mobile_list
+            assert mobile_list["rowWidth"] <= mobile_list["wrapWidth"] + 1, mobile_list
+            assert mobile_list["wrapScrollWidth"] <= mobile_list["wrapClientWidth"] + 1, mobile_list
+            assert mobile_list["primaryCellsVisible"] is True, mobile_list
+            assert mobile_list["gridAreas"] == {
                 "zone": "zone", "name": "name", "stock": "stock", "need": "need", "order": "order",
                 "k": "k", "l": "l", "unit": "unit", "actions": "actions",
-            }, mobile_header
-            assert mobile_header["needTextAlign"] == "center" and mobile_header["orderTextAlign"] == "left", mobile_header
-            assert mobile_header["orderDisplay"] == "flex" and mobile_header["orderJustify"] == "flex-start", mobile_header
-            assert mobile_header["regularRowsAligned"] is True, mobile_header
-            assert mobile_header["orderContained"] is True, mobile_header
-            assert mobile_header["stockPosition"] == "static", mobile_header
-            assert mobile_header["zoneInputHeight"] >= 42 and mobile_header["stockInputHeight"] >= 42, mobile_header
-            assert mobile_header["orderWidth"] >= 200 and mobile_header["orderFontSize"] >= 20, mobile_header
-            assert mobile_header["nameFontSize"] >= 15 and mobile_header["summaryHeight"] <= 32, mobile_header
-            assert mobile_header["aliasDetailTextHidden"] is True, mobile_header
+            }, mobile_list
+            assert mobile_list["needTextAlign"] == "center" and mobile_list["orderTextAlign"] == "center", mobile_list
+            assert mobile_list["orderDisplay"] == "flex", mobile_list
+            assert mobile_list["regularRowsAligned"] is True, mobile_list
+            assert mobile_list["stockPosition"] == "static", mobile_list
+            assert mobile_list["zoneInputHeight"] >= 36 and mobile_list["stockInputHeight"] >= 36, mobile_list
+            assert mobile_list["orderFontSize"] >= 16 and mobile_list["nameFontSize"] >= 12, mobile_list
+            assert mobile_list["collapsed"]["height"] <= 52, mobile_list
+            assert mobile_list["collapsed"]["secondaryHidden"] is True, mobile_list
+            assert mobile_list["collapsed"]["aliasControlsHidden"] is True, mobile_list
+            assert mobile_list["collapsed"]["orderDetailsHidden"] is True, mobile_list
+            assert mobile_list["expanded"]["height"] > mobile_list["collapsed"]["height"], mobile_list
+            assert mobile_list["expanded"]["secondaryVisible"] is True, mobile_list
+            assert mobile_list["expanded"]["ariaExpanded"] == "true" and mobile_list["expanded"]["classExpanded"] is True, mobile_list
+            assert mobile_list["expanded"]["orderWidth"] >= 180, mobile_list
 
             focus_race = mobile_page.evaluate(
                 """async () => {
@@ -895,7 +912,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0722.0055"
+            assert active_patch["body"]["appVersion"] == "0722.0106"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])
