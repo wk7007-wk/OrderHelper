@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0722.0215';/, 'APP_VERSION must match the KST SFA work-priority release time');
+mustMatch(/const APP_VERSION = '0722.0229';/, 'APP_VERSION must match the KST cross-device sync-reset release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -440,6 +440,13 @@ mustNotMatch(/markDeferredInputDirty\([\s\S]*?scheduleAutoSave\(reason\)/, 'draf
 mustMatch(/const work = deferredInputWork;\s*deferredInputWork = emptyDeferredInputWork\(\);\s*if \(revision !== deferredInputRevision\) return;/, 'deferred input work must not apply stale calculations over newer input');
 mustMatch(/const SAVE_REQUEST_TIMEOUT_MS = 20000;/, 'Firebase autosave must have a bounded request timeout');
 mustMatch(/const CONFIRMED_SAVE_QUEUE_STORAGE_KEY = 'bbq_confirmed_save_queue_v1';/, 'Enter-confirmed queue storage key missing');
+mustMatch(/const SYNC_RESET_STORAGE_KEY = 'bbq_sync_reset_v1';/, 'cross-device conflict reset marker storage missing');
+mustMatch(/function syncResetMarkerFromPayload\(data\)/, 'remote sync reset marker sanitizer missing');
+mustMatch(/function applyRemoteSyncResetIfNeeded\(data\)[\s\S]*localStorage\.removeItem\(CONFIRMED_SAVE_QUEUE_STORAGE_KEY\);[\s\S]*localStorage\.removeItem\(PENDING_SYNC_REVISION_STORAGE_KEY\);[\s\S]*localStorage\.removeItem\('bbq_entries'\);[\s\S]*localStorage\.setItem\(SYNC_RESET_STORAGE_KEY, JSON\.stringify\(marker\)\);/, 'remote reset must discard stale confirmed queues, pending drafts, and inventory values exactly once');
+mustMatch(/const resetApplied = applyRemoteSyncResetIfNeeded\(data\);[\s\S]*if \(!resetApplied && \(localDirty \|\| hasConfirmedSaveQueue\(\)\)\) return;/, 'remote reset must run before local dirty and confirmed-queue protection');
+mustMatch(/if \(activeSyncResetMarker\.id\) payload\.syncReset = \{ \.\.\.activeSyncResetMarker, scope: 'current_inventory' \};/, 'confirmed saves must preserve the active reset epoch');
+mustMatch(/const resetGenerationAtStart = syncResetGeneration;[\s\S]*if \(resetGenerationAtStart !== syncResetGeneration\) return false;/, 'an in-flight stale save must not complete after a reset epoch changes');
+mustMatch(/autoLoadFromFB\(true\)\.then\(\(\) => retryConfirmedRemotePending\('startup'\)\);/, 'startup must receive a remote reset before retrying an old confirmed queue');
 mustMatch(/async function putConfirmedSaveTargets\(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = FIREBASE_LEDGER_CAS_ATTEMPTS\)/, 'current/history writes need one shared abortable CAS boundary');
 mustMatch(/fetch\(currentUrl, \{ method: 'PUT',[\s\S]*body, signal: controller\.signal \}\),\s*fetch\(historyUrl, \{ method: 'PUT',[\s\S]*body, signal: controller\.signal \}\)/, 'both confirmed targets must receive one identical CAS-merged body per attempt');
 mustMatch(/controller\.abort\(\);/, 'a failed save target must abort its sibling before releasing single-flight');

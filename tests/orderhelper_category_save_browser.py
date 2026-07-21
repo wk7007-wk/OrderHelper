@@ -171,6 +171,60 @@ def main():
                 "inputLast": "browser-unmatched",
             }, sfa_priority
             install_fixture(page)
+            sync_reset = page.evaluate(
+                """() => {
+                    entries[0].stock = 9;
+                    stateRevision = 8000;
+                    inventoryRevision = 8000;
+                    localDirty = true;
+                    localStorage.setItem('bbq_entries', JSON.stringify(entries));
+                    localStorage.setItem(STATE_REVISION_STORAGE_KEY, '8000');
+                    localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, '8000');
+                    localStorage.setItem(PENDING_SYNC_REVISION_STORAGE_KEY, '8000');
+                    localStorage.setItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY, JSON.stringify({ v: 1, active: { stale: true }, queued: null }));
+                    const remote = {
+                        savedAt: 9001,
+                        stateRevision: 9001,
+                        inventoryRevision: 9001,
+                        dateKey: '20260722',
+                        syncReset: { id: 'browser-reset-9000', resetAt: 9000, scope: 'current_inventory' },
+                        orderDays: 3,
+                        zoneOrder: zoneOrder.slice(),
+                        entries: entries.map(entry => ({ ...entry, stock: null })),
+                        inventoryByItemKey: {},
+                        overrides: {},
+                        actualOrders: {},
+                    };
+                    const resetApplied = applyRemoteSyncResetIfNeeded(remote);
+                    const dataApplied = applyFBData(remote);
+                    const repeatApplied = applyRemoteSyncResetIfNeeded(remote);
+                    return {
+                        resetApplied,
+                        dataApplied,
+                        repeatApplied,
+                        queue: localStorage.getItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY),
+                        pending: localStorage.getItem(PENDING_SYNC_REVISION_STORAGE_KEY),
+                        marker: JSON.parse(localStorage.getItem(SYNC_RESET_STORAGE_KEY) || 'null'),
+                        stateRevision,
+                        inventoryRevision,
+                        localDirty,
+                        filledStocks: entries.filter(entry => entry.stock !== null && entry.stock !== '').length,
+                    };
+                }"""
+            )
+            assert sync_reset == {
+                "resetApplied": True,
+                "dataApplied": True,
+                "repeatApplied": False,
+                "queue": None,
+                "pending": None,
+                "marker": {"id": "browser-reset-9000", "resetAt": 9000},
+                "stateRevision": 9001,
+                "inventoryRevision": 9001,
+                "localDirty": False,
+                "filledStocks": 0,
+            }, sync_reset
+            install_fixture(page)
             first_item_state.update(page.evaluate("""() => ({ name: MASTER[0].name, itemKey: itemKeyForName(MASTER[0].name) })"""))
             remote["current"] = {"savedAt": 900, "stateRevision": 900, "inventoryRevision": 900, "entries": []}
             remote["history"] = dict(remote["current"])
