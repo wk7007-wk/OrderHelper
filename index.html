@@ -239,19 +239,126 @@
 
   /* 모바일 (폰) */
   @media (max-width: 600px) {
-    body { font-size: 14px; padding-bottom: 40px; }
-    .top { padding: 8px; gap: 6px; align-items: flex-start; }
-    .top h1 { font-size: 14px; }
-    .top button { padding: 8px 10px; font-size: 13px; }
-    .status-pill { min-height: 30px; }
-    th, td { padding: 6px 4px; font-size: 12px; }
-    table { min-width: 940px; }
-    td.name { max-width: 138px; min-width: 138px; word-break: keep-all; overflow-wrap: anywhere; }
-    td input.cell { width: 54px; padding: 8px 4px; font-size: 16px; }
-    td input.cell.zone { width: 68px; }
-    td.actions button { padding: 8px 10px; margin-right: 3px; font-size: 14px; min-width: 32px; }
-    .input-tools { padding: 8px; }
-    .input-tools button { width: 100%; padding: 10px 12px; font-size: 13px; }
+    body { font-size: 14px; padding-bottom: 32px; }
+    .top {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+      padding: 10px;
+      align-items: center;
+    }
+    .top h1 { font-size: 18px; line-height: 1.2; }
+    .top .badge { justify-self: start; font-size: 12px; padding: 5px 10px; }
+    .top .order-total-summary { grid-column: 1 / -1; width: 100%; min-height: 34px; justify-content: center; padding: 7px 10px; font-size: 12px; line-height: 1.35; text-align: center; white-space: normal; }
+    .top > label { display: flex; align-items: center; gap: 6px; min-height: 38px; font-size: 13px !important; }
+    .top #orderDays { flex: 1; min-height: 36px; margin-left: 0 !important; font-size: 15px !important; }
+    .top #cycleHint { justify-self: end; color: #aebbd0; font-size: 12px; line-height: 1.35; text-align: right; }
+    .top button { min-height: 40px; padding: 9px 10px; font-size: 13px; }
+    .top .grid-sort-control { grid-column: 1 / -1; width: 100%; order: initial; }
+    .top .grid-sort-control button { flex: 1; min-height: 36px; }
+    .top #sfaAnalyzeBtn, .top #sfaCompareBtn, .top > button.primary { width: 100%; }
+    .top #sfaStatus, .top #saveState { width: 100%; justify-content: center; }
+    .top #lastSaved { align-self: center; color: #aebbd0; }
+    .top #appVer { justify-self: end; align-self: center; color: #aebbd0; }
+    .status-pill { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+    .sales-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 10px; font-size: 13px; }
+    .sales-row > .meta:first-child { align-self: center; color: #c5cfdd; font-size: 12px; font-weight: 800; }
+    .sales-row .base-sales-control { min-height: 38px; padding-right: 0; border-right: 0; }
+    .sales-row input.sales { width: 64px; min-height: 38px; padding: 7px 8px; font-size: 15px; }
+    .sales-row #salesInputs { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .sales-row .day-block { display: grid; grid-template-columns: minmax(0, 1fr) 64px; align-items: center; gap: 6px; }
+    .sales-row .day-block .day-label { font-size: 11px; }
+    .sales-row #salesAvg { grid-column: 1 / -1; color: #aebbd0; font-size: 12px; line-height: 1.4; }
+    .input-tools { padding: 8px 10px 10px; }
+    .input-tools button { width: 100%; min-height: 42px; padding: 10px 12px; font-size: 14px; }
+    .table-wrap { overflow-x: hidden; padding: 8px; border-top: 1px solid #0f3460; }
+    table, tbody { display: block; width: 100%; min-width: 0; }
+    thead { display: none; }
+    #tbody { display: grid; gap: 10px; }
+    #tbody tr[data-entry-key] {
+      display: grid;
+      grid-template-columns: 82px 72px minmax(0, 1fr) 64px;
+      grid-template-areas:
+        "zone name name name"
+        "stock need order order"
+        "k l unit actions";
+      width: 100%;
+      overflow: hidden;
+      border: 1px solid rgba(49, 90, 141, 0.72);
+      border-radius: 12px;
+      background: #16213e;
+      box-shadow: 0 5px 16px rgba(3, 8, 20, 0.2);
+    }
+    #tbody tr[data-entry-key] > td {
+      position: static !important;
+      left: auto !important;
+      display: block;
+      width: auto !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      padding: 8px;
+      border-bottom: 0;
+      background: transparent !important;
+      white-space: normal;
+    }
+    #tbody tr.row-pending { background: linear-gradient(135deg, rgba(112, 37, 70, 0.72), rgba(52, 30, 57, 0.82)); border-color: rgba(233, 69, 96, 0.46); }
+    #tbody tr.row-checked { background: linear-gradient(135deg, rgba(15, 52, 96, 0.72), rgba(22, 33, 62, 0.94)); }
+    #tbody tr.row-hidden { background: rgba(8, 14, 24, 0.86); border-color: rgba(49, 90, 141, 0.38); }
+    #tbody td[data-column="zone"] { grid-area: zone; display: flex !important; align-items: center; border-right: 1px solid rgba(49, 90, 141, 0.45); border-bottom: 1px solid rgba(49, 90, 141, 0.45); }
+    #tbody td[data-column="name"] { grid-area: name; border-bottom: 1px solid rgba(49, 90, 141, 0.45); }
+    #tbody td[data-column="stock"] { grid-area: stock; }
+    #tbody td[data-column="need"] { grid-area: need; text-align: center; }
+    #tbody td[data-column="order"] { grid-area: order; text-align: left; }
+    #tbody td[data-column="k"] { grid-area: k; }
+    #tbody td[data-column="l"] { grid-area: l; }
+    #tbody td[data-column="unit"] { grid-area: unit; }
+    #tbody td[data-column="actions"] { grid-area: actions; display: flex !important; align-items: flex-end; justify-content: flex-end; }
+    #tbody td[data-column="stock"]::before,
+    #tbody td[data-column="need"]::before,
+    #tbody td[data-column="order"]::before,
+    #tbody td[data-column="k"]::before,
+    #tbody td[data-column="l"]::before,
+    #tbody td[data-column="unit"]::before {
+      display: block;
+      margin-bottom: 5px;
+      color: #93a4bb;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    #tbody td[data-column="stock"]::before { content: "재고"; }
+    #tbody td[data-column="need"]::before { content: "필요량"; }
+    #tbody td[data-column="order"]::before { content: "추천발주"; }
+    #tbody td[data-column="k"]::before { content: "여유"; }
+    #tbody td[data-column="l"]::before { content: "일사용"; }
+    #tbody td[data-column="unit"]::before { content: "단위"; }
+    #tbody td.name { word-break: keep-all; overflow-wrap: anywhere; }
+    #tbody .item-title { color: #fff; font-size: 15px; font-weight: 900; line-height: 1.35; }
+    #tbody .inline-alias-correction { margin-top: 6px; font-size: 11px; }
+    #tbody .inline-alias-correction summary { min-height: 24px; flex-wrap: nowrap; }
+    #tbody .inline-alias-summary-text,
+    #tbody .inline-alias-factor-badge { display: none; }
+    #tbody .inline-site-match { max-width: none; margin-top: 2px; font-size: 10px; }
+    #tbody .inline-site-match summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #tbody td input.cell { width: 100%; min-height: 42px; padding: 8px 6px; font-size: 17px; }
+    #tbody td input.cell.zone { width: 100%; min-height: 42px; padding: 8px 4px; text-align: center; font-size: 13px; }
+    #tbody .need-output-value { min-height: 42px; font-size: 18px; font-weight: 900; }
+    #tbody .output-order-value { min-height: 42px; font-size: 20px; font-weight: 900; }
+    #tbody .order-cell { gap: 6px; }
+    #tbody .order-analysis { min-height: 22px; padding: 3px 7px; font-size: 11px; }
+    #tbody .order-amount { gap: 2px; padding: 6px 8px; }
+    #tbody .order-amount-primary { font-size: 12px; }
+    #tbody .order-amount-secondary,
+    #tbody .order-amount-warning { font-size: 10px; line-height: 1.35; }
+    #tbody .daily-cell { display: grid; gap: 5px; }
+    #tbody .daily-analysis,
+    #tbody .ai-usage-advisory { width: 100%; margin-left: 0; justify-content: center; }
+    #tbody td.actions button { min-width: 34px; min-height: 36px; padding: 7px; margin: 0 0 0 3px; font-size: 14px; }
+    #tbody .inline-unmatched-row { display: grid; grid-template-columns: 82px minmax(0, 1fr); width: 100%; overflow: hidden; border: 1px solid rgba(249, 115, 22, 0.45); border-radius: 12px; background: rgba(249, 115, 22, 0.08); }
+    #tbody .inline-unmatched-row > td { position: static !important; display: block; width: auto !important; min-width: 0 !important; max-width: none !important; padding: 8px; white-space: normal; background: transparent !important; }
+    #tbody .inline-unmatched-row > td:nth-child(3) { grid-column: 1 / -1; }
+    #tbody .inline-unmatched-row > td:last-child { display: none; }
     .sfa-panel { padding: 8px; }
     .sfa-panel-actions { width: 100%; margin-left: 0; }
     .sfa-panel-actions button { flex: 1; padding: 8px 9px; }
@@ -266,15 +373,12 @@
     .sfa-alias-fields, .sfa-alias-new-fields { grid-template-columns: 1fr; }
     .inline-alias-fields { grid-template-columns: 1fr; }
     .inline-alias-new-fields { grid-template-columns: 1fr; }
-    .grid-sort-control { order: 2; }
-    #thead th:nth-child(1), #tbody td:nth-child(1) { width: 76px; min-width: 76px; max-width: 76px; }
-    #thead th:nth-child(2), #tbody td:nth-child(2) { left: 76px; width: 138px; min-width: 138px; max-width: 138px; }
-    #thead th:nth-child(3), #tbody td:nth-child(3) { left: 214px; width: 64px; min-width: 64px; max-width: 64px; }
-    #thead th[data-column="stock"], #tbody td[data-column="stock"] { width: 64px; min-width: 64px; max-width: 64px; }
-    #thead th[data-column="need"], #tbody td.need-qty { width: 70px; min-width: 70px; max-width: 70px; }
-    #thead th[data-column="order"], #tbody td.order-qty { width: 280px; min-width: 280px; max-width: 280px; }
     .sfa-io-grid { grid-template-columns: 1fr; }
-    .table-wrap { border-top: 1px solid #0f3460; }
+    .pin-overlay { padding: 24px; gap: 14px; }
+    .pin-overlay h2 { font-size: 22px; }
+    .pin-note, .pin-error { width: min(100%, 340px); max-width: 340px; font-size: 14px; line-height: 1.5; }
+    .pin-overlay input, .pin-overlay input.device-name { width: min(100%, 280px); min-height: 54px; }
+    .pin-overlay button { min-width: 128px; min-height: 48px; }
   }
 </style>
 </head>
@@ -408,7 +512,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0721.2346';
+const APP_VERSION = '0722.0055';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';

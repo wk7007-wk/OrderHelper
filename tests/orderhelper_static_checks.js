@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0721.2346';/, 'APP_VERSION must match the KST category/mobile conflict release time');
+mustMatch(/const APP_VERSION = '0722.0055';/, 'APP_VERSION must match the KST mobile-card layout release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -169,7 +169,9 @@ const stockAdjacentHeader = /<th id="thZone" data-column="zone">구역<\/th>\s*<
 assert.strictEqual((html.match(stockAdjacentHeader) || []).length, 2, 'static and dynamic headers must keep stock directly beside the item name');
 mustMatch(/<td class="name"[\s\S]{0,500}<td data-column="stock"><input class="cell"[\s\S]{0,500}data-field="stock"[\s\S]{0,200}<\/td>\s*\$\{needCell\}\s*\$\{orderCell\}/, 'every stored row must put the stock input directly after the item name');
 mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ position: sticky; left: 326px;/, 'desktop stock column must stay sticky beside the item name');
-mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ left: 214px;/, 'mobile stock column must stay sticky beside the item name without covering the full viewport');
+mustMatch(/#tbody tr\[data-entry-key\] \{[\s\S]*grid-template-areas:[\s\S]*"zone name name name"[\s\S]*"stock need order order"[\s\S]*"k l unit actions";/, 'mobile rows must use a readable card grid that keeps core values on screen');
+mustMatch(/\.table-wrap \{ overflow-x: hidden;[\s\S]*thead \{ display: none; \}/, 'mobile card layout must remove horizontal table overflow and redundant headers');
+mustMatch(/#tbody \.inline-alias-summary-text,[\s\S]*#tbody \.inline-alias-factor-badge \{ display: none; \}/, 'mobile item cards must collapse verbose alias details until opened');
 mustMatch(/#thead th\[data-column="need"\], #tbody td\.need-qty[\s\S]*text-align: center;/, 'need header and values must align in one centered column');
 mustMatch(/#thead th\[data-column="order"\], #tbody td\.order-qty[\s\S]*text-align: left;[\s\S]*\.order-cell \{ display: flex;[\s\S]*align-items: center;[\s\S]*justify-content: flex-start;/, 'recommended order details must align visibly within one row');
 mustMatch(/#tbody td\.need-qty, #tbody td\.order-qty \{ vertical-align: top; \}/, 'need and recommended-order cells must share the same top-aligned primary row');

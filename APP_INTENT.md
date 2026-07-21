@@ -90,5 +90,6 @@
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, 과거 producer가 버린 금액은 원본 Excel 재분석 없이는 복구할 수 없음, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.
 
 ## 2026-07-22 handoff
-- APP_VERSION 0721.2346 preserves immediate category selection, bounded category-save conflict recovery, and mobile sticky column layout.
-- Remaining verification pointer: live GitHub Pages reflection plus p95/mobile screenshot evidence, without live order/payment/Firebase writes.
+- APP_VERSION 0722.0055 preserves immediate category selection and bounded category-save conflict recovery while replacing the cramped mobile sticky table with readable on-screen cards.
+- At phone width, every item keeps zone/name, stock, need, recommended order, usage, unit, and actions inside one 390px card; verbose alias evidence stays available inside its details control instead of filling the default row.
+- Remaining verification pointer: live GitHub Pages reflection plus real in-app-browser mobile screenshot evidence, without live order/payment/Firebase writes.

@@ -571,66 +571,78 @@ def main():
                     const headerCells = Array.from(document.querySelectorAll('#thead th'));
                     const row = document.querySelector('#tbody tr[data-entry-key]:first-of-type');
                     const rowCells = Array.from(row.querySelectorAll(':scope > td'));
-                    const headers = headerCells.slice(0, 5).map(cell => {
-                        const rect = cell.getBoundingClientRect();
-                        return { x: rect.x, right: rect.right, top: rect.top };
-                    });
-                    const cells = rowCells.slice(0, 5).map(cell => {
-                        const rect = cell.getBoundingClientRect();
-                        return { x: rect.x, right: rect.right };
-                    });
                     const needCell = row.querySelector('td.need-qty');
                     const orderCell = row.querySelector('td.order-qty');
                     const orderContent = orderCell.querySelector('.order-cell');
-                    const needValue = needCell.querySelector('.need-output-value');
                     const orderValue = orderCell.querySelector('.output-order-value');
                     const nameCell = row.querySelector('td[data-column="name"]');
                     const stockCell = row.querySelector('td[data-column="stock"]');
-                    const nameRect = nameCell.getBoundingClientRect();
-                    const needRect = needCell.getBoundingClientRect();
+                    const zoneInput = row.querySelector('input.cell[data-field="zone"]');
+                    const stockInput = row.querySelector('input.cell[data-field="stock"]');
+                    const summary = row.querySelector('.inline-alias-correction > summary');
+                    const rowRect = row.getBoundingClientRect();
                     const orderRect = orderCell.getBoundingClientRect();
                     const orderContentRect = orderContent.getBoundingClientRect();
-                    const stockRect = stockCell.getBoundingClientRect();
+                    const primaryCells = ['zone', 'name', 'stock', 'need', 'order'].map(key =>
+                        row.querySelector(`td[data-column="${key}"]`).getBoundingClientRect()
+                    );
                     const expectedKeys = ['zone', 'name', 'stock', 'need', 'order', 'k', 'l', 'unit', 'actions'];
                     return {
-                        wrapTop: wrap.top,
-                        headers,
-                        cells,
                         headerKeys: headerCells.map(cell => cell.dataset.column),
                         headerTexts: headerCells.map(cell => cell.textContent.trim()),
                         cellKeys: rowCells.map(cell => cell.dataset.column),
+                        headerDisplay: getComputedStyle(document.querySelector('thead')).display,
+                        rowDisplay: getComputedStyle(row).display,
+                        rowWidth: rowRect.width,
+                        wrapWidth: wrap.width,
+                        wrapScrollWidth: document.querySelector('.table-wrap').scrollWidth,
+                        wrapClientWidth: document.querySelector('.table-wrap').clientWidth,
+                        primaryCellsVisible: primaryCells.every(rect =>
+                            rect.left >= wrap.left - 1 && rect.right <= wrap.right + 1 && rect.width > 0
+                        ),
+                        gridAreas: Object.fromEntries(expectedKeys.map(key => {
+                            const cell = row.querySelector(`td[data-column="${key}"]`);
+                            return [key, getComputedStyle(cell).gridArea];
+                        })),
                         needTextAlign: getComputedStyle(needCell).textAlign,
-                        needVerticalAlign: getComputedStyle(needCell).verticalAlign,
                         orderTextAlign: getComputedStyle(orderCell).textAlign,
-                        orderVerticalAlign: getComputedStyle(orderCell).verticalAlign,
                         orderDisplay: getComputedStyle(orderContent).display,
                         orderJustify: getComputedStyle(orderContent).justifyContent,
-                        needNumberCenterY: (needValue.getBoundingClientRect().top + needValue.getBoundingClientRect().bottom) / 2,
-                        orderNumberCenterY: (orderValue.getBoundingClientRect().top + orderValue.getBoundingClientRect().bottom) / 2,
+                        orderWidth: orderCell.getBoundingClientRect().width,
+                        orderFontSize: parseFloat(getComputedStyle(orderValue).fontSize),
+                        nameFontSize: parseFloat(getComputedStyle(nameCell.querySelector('.item-title')).fontSize),
+                        zoneInputHeight: zoneInput.getBoundingClientRect().height,
+                        stockInputHeight: stockInput.getBoundingClientRect().height,
+                        summaryHeight: summary?.getBoundingClientRect().height || 0,
+                        aliasDetailTextHidden: !row.querySelector('.inline-alias-summary-text') || getComputedStyle(row.querySelector('.inline-alias-summary-text')).display === 'none',
                         regularRowsAligned: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).every(candidate =>
                             Array.from(candidate.querySelectorAll(':scope > td')).map(cell => cell.dataset.column).join(',') === expectedKeys.join(',')
                         ),
                         orderContained: orderContentRect.left >= orderRect.left - 1 && orderContentRect.right <= orderRect.right + 1,
-                        stockNextToName: Math.abs(nameRect.right - stockRect.left) <= 1,
-                        stockBeforeNeed: stockRect.right <= needRect.left + 1,
-                        stockSticky: getComputedStyle(stockCell).position === 'sticky',
+                        stockPosition: getComputedStyle(stockCell).position,
                     };
                 }"""
             )
             assert mobile_header["headerKeys"] == ["zone", "name", "stock", "need", "order", "k", "l", "unit", "actions"], mobile_header
             assert mobile_header["headerTexts"] == ["구역", "품목명", "재고", "필요량", "추천발주 · 예상금액", "여유", "일사용", "단위", ""], mobile_header
             assert mobile_header["cellKeys"] == ["zone", "name", "stock", "need", "order", "k", "l", "unit", "actions"], mobile_header
-            assert abs(mobile_header["headers"][0]["top"] - mobile_header["wrapTop"]) <= 1, mobile_header
-            for header, cell in zip(mobile_header["headers"], mobile_header["cells"]):
-                assert abs(header["x"] - cell["x"]) < 1 and abs(header["right"] - cell["right"]) < 1, mobile_header
-            assert mobile_header["needTextAlign"] == "center" and mobile_header["needVerticalAlign"] == "top", mobile_header
-            assert mobile_header["orderTextAlign"] == "left" and mobile_header["orderVerticalAlign"] == "top", mobile_header
+            assert mobile_header["headerDisplay"] == "none" and mobile_header["rowDisplay"] == "grid", mobile_header
+            assert mobile_header["rowWidth"] <= mobile_header["wrapWidth"] + 1, mobile_header
+            assert mobile_header["wrapScrollWidth"] <= mobile_header["wrapClientWidth"] + 1, mobile_header
+            assert mobile_header["primaryCellsVisible"] is True, mobile_header
+            assert mobile_header["gridAreas"] == {
+                "zone": "zone", "name": "name", "stock": "stock", "need": "need", "order": "order",
+                "k": "k", "l": "l", "unit": "unit", "actions": "actions",
+            }, mobile_header
+            assert mobile_header["needTextAlign"] == "center" and mobile_header["orderTextAlign"] == "left", mobile_header
             assert mobile_header["orderDisplay"] == "flex" and mobile_header["orderJustify"] == "flex-start", mobile_header
-            assert abs(mobile_header["needNumberCenterY"] - mobile_header["orderNumberCenterY"]) <= 1, mobile_header
             assert mobile_header["regularRowsAligned"] is True, mobile_header
             assert mobile_header["orderContained"] is True, mobile_header
-            assert mobile_header["stockNextToName"] is True and mobile_header["stockBeforeNeed"] is True, mobile_header
-            assert mobile_header["stockSticky"] is True, mobile_header
+            assert mobile_header["stockPosition"] == "static", mobile_header
+            assert mobile_header["zoneInputHeight"] >= 42 and mobile_header["stockInputHeight"] >= 42, mobile_header
+            assert mobile_header["orderWidth"] >= 200 and mobile_header["orderFontSize"] >= 20, mobile_header
+            assert mobile_header["nameFontSize"] >= 15 and mobile_header["summaryHeight"] <= 32, mobile_header
+            assert mobile_header["aliasDetailTextHidden"] is True, mobile_header
 
             focus_race = mobile_page.evaluate(
                 """async () => {
@@ -883,7 +895,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0721.2346"
+            assert active_patch["body"]["appVersion"] == "0722.0055"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])
