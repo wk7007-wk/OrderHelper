@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0722.0229';/, 'APP_VERSION must match the KST cross-device sync-reset release time');
+mustMatch(/const APP_VERSION = '0722.0250';/, 'APP_VERSION must match the KST order-omission review release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -234,6 +234,9 @@ mustMatch(/수동 일사용\/발주값 자동변경 없음/, 'SFA compare panel 
 mustMatch(/실사용 참고 즉시 반영/, 'SFA compare panel must disclose that actual order history refreshes reference badges');
 mustMatch(/실발주 이력은 실사용 참고에만 반영/, 'SFA compare panel must disclose that actual order history is reference-only');
 mustMatch(/sfaReviewRows\(comp\)/, 'SFA comparison must include matched differences and missing rows');
+mustMatch(/data-tab="gap"[\s\S]*발주 누락/, 'SFA analysis must expose the order-omission review tab');
+mustMatch(/function sfaOmissionRows\(comp\)/, 'SFA analysis must calculate actual-order shortages against required quantities');
+mustMatch(/필요량 대비 실제 발주 부족/, 'SFA omission view must explain its comparison basis');
 mustMatch(/function orderUnitParts\(item\)/, 'check/order unit parser missing');
 mustMatch(/function buildConversionAnalysis\(history, currentSnapshot\)/, 'unit conversion analysis builder missing');
 mustMatch(/function movementConversionFactorFromRecords\(prev, curr, item\)/, 'unit conversion must infer from stock movement versus actual SFA order quantity');
@@ -752,6 +755,7 @@ this.__OrderHelperApi = {
   formatWon,
   firebasePayloadIsNewer,
   compareGridRows,
+  sfaOmissionRows,
   sfaWorkRowPriority,
   unmatchedInlineSiteRows,
   zoneSuggestionValues,
@@ -1131,6 +1135,18 @@ const compareOnlyData = {
   items: [{ name: 'BBQ치즈볼', unit: 'BOX', row_index: 9 }],
   comparison: { matched: [{ row_index: 9, sfa_name: 'BBQ치즈볼', sfa_qty: 5, sfa_unit: 'BOX', sfa_amount: '12,000', expected_name: '냉동-치즈볼-BBQ치즈볼(크림)', expected_stock_need: 10, score: 0.96 }], missing: [], extra: [] },
 };
+const omissionRows = plain(api.sfaOmissionRows({
+  matched: [
+    { expected_name: '일부 부족', expected_qty: 5, sfa_qty: 3, risk: 'MEDIUM' },
+    { expected_name: '수량 일치', expected_qty: 2, sfa_qty: 2, risk: 'LOW', status: 'OK' },
+    { expected_name: '초과 발주', expected_qty: 2, sfa_qty: 4, risk: 'LOW' },
+    { expected_name: '묶음 환산 충족', expected_qty: 2, sfa_qty: 1, risk: 'LOW', decision: 'AMOUNT_UNIT_COVERED' }
+  ],
+  missing: [{ name: '완전 누락', expected_qty: 4, sfa_qty: 0, risk: 'HIGH' }]
+}));
+assert.deepStrictEqual(omissionRows.map(row => row.expected_name || row.name), ['완전 누락', '일부 부족'], 'omission review must show complete and partial shortages only, with highest risk first');
+assert.strictEqual(omissionRows[0].shortageOrderQty, 4, 'complete omission must preserve the full required quantity as shortage');
+assert.strictEqual(omissionRows[1].shortageOrderQty, 2, 'partial omission must calculate required quantity minus actual SFA quantity');
 matches = api.buildOrderSiteMatches(compareOnlyData);
 assert.strictEqual(matches[0].siteQty, 5, 'matching builder should preserve comparison quantity when source row lacks it');
 assert.strictEqual(matches[0].amount, 12000, 'matching builder should preserve comparison amount when source row lacks it');

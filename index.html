@@ -562,7 +562,8 @@
   </div>
   <div class="sfa-counts" id="sfaCompareCounts"></div>
   <div class="sfa-tabs" id="sfaAnalysisTabs">
-    <button class="sfa-tab active" type="button" data-tab="match" onclick="setSfaAnalysisTab('match')">품목 연결</button>
+    <button class="sfa-tab active" type="button" data-tab="gap" onclick="setSfaAnalysisTab('gap')">발주 누락</button>
+    <button class="sfa-tab" type="button" data-tab="match" onclick="setSfaAnalysisTab('match')">품목 연결</button>
     <button class="sfa-tab" type="button" data-tab="alias" onclick="setSfaAnalysisTab('alias')">발주명 확인</button>
     <button class="sfa-tab" type="button" data-tab="unit" onclick="setSfaAnalysisTab('unit')">발주 단위 확인</button>
     <button class="sfa-tab" type="button" data-tab="unmatched" onclick="setSfaAnalysisTab('unmatched')">연결 필요</button>
@@ -653,7 +654,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0722.0229';
+const APP_VERSION = '0722.0250';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -1382,7 +1383,7 @@ let sfaStatusInitialized = false;
 let lastSfaStatusKey = '';
 let sfaLastRequestAt = 0;
 let sfaCompareVisible = false;
-let sfaActiveTab = 'match';
+let sfaActiveTab = 'gap';
 let lastSfaCompareSavedAt = 0;
 let lastSfaCompareStatusKey = '';
 let lastSfaCompareData = null;
@@ -6157,7 +6158,7 @@ function unitCorrectionRowHtml(item) {
 }
 
 function setSfaAnalysisTab(tab) {
-  sfaActiveTab = ['match', 'alias', 'unit', 'unmatched', 'io'].includes(tab) ? tab : 'match';
+  sfaActiveTab = ['gap', 'match', 'alias', 'unit', 'unmatched', 'io'].includes(tab) ? tab : 'gap';
   renderSfaAnalysisTab(lastSfaCompareData);
 }
 
@@ -6788,6 +6789,15 @@ function renderSfaAnalysisTab(data = lastSfaCompareData) {
     bindSfaCorrectionInputs();
     return;
   }
+  if (sfaActiveTab === 'gap') {
+    const omissionRows = sfaOmissionRows(data.comparison);
+    const zeroCount = omissionRows.filter(row => row.omissionType === 'zero').length;
+    const partialCount = omissionRows.length - zeroCount;
+    body.innerHTML = omissionRows.length
+      ? `<div class="sfa-panel-meta">필요량 대비 실제 발주 부족 · 완전 누락 ${zeroCount}개 · 일부 부족 ${partialCount}개</div>${omissionRows.map(sfaOmissionRowHtml).join('')}`
+      : '<div class="sfa-panel-meta">필요량 대비 실제 발주 누락 없음</div>';
+    return;
+  }
   const matches = buildOrderSiteMatches(data);
   if (sfaActiveTab === 'unmatched') {
     const matchRows = matches.filter(row => !['confirmed', 'unlinked'].includes(row.status));
@@ -6812,6 +6822,52 @@ function sfaReviewRows(comp) {
   const matched = comp?.matched || [];
   const missing = comp?.missing || [];
   return matched.filter(row => row.status !== 'OK').concat(missing);
+}
+
+function sfaOmissionRows(comp) {
+  const riskOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+  return (comp?.matched || []).concat(comp?.missing || []).map(row => {
+    const expected = Number(row?.expected_qty ?? row?.qty ?? 0);
+    const actual = Number(row?.sfa_qty ?? 0);
+    const safeExpected = Number.isFinite(expected) && expected > 0 ? expected : 0;
+    const safeActual = Number.isFinite(actual) && actual > 0 ? actual : 0;
+    const decision = String(row?.decision || '').toUpperCase();
+    return {
+      ...row,
+      expectedOrderQty: safeExpected,
+      actualOrderQty: safeActual,
+      shortageOrderQty: Math.max(0, safeExpected - safeActual),
+      omissionType: safeActual > 0 ? 'partial' : 'zero',
+      omissionCovered: row?.status === 'OK' || decision === 'MATCH' || decision.includes('COVERED')
+    };
+  }).filter(row => !row.omissionCovered && row.shortageOrderQty > 0.0005).sort((left, right) => {
+    const riskDiff = (riskOrder[left.risk] ?? 3) - (riskOrder[right.risk] ?? 3);
+    if (riskDiff) return riskDiff;
+    const typeDiff = (left.omissionType === 'zero' ? 0 : 1) - (right.omissionType === 'zero' ? 0 : 1);
+    if (typeDiff) return typeDiff;
+    const shortageDiff = right.shortageOrderQty - left.shortageOrderQty;
+    if (Math.abs(shortageDiff) > 0.0005) return shortageDiff;
+    const leftName = left.expected_name || left.name || left.sfa_name || '';
+    const rightName = right.expected_name || right.name || right.sfa_name || '';
+    return leftName.localeCompare(rightName, 'ko', { numeric: true });
+  });
+}
+
+function sfaOmissionRowHtml(row) {
+  const risk = row.risk || (row.omissionType === 'zero' ? 'HIGH' : 'MEDIUM');
+  const name = row.expected_name || row.name || row.sfa_name || '';
+  const expectedUnit = row.expected_unit || row.unit || '';
+  const actualUnit = row.sfa_unit || expectedUnit;
+  const label = row.omissionType === 'zero' ? '완전 누락' : sfaRiskLabel(risk);
+  const expectedText = `${displayDecimal(row.expectedOrderQty)}${expectedUnit ? ` ${expectedUnit}` : ''}`;
+  const actualText = `${displayDecimal(row.actualOrderQty)}${actualUnit ? ` ${actualUnit}` : ''}`;
+  const shortageText = `${displayDecimal(row.shortageOrderQty)}${expectedUnit ? ` ${expectedUnit}` : ''}`;
+  return `<div class="sfa-row ${sfaRiskClass(risk)}">
+    <div class="risk">${escapeHtml(label)}</div>
+    <div class="item">${escapeHtml(name)}</div>
+    <div class="qty">부족 ${escapeHtml(shortageText)}</div>
+    <div class="reason">필요 ${escapeHtml(expectedText)} · 실제 발주 ${escapeHtml(actualText)}${row.reason ? ` · ${escapeHtml(row.reason)}` : ''}</div>
+  </div>`;
 }
 
 function sfaGapRowHtml(row, extraOnly = false) {
@@ -6857,6 +6913,7 @@ function renderSfaComparePanel(data) {
   const history = data.historySummary || {};
   const matched = comp.matched || [];
   const reviewRows = sfaReviewRows(comp);
+  const omissionRows = sfaOmissionRows(comp);
   const high = reviewRows.filter(row => row.risk === 'HIGH');
   const medium = reviewRows.filter(row => row.risk === 'MEDIUM');
   const low = reviewRows.filter(row => row.risk === 'LOW');
@@ -6879,6 +6936,7 @@ function renderSfaComparePanel(data) {
     ? `실발주값 ${Object.keys(applied).length}개 이력 기록됨 · 수동 일사용/발주값 자동변경 없음 · 실사용 참고 즉시 반영`
     : '비교만 완료: 수동 일사용/발주값 자동변경 없음 · 실발주 이력은 실사용 참고에만 반영';
   counts.innerHTML = [
+    sfaCountChip('발주 누락', omissionRows.length, omissionRows.length ? 'high' : 'low'),
     sfaCountChip('일치', okCount),
     sfaCountChip('위험', high.length, 'high'),
     sfaCountChip('확인', medium.length, 'medium'),
