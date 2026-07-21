@@ -245,9 +245,10 @@
     .top button { padding: 8px 10px; font-size: 13px; }
     .status-pill { min-height: 30px; }
     th, td { padding: 6px 4px; font-size: 12px; }
-    td.name { max-width: 160px; min-width: 160px; word-break: keep-all; }
-    td input.cell { width: 56px; padding: 8px 4px; font-size: 16px; }
-    td input.cell.zone { width: 90px; }
+    table { min-width: 940px; }
+    td.name { max-width: 138px; min-width: 138px; word-break: keep-all; overflow-wrap: anywhere; }
+    td input.cell { width: 54px; padding: 8px 4px; font-size: 16px; }
+    td input.cell.zone { width: 68px; }
     td.actions button { padding: 8px 10px; margin-right: 3px; font-size: 14px; min-width: 32px; }
     .input-tools { padding: 8px; }
     .input-tools button { width: 100%; padding: 10px 12px; font-size: 13px; }
@@ -266,12 +267,12 @@
     .inline-alias-fields { grid-template-columns: 1fr; }
     .inline-alias-new-fields { grid-template-columns: 1fr; }
     .grid-sort-control { order: 2; }
-    #thead th:nth-child(1), #tbody td:nth-child(1) { width: 98px; min-width: 98px; max-width: 98px; }
-    #thead th:nth-child(2), #tbody td:nth-child(2) { left: 98px; width: 180px; min-width: 180px; max-width: 180px; }
-    #thead th:nth-child(3), #tbody td:nth-child(3) { left: 278px; width: 72px; min-width: 72px; max-width: 72px; }
-    #thead th[data-column="stock"], #tbody td[data-column="stock"] { width: 72px; min-width: 72px; max-width: 72px; }
-    #thead th[data-column="need"], #tbody td.need-qty { width: 72px; min-width: 72px; max-width: 72px; }
-    #thead th[data-column="order"], #tbody td.order-qty { width: 340px; min-width: 340px; max-width: 340px; }
+    #thead th:nth-child(1), #tbody td:nth-child(1) { width: 76px; min-width: 76px; max-width: 76px; }
+    #thead th:nth-child(2), #tbody td:nth-child(2) { left: 76px; width: 138px; min-width: 138px; max-width: 138px; }
+    #thead th:nth-child(3), #tbody td:nth-child(3) { left: 214px; width: 64px; min-width: 64px; max-width: 64px; }
+    #thead th[data-column="stock"], #tbody td[data-column="stock"] { width: 64px; min-width: 64px; max-width: 64px; }
+    #thead th[data-column="need"], #tbody td.need-qty { width: 70px; min-width: 70px; max-width: 70px; }
+    #thead th[data-column="order"], #tbody td.order-qty { width: 280px; min-width: 280px; max-width: 280px; }
     .sfa-io-grid { grid-template-columns: 1fr; }
     .table-wrap { border-top: 1px solid #0f3460; }
   }
@@ -407,7 +408,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0717.0918';
+const APP_VERSION = '0721.2346';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -1157,6 +1158,7 @@ let sfaAnalysisRecordsCache = { revision: -1, records: [] };
 let sfaLatestRecordsCache = { revision: -1, records: [] };
 let stateRevision = 0;
 let inventoryRevision = 0;
+let pendingEntryZonePatches = new Map();
 
 function canonicalItemName(name) {
   return ITEM_NAME_ALIASES[name] || name;
@@ -1699,6 +1701,63 @@ function mergeFirebasePayloadLedger(remotePayload, localPayload) {
   return merged;
 }
 
+function findEntryForZonePatch(rows, patch) {
+  const entryKey = String(patch?.entryKey || patch?.id || '').trim();
+  if (entryKey) {
+    const byEntryKey = rows.find(entry => (entry.entryKey || entry.id || '') === entryKey);
+    if (byEntryKey) return byEntryKey;
+  }
+  const itemKey = String(patch?.itemKey || '').trim();
+  const name = canonicalItemName(patch?.name || itemNameFromKey(itemKey));
+  return rows.find(entry => (entry.itemKey || itemKeyForName(entry.name)) === itemKey && canonicalItemName(entry.name) === name) || null;
+}
+
+function mergeEntryZonePatchesIntoEntries(remoteEntries, localEntries, patches) {
+  const nextEntries = sanitizeEntries(remoteEntries);
+  const localRows = sanitizeEntries(localEntries);
+  let changed = false;
+  sanitizeEntryZonePatches(patches).forEach(patch => {
+    const localRow = findEntryForZonePatch(localRows, patch);
+    const zone = Object.prototype.hasOwnProperty.call(patch, 'zone') ? String(patch.zone || '') : String(localRow?.zone || '');
+    let target = findEntryForZonePatch(nextEntries, patch);
+    if (!target && localRow) {
+      target = { ...localRow };
+      nextEntries.push(target);
+    }
+    if (!target) return;
+    if (target.zone !== zone) changed = true;
+    target.zone = zone;
+  });
+  return { entries: sanitizeEntries(nextEntries), changed };
+}
+
+function maxFirebasePayloadRevision(...payloads) {
+  return payloads.reduce((maxValue, payload) => {
+    const revision = firebasePayloadRevision(payload);
+    return Math.max(maxValue, revision.stateRevision, revision.inventoryRevision, revision.savedAt);
+  }, 0);
+}
+
+function mergeConfirmedEntryZonePatchPayload(currentRemote, historyRemote, localPayload, patches) {
+  const cleanPatches = sanitizeEntryZonePatches(patches);
+  if (!cleanPatches.length) return null;
+  const firstMerge = mergeFirebasePayloadLedger(currentRemote, localPayload);
+  const merged = mergeFirebasePayloadLedger(historyRemote, firstMerge);
+  const patched = mergeEntryZonePatchesIntoEntries(merged.entries || [], localPayload?.entries || [], cleanPatches);
+  if (!patched.changed) return null;
+  const now = Date.now();
+  const nextRevision = Math.max(now, maxFirebasePayloadRevision(currentRemote, historyRemote, localPayload) + 1);
+  return {
+    ...merged,
+    savedAt: now,
+    stateRevision: nextRevision,
+    inventoryRevision: nextRevision,
+    dateKey: normalizeHistoryDateKey(localPayload?.dateKey) || kstDateKey(now),
+    entries: patched.entries,
+    inventoryByItemKey: inventoryByItemKeyForPayload(patched.entries)
+  };
+}
+
 async function putFirebasePayloadWithLedgerCas(url, localPayload, maxAttempts = FIREBASE_LEDGER_CAS_ATTEMPTS) {
   let lastResponse = null;
   let lastPayload = localPayload;
@@ -2175,6 +2234,59 @@ function sanitizeEntries(source = entries) {
   return out;
 }
 
+function entryZonePatchKey(patch) {
+  const entryKey = String(patch?.entryKey || patch?.id || '').trim();
+  if (entryKey) return `entry:${entryKey}`;
+  const itemKey = String(patch?.itemKey || itemKeyForName(patch?.name || '') || '').trim();
+  return itemKey ? `item:${itemKey}` : '';
+}
+
+function sanitizeEntryZonePatches(source = []) {
+  const known = knownItemNameSet();
+  const out = [];
+  const used = new Set();
+  (Array.isArray(source) ? source : []).forEach(patch => {
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return;
+    const fromKey = itemNameFromKey(patch.itemKey);
+    const name = canonicalItemName(String(patch.name || fromKey || '').trim());
+    if (!known.has(name)) return;
+    const entryKey = String(patch.entryKey || patch.id || '').trim();
+    const itemKey = itemKeyForName(name);
+    const key = entryZonePatchKey({ entryKey, itemKey, name });
+    if (!key || used.has(key)) return;
+    used.add(key);
+    out.push({
+      entryKey,
+      id: entryKey,
+      itemKey,
+      name,
+      zone: String(patch.zone || ''),
+      revision: Number(patch.revision || 0)
+    });
+  });
+  return out.slice(-200);
+}
+
+function rememberEntryZonePatch(entry) {
+  const patch = sanitizeEntryZonePatches([{ ...entry, revision: stateRevision }])[0];
+  const key = entryZonePatchKey(patch);
+  if (!patch || !key) return false;
+  pendingEntryZonePatches.set(key, patch);
+  return true;
+}
+
+function entryZonePatchesForCommit() {
+  return sanitizeEntryZonePatches(Array.from(pendingEntryZonePatches.values()));
+}
+
+function clearEntryZonePatchesForCommit(commit) {
+  sanitizeEntryZonePatches(commit?.entryZonePatches || []).forEach(patch => {
+    const key = entryZonePatchKey(patch);
+    const pending = pendingEntryZonePatches.get(key);
+    if (!pending || Number(pending.revision || 0) <= Number(commit.revision || 0)) pendingEntryZonePatches.delete(key);
+  });
+}
+
 function migrateEntriesByName(source = entries) {
   return sanitizeEntries(source);
 }
@@ -2387,9 +2499,9 @@ function displayStockTotal(name) {
   return aggregate.hasValue ? aggregate.total : null;
 }
 
-function inventoryByItemKeyForPayload() {
+function inventoryByItemKeyForPayload(source = entries) {
   const out = {};
-  sanitizeEntries(entries).forEach(entry => {
+  sanitizeEntries(source).forEach(entry => {
     const itemKey = entry.itemKey || itemKeyForName(entry.name);
     if (!out[itemKey]) out[itemKey] = { itemKey, name: entry.name, total: null, hasValue: false, entries: [] };
     const stock = entry.stock == null ? null : Number(entry.stock);
@@ -7018,6 +7130,12 @@ function setGridSortMode(mode) {
   stockFlowEpoch += 1;
   flushDeferredInputWork();
   gridSortMode = nextMode;
+  updateGridSortButtons();
+  renderZoneOptions(entries);
+  if (reorderRenderedGridRows()) {
+    restoreGridFocus(focusSnapshot);
+    return;
+  }
   render({ focusSnapshot, allowDuringGridEdit: true });
 }
 
@@ -7200,6 +7318,8 @@ function bindCellInputs() {
         ent.zone = v;
         markInventoryMutation();
         scheduleDeferredInputWork({ saveReason: 'auto', draftScope: 'entries' });
+        rememberEntryZonePatch(ent);
+        renderZoneOptions(entries);
       } else {
         // k or l (overrides per name)
         const n = ent.name;
@@ -7628,7 +7748,8 @@ function sanitizeConfirmedCommit(source) {
     dateKey,
     reason: String(source.reason || 'enter').slice(0, 40),
     createdAt: Number(source.createdAt || 0),
-    body
+    body,
+    entryZonePatches: sanitizeEntryZonePatches(source.entryZonePatches || [])
   };
 }
 
@@ -7699,7 +7820,7 @@ function buildConfirmedSaveCommit(reason = 'enter') {
   const ledger = sfaOrderLedgerForPayload();
   const payload = { savedAt: now, stateRevision: revision, inventoryRevision: inventoryRevisionValue, dateKey, orderDays: days, entries: sanitizeEntries(entries), inventoryByItemKey: inventoryByItemKeyForPayload(), overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), sfaAnalysisHistory: sfaLedgerPointer(ledger), sfaOrderLedger: ledger, sfaActualHistory: sfaActualHistoryPointer(ledger), aiUsageEvidence: buildAiUsageEvidenceSummary(now, ledger), aiUsageAdvisory: sanitizeAiUsageAdvisory(), aiUsageAccepted: sanitizeAiUsageAccepted(), sfaAnalysisReadModel: buildSfaAnalysisReadModel(lastSfaCompareData), dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   const commitId = `${now}-${revision}-${++confirmedSaveSequence}`;
-  return { commitId, revision, inventoryRevision: inventoryRevisionValue, dateKey, reason, createdAt: now, body: JSON.stringify(payload) };
+  return { commitId, revision, inventoryRevision: inventoryRevisionValue, dateKey, reason, createdAt: now, body: JSON.stringify(payload), entryZonePatches: entryZonePatchesForCommit() };
 }
 
 async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = FIREBASE_LEDGER_CAS_ATTEMPTS) {
@@ -7708,11 +7829,15 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
   const currentUrl = `${FB_URL}${FB_PATH}/current.json`;
   const historyUrl = `${FB_URL}${FB_PATH}/history/${commit.dateKey}.json`;
   const localPayload = JSON.parse(commit.body);
-  const attempts = Math.max(1, Math.min(8, Number(maxAttempts) || FIREBASE_LEDGER_CAS_ATTEMPTS));
+  const entryZonePatches = sanitizeEntryZonePatches(commit.entryZonePatches || []);
+  const attempts = entryZonePatches.length
+    ? Math.max(1, Math.min(2, Number(maxAttempts) || FIREBASE_LEDGER_CAS_ATTEMPTS))
+    : Math.max(1, Math.min(8, Number(maxAttempts) || FIREBASE_LEDGER_CAS_ATTEMPTS));
   let currentResponse = null;
   let historyResponse = null;
   let payload = localPayload;
   let body = commit.body;
+  let entryZonePatchMerged = false;
   try {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       const [currentRead, historyRead] = await Promise.all([
@@ -7730,25 +7855,44 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
       payload = mergeFirebasePayloadLedger(historyRemote, payload);
       body = JSON.stringify(payload);
       if (firebasePayloadIsNewer(currentRemote, localPayload) || firebasePayloadIsNewer(historyRemote, localPayload)) {
-        return {
-          currentResponse: null,
-          historyResponse: null,
-          payload,
-          body,
-          attempts: attempt,
-          conflict: true,
-          conflictReason: 'remote_newer_revision'
-        };
+        const patchedPayload = mergeConfirmedEntryZonePatchPayload(currentRemote, historyRemote, localPayload, entryZonePatches);
+        if (!patchedPayload) {
+          return {
+            currentResponse: null,
+            historyResponse: null,
+            payload,
+            body,
+            attempts: attempt,
+            conflict: true,
+            conflictReason: 'remote_newer_revision'
+          };
+        }
+        payload = patchedPayload;
+        body = JSON.stringify(payload);
+        entryZonePatchMerged = true;
       }
       [currentResponse, historyResponse] = await Promise.all([
         fetch(currentUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': currentEtag }, body, signal: controller.signal }),
         fetch(historyUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': historyEtag }, body, signal: controller.signal })
       ]);
       if (currentResponse.status !== 412 && historyResponse.status !== 412) {
-        return { currentResponse, historyResponse, payload, body, attempts: attempt };
+        return { currentResponse, historyResponse, payload, body, attempts: attempt, entryZonePatchMerged };
       }
     }
-    return { currentResponse, historyResponse, payload, body, attempts };
+    if (entryZonePatches.length && (currentResponse?.status === 412 || historyResponse?.status === 412)) {
+      return {
+        currentResponse,
+        historyResponse,
+        payload,
+        body,
+        attempts,
+        conflict: true,
+        conflictReason: entryZonePatchMerged ? 'entry_zone_patch_retry_exhausted' : 'entry_zone_patch_cas_conflict',
+        localPatchPreserved: true,
+        entryZonePatchMerged
+      };
+    }
+    return { currentResponse, historyResponse, payload, body, attempts, entryZonePatchMerged };
   } finally {
     clearTimeout(timer);
     controller.abort();
@@ -7813,7 +7957,7 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
       pendingSave = true;
       pendingSaveReason = commit.reason;
       pushSaveLog(saveReasonLabel(commit.reason) + ' 충돌', 'error');
-      renderSaveState('다른 기기 최신 저장 충돌 · 확인 필요', 'error');
+      renderSaveState(result.localPatchPreserved ? '저장충돌 · 내 변경 보존됨 · 다시 저장' : '다른 기기 최신 저장 충돌 · 확인 필요', 'error');
       console.error('[confirmed-save] remote newer conflict', commit.commitId, result.conflictReason);
       return false;
     }
@@ -7834,6 +7978,12 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
     localStorage.setItem('bbq_savedAt', String(payload.savedAt));
     const saveMatchesLatestState = commit.revision === stateRevision &&
       commit.inventoryRevision === inventoryRevision && !deferredInputWork.dirty;
+    if (saveMatchesLatestState) {
+      stateRevision = Math.max(stateRevision, Number(payload.stateRevision || 0));
+      inventoryRevision = Math.max(inventoryRevision, Number(payload.inventoryRevision || 0));
+      localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
+      localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
+    }
     if (!nextQueue.active && saveMatchesLatestState) {
       localDirty = false;
       localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
@@ -7851,6 +8001,7 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
     if (saveRetryTimer) { clearTimeout(saveRetryTimer); saveRetryTimer = null; }
     pendingSave = Boolean(nextQueue.active);
     pendingSaveReason = nextQueue.active?.reason || 'enter';
+    clearEntryZonePatchesForCommit(commit);
     succeeded = true;
     pushSaveLog(saveReasonLabel(commit.reason) + ' 완료', 'success', payload.savedAt);
     if (nextQueue.active) renderSaveState('다음 확정 저장 대기', 'dirty');
@@ -8021,6 +8172,7 @@ function scheduleAutoSave() {
 function flushAutoSave(reason) {
   flushDeferredInputWork();
   if (!reason || reason === 'auto') return false;
+  renderZoneOptions(entries);
   return saveToFB(reason);
 }
 

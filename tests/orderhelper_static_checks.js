@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0717.0918';/, 'APP_VERSION must match the KST need/order number alignment release time');
+mustMatch(/const APP_VERSION = '0721.2346';/, 'APP_VERSION must match the KST category/mobile conflict release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -131,7 +131,7 @@ mustMatch(/function handleOutputCellInput\(target\)/, 'output edit handler missi
 mustMatch(/function setOutputStockTotal\(name, value\)/, 'output stock total setter missing');
 mustMatch(/function itemKeyForName\(name\)/, 'inventory rows need a stable item key shared by input and output');
 mustMatch(/function sanitizeEntries\(source = entries\)/, 'inventory entries need stable unique entry keys');
-mustMatch(/function inventoryByItemKeyForPayload\(\)/, 'current/history payload needs the same keyed inventory read model as output');
+mustMatch(/function inventoryByItemKeyForPayload\(source = entries\)/, 'current/history payload needs the same keyed inventory read model as output');
 mustMatch(/let stateRevision = 0;/, 'local/current saves need a monotonic state revision');
 mustMatch(/let inventoryRevision = 0;/, 'inventory saves need a monotonic inventory revision');
 mustMatch(/function shouldApplyIncomingCurrent\(data\)/, 'remote current application needs a latest-revision gate');
@@ -169,7 +169,7 @@ const stockAdjacentHeader = /<th id="thZone" data-column="zone">구역<\/th>\s*<
 assert.strictEqual((html.match(stockAdjacentHeader) || []).length, 2, 'static and dynamic headers must keep stock directly beside the item name');
 mustMatch(/<td class="name"[\s\S]{0,500}<td data-column="stock"><input class="cell"[\s\S]{0,500}data-field="stock"[\s\S]{0,200}<\/td>\s*\$\{needCell\}\s*\$\{orderCell\}/, 'every stored row must put the stock input directly after the item name');
 mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ position: sticky; left: 326px;/, 'desktop stock column must stay sticky beside the item name');
-mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ left: 278px;/, 'mobile stock column must stay sticky beside the item name');
+mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ left: 214px;/, 'mobile stock column must stay sticky beside the item name without covering the full viewport');
 mustMatch(/#thead th\[data-column="need"\], #tbody td\.need-qty[\s\S]*text-align: center;/, 'need header and values must align in one centered column');
 mustMatch(/#thead th\[data-column="order"\], #tbody td\.order-qty[\s\S]*text-align: left;[\s\S]*\.order-cell \{ display: flex;[\s\S]*align-items: center;[\s\S]*justify-content: flex-start;/, 'recommended order details must align visibly within one row');
 mustMatch(/#tbody td\.need-qty, #tbody td\.order-qty \{ vertical-align: top; \}/, 'need and recommended-order cells must share the same top-aligned primary row');
@@ -435,7 +435,7 @@ mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(
 mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*updateDerivedOrderForName\(ent\.name\);\s*scheduleDeferredInputWork\(\{ updateBadge: true, draftScope: 'entries' \}\);/, 'stock input must patch its row immediately without scheduling 90-day analysis per digit');
 mustMatch(/function logStockEvent\(e, phase\) \{\s*if \(!STOCK_FLOW_DEBUG\) return;/, 'stock key debug persistence must be disabled outside explicit diagnostics');
 mustMatch(/function commitStockInputAfterFocus\(target, reason\)[\s\S]*persistDraft: false,[\s\S]*flushAutoSave\(reason\);/, 'stock completion must move focus before heavy analysis and confirmed save');
-mustMatch(/function flushAutoSave\(reason\) \{\s*flushDeferredInputWork\(\);\s*if \(!reason \|\| reason === 'auto'\) return false;\s*return saveToFB\(reason\);/, 'flushAutoSave must reject draft/auto calls and persist scheduled input before explicit commit');
+mustMatch(/function flushAutoSave\(reason\) \{\s*flushDeferredInputWork\(\);\s*if \(!reason \|\| reason === 'auto'\) return false;\s*renderZoneOptions\(entries\);\s*return saveToFB\(reason\);/, 'flushAutoSave must reject draft/auto calls and persist scheduled input before explicit commit');
 mustMatch(/async function flushCurrentBeforeSfaAnalysisRequest\(\) \{\s*flushDeferredInputWork\(\);/, 'SFA request save gate must flush pending input work first');
 mustMatch(/if \(!confirmCurrentSave\('sfaAnalysis'\)\) return false;\s*return waitForSaveIdle\(\);/, 'SFA request must wait for an Enter-equivalent confirmed save');
 mustNotMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l change must remain a local draft');
@@ -488,6 +488,10 @@ mustMatch(/<datalist id="zoneOptions"><\/datalist>/, 'zone input needs one share
 mustMatch(/function zoneSuggestionValues\(source = entries\)/, 'zone suggestions must be derived from saved and typed rows');
 mustMatch(/list="zoneOptions" autocomplete="off"/, 'zone input must retain free text while offering existing values');
 mustMatch(/\.map\(zone => `<option value="\$\{escapeHtml\(zone\)\}"><\/option>`\)/, 'zone suggestions must be escaped before rendering');
+mustMatch(/rememberEntryZonePatch\(ent\);\s*renderZoneOptions\(entries\);/, 'zone input must refresh local selection options immediately without waiting for remote ACK');
+mustMatch(/function mergeConfirmedEntryZonePatchPayload\(currentRemote, historyRemote, localPayload, patches\)/, 'remote-newer save conflicts need a bounded category-zone patch merge');
+mustMatch(/entryZonePatches\.length && \(currentResponse\?\.status === 412 \|\| historyResponse\?\.status === 412\)/, 'entry-zone pair-CAS conflicts must stop at the bounded retry even without a remote-newer merge');
+mustMatch(/conflictReason: entryZonePatchMerged \? 'entry_zone_patch_retry_exhausted' : 'entry_zone_patch_cas_conflict'[\s\S]*localPatchPreserved: true/, 'repeated pair-CAS conflicts must preserve the local category-zone queue with a clear status');
 mustMatch(/function migrateRuntimeItemNames\(\)/, 'runtime item name migration helper missing');
 mustMatch(/entries = migrateEntriesByName\(entries\);/, 'entries must migrate old item names');
 mustMatch(/overrides = migrateNamedObject\(overrides\);/, 'overrides must migrate old item names');
@@ -522,7 +526,7 @@ mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderManualItems
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'dailySales'\)\) dailySales = Array\.isArray\(data\.dailySales\) \? data\.dailySales : \[\];/, 'Firebase sync must apply cleared daily sales payloads');
 mustMatch(/function handleOrderDaysChange\(\)/, 'orderDays change handler must save and sync');
 mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Firebase immediately');
-mustMatch(/function setGridSortMode\(mode\) \{[\s\S]*flushDeferredInputWork\(\);[\s\S]*gridSortMode = nextMode;[\s\S]*render\(\{ focusSnapshot, allowDuringGridEdit: true \}\);/, 'sort context switch must flush deferred state and restore the keyed focus snapshot');
+mustMatch(/function setGridSortMode\(mode\) \{[\s\S]*flushDeferredInputWork\(\);[\s\S]*gridSortMode = nextMode;[\s\S]*updateGridSortButtons\(\);[\s\S]*renderZoneOptions\(entries\);[\s\S]*if \(reorderRenderedGridRows\(\)\) \{[\s\S]*restoreGridFocus\(focusSnapshot\);[\s\S]*return;[\s\S]*render\(\{ focusSnapshot, allowDuringGridEdit: true \}\);/, 'sort context switch must use DOM row reorder before falling back to a full render');
 mustNotMatch(/flushAutoSave\('sortSwitch'\)/, 'sort-only UI changes must not confirm an unentered draft');
 mustMatch(/const flowEpoch = stockFlowEpoch;[\s\S]*if \(flowEpoch !== stockFlowEpoch\) return;/, 'sort switch must fence a stale blur-driven stock advance');
 mustMatch(/function compareGridRows\(left, right, mode = gridSortMode\)/, 'single grid needs explicit input-zone and SFA sort contexts');
@@ -684,6 +688,8 @@ this.__OrderHelperApi = {
   sfaLedgerPointer,
   sfaLedgerFromPayload,
   mergeFirebasePayloadLedger,
+  mergeConfirmedEntryZonePatchPayload,
+  mergeEntryZonePatchesIntoEntries,
   putFirebasePayloadWithLedgerCas,
   appendSfaAnalysisHistory,
   mergeSfaAnalysisHistories,
@@ -713,6 +719,7 @@ this.__OrderHelperApi = {
   firebasePayloadIsNewer,
   compareGridRows,
   zoneSuggestionValues,
+  renderZoneOptions,
   canonicalItemNameForActual,
   fixedActualAliasesForItem,
   migrateActualAliasName,
@@ -749,6 +756,7 @@ this.__OrderHelperApi = {
     localStorage.removeItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY);
     localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
     localStorage.removeItem('bbq_savedAt');
+    pendingEntryZonePatches = new Map();
     if (deferredInputWorkHandle) cancelFrameTask(deferredInputWorkHandle);
     deferredInputWorkHandle = null;
     deferredInputWork = emptyDeferredInputWork();
@@ -761,6 +769,12 @@ this.__OrderHelperApi = {
   writeConfirmedSaveQueue,
   emptyConfirmedSaveQueue,
   buildConfirmedSaveCommit,
+  rememberEntryZonePatchForCheck(entryKeyOrId) {
+    const entry = entries.find(row => row.entryKey === entryKeyOrId || row.id === entryKeyOrId);
+    return rememberEntryZonePatch(entry);
+  },
+  entryZonePatchesForCheck() { return entryZonePatchesForCommit(); },
+  renderForCheck(options = {}) { return render(options); },
   confirmedQueueKeyForCheck: CONFIRMED_SAVE_QUEUE_STORAGE_KEY,
   hasPendingLocalSync,
   cancelAutosaveForCheck() {
