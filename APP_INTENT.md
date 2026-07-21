@@ -91,6 +91,6 @@
 - 남은 위험: 실기기 키보드 이벤트 차이, SFA 화면 변동, 재고 변동 기반 환산은 실발주 반영 기록이 쌓인 뒤 안정화됨, 과거 producer가 버린 금액은 원본 Excel 재분석 없이는 복구할 수 없음, PC/SiteBot이 꺼지면 Termux는 감지만 가능하고 실제 SFA 파일 스캔은 못 한다.
 
 ## 2026-07-22 handoff
-- APP_VERSION 0722.0154 keeps unclipped mobile zone/name text and the persisted route-group editor, while aligning zone/name/stock/need/order/detail controls on one vertical center. Pending rows use a restrained status edge, inventory tools share one row, and expanded details consistently place labels above values.
+- APP_VERSION 0722.0204 keeps the same inventory grid semantics across devices. Mobile remains a vertically aligned compact list; PC fluidly expands the sticky zone/name/stock tracks, order evidence column, and route-group editor across the available viewport instead of leaving wide-screen space unused.
 - The detail toggle restores the full editable card (usage, daily amount, unit, row actions, matching controls, and amount evidence) only when requested; collapsed rows remain compact with no horizontal overflow.
 - Remaining verification pointer: live GitHub Pages reflection plus actual Codex in-app-browser list screenshot after deployment, without live order/payment/Firebase writes.

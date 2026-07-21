@@ -943,7 +943,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0722.0154"
+            assert active_patch["body"]["appVersion"] == "0722.0204"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])

@@ -9,7 +9,12 @@
 <title>BBQ 발주</title>
 <style>
   * { box-sizing: border-box; }
-  :root { --sticky-top: 52px; }
+  :root {
+    --sticky-top: 52px;
+    --desktop-zone-width: 106px;
+    --desktop-name-width: 220px;
+    --desktop-stock-width: 78px;
+  }
   body { margin: 0; font-family: -apple-system, 'Noto Sans KR', sans-serif; background: #1a1a2e; color: #e0e0e0; font-size: 13px; }
   .top { position: sticky; top: 0; z-index: 10; background: #16213e; border-bottom: 1px solid #0f3460; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .top h1 { font-size: 16px; margin: 0; }
@@ -141,9 +146,9 @@
   /* Horizontal overflow makes .table-wrap the sticky containing block.  A
      page-header offset here pushes the headings down into the body rows. */
   th { position: sticky; top: 0; z-index: 6; background: #0f3460; font-size: 11px; color: #ccc; font-weight: 600; }
-  #thead th:nth-child(1), #tbody td:nth-child(1) { position: sticky; left: 0; width: 106px; min-width: 106px; max-width: 106px; }
-  #thead th:nth-child(2), #tbody td:nth-child(2) { position: sticky; left: 106px; width: 220px; min-width: 220px; max-width: 220px; }
-  #thead th:nth-child(3), #tbody td:nth-child(3) { position: sticky; left: 326px; width: 78px; min-width: 78px; max-width: 78px; }
+  #thead th:nth-child(1), #tbody td:nth-child(1) { position: sticky; left: 0; width: var(--desktop-zone-width); min-width: var(--desktop-zone-width); max-width: var(--desktop-zone-width); }
+  #thead th:nth-child(2), #tbody td:nth-child(2) { position: sticky; left: var(--desktop-zone-width); width: var(--desktop-name-width); min-width: var(--desktop-name-width); max-width: var(--desktop-name-width); }
+  #thead th:nth-child(3), #tbody td:nth-child(3) { position: sticky; left: calc(var(--desktop-zone-width) + var(--desktop-name-width)); width: var(--desktop-stock-width); min-width: var(--desktop-stock-width); max-width: var(--desktop-stock-width); }
   #thead th:nth-child(-n+3) { z-index: 8; }
   #tbody td:nth-child(-n+3) { z-index: 3; background: #1a1a2e; }
   tr.need td { background: rgba(233, 69, 96, 0.08); }
@@ -235,6 +240,29 @@
   .snooze-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .snooze-actions button { border: 0; border-radius: 6px; padding: 10px 14px; font-weight: 700; color: #fff; background: #0f3460; }
   .snooze-actions button.primary { background: #e94560; }
+
+  @media (min-width: 1000px) {
+    :root {
+      --desktop-zone-width: clamp(106px, 8vw, 144px);
+      --desktop-name-width: clamp(240px, 22vw, 440px);
+      --desktop-stock-width: clamp(78px, 6vw, 104px);
+    }
+    .table-wrap { width: 100%; overflow-x: auto; }
+    table { width: 100%; min-width: 1180px; }
+    #tbody tr[data-entry-key] > td { vertical-align: top; }
+    td.name { max-width: none; }
+    #thead th[data-column="order"], #tbody td.order-qty { width: clamp(400px, 32vw, 840px); min-width: 360px; max-width: none; }
+    .order-amount { grid-template-columns: minmax(130px, .45fr) minmax(220px, 1fr); column-gap: 8px; align-items: center; }
+    .order-amount-warning { grid-column: 1 / -1; }
+    .zone-route-list { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+    .zone-add-row { width: min(620px, 100%); }
+  }
+
+  @media (min-width: 1600px) {
+    th, td { padding: 7px 10px; }
+    .order-amount-primary { font-size: 12px; }
+    .order-amount-secondary, .order-amount-warning { font-size: 10px; }
+  }
 
   /* PIN 잠금 */
   body.auth-locked .app-shell { display: none; }
@@ -625,7 +653,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0722.0154';
+const APP_VERSION = '0722.0204';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';

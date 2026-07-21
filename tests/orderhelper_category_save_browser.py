@@ -296,11 +296,13 @@ def main():
             retry_page.close()
             force_412["enabled"] = False
 
+            desktop_layouts = []
             for viewport in (
                 {"width": 360, "height": 800},
                 {"width": 390, "height": 844},
                 {"width": 412, "height": 915},
                 {"width": 1366, "height": 768},
+                {"width": 1920, "height": 1080},
             ):
                 layout_page = browser.new_page(viewport=viewport)
                 layout_page.route("**/*firebasedatabase.app/**", firebase_route)
@@ -316,12 +318,25 @@ def main():
                         const order = row.querySelector('td[data-column="order"]').getBoundingClientRect();
                         const stockInput = row.querySelector('input.cell[data-field="stock"]').getBoundingClientRect();
                         const zoneInput = row.querySelector('input.cell[data-field="zone"]').getBoundingClientRect();
+                        const itemTitle = row.querySelector('.item-title').getBoundingClientRect();
+                        const needValue = row.querySelector('.need-output-value').getBoundingClientRect();
+                        const orderValue = row.querySelector('.output-order-value').getBoundingClientRect();
+                        const table = document.querySelector('.table-wrap table').getBoundingClientRect();
+                        const wrap = document.querySelector('.table-wrap').getBoundingClientRect();
+                        const contentTops = [zoneInput.top, itemTitle.top, stockInput.top, needValue.top, orderValue.top];
                         return {
                             viewport: window.innerWidth,
+                            tableWidth: table.width,
+                            wrapWidth: wrap.width,
                             stickyRight: stock.right,
+                            zoneWidth: zone.width,
+                            nameWidth: name.width,
+                            stockWidth: stock.width,
                             needLeft: need.left,
                             needRight: need.right,
                             orderLeft: order.left,
+                            orderWidth: order.width,
+                            contentTopSpread: Math.max(...contentTops) - Math.min(...contentTops),
                             zoneInputHeight: zoneInput.height,
                             stockInputHeight: stockInput.height,
                             zoneVisible: zone.left >= -1 && zone.right <= window.innerWidth + 1,
@@ -334,7 +349,16 @@ def main():
                 assert layout["needLeft"] < layout["viewport"] and layout["orderLeft"] < layout["viewport"], layout
                 if viewport["width"] <= 600:
                     assert layout["zoneInputHeight"] >= 32 and layout["stockInputHeight"] >= 32, layout
+                else:
+                    assert layout["tableWidth"] >= layout["wrapWidth"] - 1, layout
+                    assert layout["contentTopSpread"] <= 2, layout
+                    desktop_layouts.append(layout)
                 layout_page.close()
+
+            assert len(desktop_layouts) == 2, desktop_layouts
+            assert desktop_layouts[1]["nameWidth"] >= desktop_layouts[0]["nameWidth"] + 80, desktop_layouts
+            assert desktop_layouts[1]["orderWidth"] >= desktop_layouts[0]["orderWidth"] + 100, desktop_layouts
+            assert desktop_layouts[1]["stickyRight"] > desktop_layouts[0]["stickyRight"], desktop_layouts
 
             browser.close()
         print("PASS orderhelper category save browser")

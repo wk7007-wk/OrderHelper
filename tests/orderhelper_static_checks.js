@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0722.0154';/, 'APP_VERSION must match the KST mobile alignment and UX release time');
+mustMatch(/const APP_VERSION = '0722.0204';/, 'APP_VERSION must match the KST fluid desktop-width release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -170,7 +170,11 @@ mustMatch(/value="\$\{escapeHtml\(ent\.zone \|\| ''\)\}"/, 'stored zone text mus
 const stockAdjacentHeader = /<th id="thZone" data-column="zone">구역<\/th>\s*<th data-column="name">품목명<\/th>\s*<th data-column="stock">재고<\/th>\s*<th data-column="need">필요량<\/th>\s*<th data-column="order">추천발주 · 예상금액<\/th>\s*<th data-column="k">여유<\/th>\s*<th data-column="l">일사용<\/th>\s*<th data-column="unit">단위<\/th>\s*<th id="thAct" data-column="actions"><\/th>/g;
 assert.strictEqual((html.match(stockAdjacentHeader) || []).length, 2, 'static and dynamic headers must keep stock directly beside the item name');
 mustMatch(/<td class="name"[\s\S]{0,500}<td data-column="stock"><input class="cell"[\s\S]{0,500}data-field="stock"[\s\S]{0,200}<\/td>\s*\$\{needCell\}\s*\$\{orderCell\}/, 'every stored row must put the stock input directly after the item name');
-mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ position: sticky; left: 326px;/, 'desktop stock column must stay sticky beside the item name');
+mustMatch(/--desktop-zone-width: 106px;[\s\S]*--desktop-name-width: 220px;[\s\S]*--desktop-stock-width: 78px;/, 'desktop sticky columns need shared fluid width variables');
+mustMatch(/#thead th:nth-child\(3\), #tbody td:nth-child\(3\) \{ position: sticky; left: calc\(var\(--desktop-zone-width\) \+ var\(--desktop-name-width\)\);/, 'desktop stock column must remain sticky after the zone and fluid name columns');
+mustMatch(/@media \(min-width: 1000px\) \{[\s\S]*--desktop-name-width: clamp\(240px, 22vw, 440px\);[\s\S]*#thead th\[data-column="order"\], #tbody td\.order-qty \{ width: clamp\(400px, 32vw, 840px\);/, 'wide screens must expand the name and order evidence columns with the viewport');
+mustMatch(/#tbody tr\[data-entry-key\] > td \{ vertical-align: top; \}/, 'desktop row controls must share the same top baseline when detail text increases row height');
+mustMatch(/\.zone-route-list \{ grid-template-columns: repeat\(auto-fit, minmax\(420px, 1fr\)\); \}/, 'desktop route groups must use available horizontal space');
 mustMatch(/#tbody tr\[data-entry-key\] \{[\s\S]*grid-template-areas: "zone name stock need order actions";/, 'mobile rows must default to one compact list line with every core value on screen');
 mustMatch(/thead \{ position: sticky; top: 0;[\s\S]*display: block;[\s\S]*#thead \{[\s\S]*grid-template-columns: 84px minmax\(0, 1fr\) 52px 42px 46px 36px;/, 'mobile compact list must balance readable zone, numeric, and detail columns');
 mustMatch(/\.input-tools \{ display: grid; grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);[\s\S]*\.zone-manager \{ grid-column: 1 \/ -1;/, 'mobile inventory tools must share one compact row while the route editor spans the full width');
