@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0724.0254';/, 'APP_VERSION must match the KST snooze-flow and SFA emphasis release time');
+mustMatch(/const APP_VERSION = '0724.0323';/, 'APP_VERSION must match the KST expected-sales synchronization release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -461,6 +461,12 @@ mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : 
 mustMatch(/function logStockEvent\(e, phase\) \{\s*if \(!STOCK_FLOW_DEBUG\) return;/, 'stock key debug persistence must be disabled outside explicit diagnostics');
 mustMatch(/function commitStockInputAfterFocus\(target, reason\)[\s\S]*persistDraft: false,[\s\S]*flushAutoSave\(reason\);/, 'stock completion must move focus before heavy analysis and confirmed save');
 mustMatch(/function flushAutoSave\(reason\) \{\s*flushDeferredInputWork\(\);\s*if \(!reason \|\| reason === 'auto'\) return false;\s*renderZoneOptions\(entries\);\s*return saveToFB\(reason\);/, 'flushAutoSave must reject draft/auto calls and persist scheduled input before explicit commit');
+mustMatch(/const SALES_REVISION_STORAGE_KEY = 'bbq_sales_revision_v1';/, 'expected sales needs its own cross-device revision');
+mustMatch(/scopes\.has\('sales'\) \|\| scopes\.has\('base'\)[\s\S]*salesRevision = nextMonotonicRevision\(salesRevision\);/, 'editing expected sales must advance its field-level revision');
+mustMatch(/function mergeFirebaseSalesState\(mergedPayload, remotePayload, localPayload\)/, 'Firebase CAS merge must resolve expected sales independently from inventory');
+mustMatch(/salesRevision: Number\(salesRevision \|\| 0\)/, 'confirmed payload must carry the expected-sales revision');
+mustMatch(/inp\.addEventListener\('change', \(\) => flushAutoSave\('salesChange'\)\);/g, 'leaving an expected-sales input must confirm it for cross-device sync');
+mustMatch(/applyMergedSalesPayloadIfNewer\(payload\);\s*localStorage\.setItem\('bbq_savedAt'/, 'a save that preserves newer remote sales must refresh the local device');
 mustMatch(/async function flushCurrentBeforeSfaAnalysisRequest\(\) \{\s*flushDeferredInputWork\(\);/, 'SFA request save gate must flush pending input work first');
 mustMatch(/if \(!confirmCurrentSave\('sfaAnalysis'\)\) return false;\s*return waitForSaveIdle\(\);/, 'SFA request must wait for an Enter-equivalent confirmed save');
 mustNotMatch(/handleOutputCellInput\(e\.target\);\s*flushAutoSave\('auto'\);/, 'output stock/k/l change must remain a local draft');
@@ -738,6 +744,7 @@ this.__OrderHelperApi = {
   sfaLedgerPointer,
   sfaLedgerFromPayload,
   mergeFirebasePayloadLedger,
+  firebaseSalesPayloadIsNewer,
   mergeConfirmedEntryZonePatchPayload,
   mergeEntryZonePatchesIntoEntries,
   putFirebasePayloadWithLedgerCas,
