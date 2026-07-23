@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0722.0250';/, 'APP_VERSION must match the KST order-omission review release time');
+mustMatch(/const APP_VERSION = '0724.0254';/, 'APP_VERSION must match the KST snooze-flow and SFA emphasis release time');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -531,14 +531,20 @@ mustMatch(/const name = canonicalItemName\(entry\.name\);/, 'history stock map m
 mustNotMatch(/name:"BBQ시크릿양념소스/, 'old BBQ secret sauce names must not remain in MASTER');
 mustMatch(/const DEFAULT_SNOOZE_DAYS = 5;/, 'snooze default days must be 5');
 mustMatch(/const MAX_SNOOZE_DAYS = 365;/, 'snooze max guard missing');
-mustMatch(/id="snoozeDaysInput" type="text" inputmode="numeric" pattern="\[0-9\]\*" maxlength="3" autocomplete="off" value="5" oninput="sanitizeSnoozeDaysInput\(this\)"/, 'snooze dialog must use digits-only input with default value');
+mustMatch(/id="snoozeDaysInput" type="text" inputmode="numeric" enterkeyhint="done" pattern="\[0-9\]\*" maxlength="3" autocomplete="off" value="5" oninput="sanitizeSnoozeDaysInput\(this\)"/, 'snooze dialog must use a mobile done-key digits-only input with default value');
 mustMatch(/function sanitizeSnoozeDaysInput\(input\)/, 'snooze digit sanitizer missing');
 mustMatch(/replace\(\/\\D\/g, ''\)\.slice\(0, 3\)/, 'snooze input must strip non-digits while typing');
+mustMatch(/input\.setSelectionRange\(caret, caret\)/, 'snooze digit sanitizer must preserve the editing caret');
 mustMatch(/parseInt\(String\(value \|\| ''\)\.replace\(\/\\D\/g, ''\), 10\)/, 'snooze parser must ignore non-digits');
-mustMatch(/function openSnoozeDialog\(name\)/, 'snooze dialog opener missing');
+mustMatch(/function openSnoozeDialog\(name, sourceButton = null\)/, 'snooze dialog opener must retain its source row');
 mustMatch(/function confirmSnooze\(event\)/, 'snooze dialog submit handler missing');
-mustMatch(/function applySnoozeItem\(name, days\)/, 'snooze apply helper missing');
-mustMatch(/function snoozeItem\(name\) \{\s*openSnoozeDialog\(name\);\s*\}/, 'snooze button must open numeric dialog');
+mustMatch(/function applySnoozeItem\(name, days, continuation = pendingSnoozeContinuation\)/, 'snooze apply helper must preserve its continuation target');
+mustMatch(/function snoozeContinuationFromButton\(button\)/, 'snooze flow must remember the next visible stock row');
+mustMatch(/function focusSnoozeContinuation\(continuation, useNext = true\)/, 'snooze flow must restore the working viewport and cursor');
+mustMatch(/function refreshAfterSnooze\(name, continuation\)[\s\S]*reorderRenderedGridRows\(\)[\s\S]*patchSnoozedItemRows\(name\)/, 'snooze apply must prefer a lightweight DOM reorder over a full grid render');
+mustMatch(/closeSnoozeDialog\(false\);\s*applySnoozeItem\(name, days, continuation\);/, 'snooze confirmation must retain its continuation before closing the dialog');
+mustMatch(/function snoozeItem\(name, sourceButton = null\) \{\s*openSnoozeDialog\(name, sourceButton\);\s*\}/, 'snooze button must open the numeric dialog with its row context');
+mustMatch(/activeGridCellInput\(\) \|\| snoozeDialogOpen\(\)/, 'background renders must remain deferred while the snooze dialog is active');
 mustNotMatch(/prompt\(/, 'snooze must not use browser prompt');
 mustMatch(/function shouldFallbackAdvanceFromChange\(target, currentId\)/, 'change fallback guard missing');
 mustMatch(/if \(active === target\) return true;/, 'mobile change while focused must advance');
@@ -562,6 +568,13 @@ mustNotMatch(/flushAutoSave\('sortSwitch'\)/, 'sort-only UI changes must not con
 mustMatch(/const flowEpoch = stockFlowEpoch;[\s\S]*if \(flowEpoch !== stockFlowEpoch\) return;/, 'sort switch must fence a stale blur-driven stock advance');
 mustMatch(/function compareGridRows\(left, right, mode = gridSortMode, context = null\)/, 'single grid needs explicit input-zone and SFA work sort contexts');
 mustMatch(/return mode === 'sfa' \? compareSfaRows\(left, right, context\) : compareInputRows\(left, right\);/, 'sort context must only change row order');
+mustMatch(/function sfaOrderRowState\(item, hidden = false, context = null\)/, 'SFA work view must classify match-needed, order-needed, and no-order rows');
+mustMatch(/return Number\(qty\) > 0 \? 'order-needed' : 'order-none';/, 'SFA order emphasis must follow the effective positive order quantity');
+mustMatch(/function applySfaOrderRowState\(row, state\)/, 'SFA order state must have a dedicated row styling patch');
+mustMatch(/applySfaOrderRowState\(row, sfaOrderRowState\(orderItemByName\(entry\.name\), hidden, sfaSortContext\)\)/, 'in-place SFA row reorder must refresh order emphasis without a full render');
+mustMatch(/applySfaOrderRowState\(tr, sfaOrderRowState\(item, hidden, sfaSortContext\)\)/, 'full grid render must apply SFA order emphasis');
+mustMatch(/#tbody tr\.sfa-order-needed \{ background:[\s\S]*border: 2px solid #f59e0b/, 'mobile SFA order-needed rows must use a strong amber treatment');
+mustMatch(/#tbody tr\.sfa-order-none:not\(\.row-hidden\) \{ background:[\s\S]*border-left-color: #475569/, 'mobile SFA no-order rows must remain visibly subdued');
 mustMatch(/function sfaAliasNeedsAttention\(aliasRow\)[\s\S]*aliasRow\.status !== 'unlinked' && !isUserSelectedAliasStatus\(aliasRow\.status\)/, 'SFA work sort must recognize unmatched, conflicting, and unconfirmed aliases');
 mustMatch(/function buildSfaWorkSortContext\([\s\S]*orderQtyByItemKey: new Map\(orderItemList\(\)\.map\(item => \[itemKeyForName\(item\.name\), outputOrderQty\(item, safeDays\)\]\)\)/, 'SFA work sort must cache effective order quantities once per sort');
 mustMatch(/function sfaWorkRowPriority\(row, context = null\)[\s\S]*if \(sfaAliasNeedsAttention\(aliasRow\)\) return 0;[\s\S]*return Number\(qty\) > 0 \? 1 : 2;/, 'SFA work sort must put alias attention first, positive order quantities second, and zero quantities last');
@@ -587,7 +600,7 @@ mustMatch(/class="cell zone" type="text"[^>]*tabindex="-1"/, 'zone field must be
 mustMatch(/<button class="add" tabindex="-1"/, 'row action buttons must be skipped by keyboard next navigation');
 mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must move within the current DOM order');
 mustMatch(/function renderAndFocusStock\([^)]*\)[\s\S]*if \(gridSortMode === 'input'\) \{[\s\S]*reorderRenderedGridRows\(\)[\s\S]*queueMicrotask\(focusNext\);/, 'stock Enter must reorder existing rows without replacing the focused tbody');
-mustMatch(/if \(!options\.allowDuringGridEdit && activeGridCellInput\(\)\) \{\s*pendingGridRender = true;\s*return false;/, 'background full renders must defer while a grid input is active');
+mustMatch(/if \(!options\.allowDuringGridEdit && \(activeGridCellInput\(\) \|\| snoozeDialogOpen\(\)\)\) \{\s*pendingGridRender = true;\s*return false;/, 'background full renders must defer while a grid input or snooze dialog is active');
 mustMatch(/if \(stockEnterHandledTargets\.has\(e\.target\)\) \{\s*return;\s*\}/, 'all stale changes from the exact Enter-handled DOM input must stay suppressed');
 mustNotMatch(/skipStockRenderOnceId/, 'global entry-id dedupe can suppress the wrong replacement input');
 mustMatch(/th \{ position: sticky; top: 0;/, 'mobile table header must stay at the table-wrap origin instead of being offset into body rows');

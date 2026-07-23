@@ -692,6 +692,58 @@ def main():
             assert mobile_list["expanded"]["needDirection"] == "column", mobile_list
             assert mobile_list["expanded"]["orderDirection"] == "column", mobile_list
 
+            snooze_flow = mobile_page.evaluate(
+                """async () => {
+                    const items = MASTER.slice(0, 3);
+                    overrides = {};
+                    entries = items.map((item, index) => ({
+                        id: `snooze-row-${index}`,
+                        entryKey: `snooze-row-${index}`,
+                        itemKey: itemKeyForName(item.name),
+                        name: item.name,
+                        zone: '가',
+                        stock: null,
+                    }));
+                    gridSortMode = 'input';
+                    render();
+                    const sourceRow = document.querySelector('tr[data-entry-key="snooze-row-0"]');
+                    sourceRow.querySelector('[data-grid-action="mobile-toggle"]').click();
+                    const snoozeButton = sourceRow.querySelector('[data-grid-action="snooze"]');
+                    const sourceTop = sourceRow.getBoundingClientRect().top;
+                    const beforeRenderCount = gridPerf.fullRenders;
+                    snoozeButton.click();
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    const daysInput = document.getElementById('snoozeDaysInput');
+                    daysInput.value = '1x2';
+                    daysInput.setSelectionRange(2, 2);
+                    daysInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    const sanitized = { value: daysInput.value, caret: daysInput.selectionStart };
+                    document.querySelector('#snoozeOverlay form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    const active = document.activeElement;
+                    const targetRow = document.querySelector('tr[data-entry-key="snooze-row-1"]');
+                    const hiddenRow = document.querySelector('tr[data-entry-key="snooze-row-0"]');
+                    const result = {
+                        sanitized,
+                        activeId: active?.dataset?.id || '',
+                        activeField: active?.dataset?.field || '',
+                        targetTopDelta: Math.abs(targetRow.getBoundingClientRect().top - sourceTop),
+                        fullRenderDelta: gridPerf.fullRenders - beforeRenderCount,
+                        hiddenMovedLast: Array.from(document.querySelectorAll('#tbody tr[data-entry-key]')).at(-1)?.dataset?.entryKey === 'snooze-row-0',
+                        hiddenClass: hiddenRow.classList.contains('row-hidden'),
+                        hiddenCollapsed: !hiddenRow.classList.contains('mobile-expanded'),
+                        returnText: hiddenRow.querySelector('.need-output-value')?.textContent || '',
+                    };
+                    overrides = {};
+                    return result;
+                }"""
+            )
+            assert snooze_flow["sanitized"] == {"value": "12", "caret": 1}, snooze_flow
+            assert snooze_flow["activeId"] == "snooze-row-1" and snooze_flow["activeField"] == "stock", snooze_flow
+            assert snooze_flow["targetTopDelta"] <= 2, snooze_flow
+            assert snooze_flow["fullRenderDelta"] == 0, snooze_flow
+            assert snooze_flow["hiddenMovedLast"] is True and snooze_flow["hiddenClass"] is True, snooze_flow
+            assert snooze_flow["hiddenCollapsed"] is True and "후 복귀" in snooze_flow["returnText"], snooze_flow
+
             focus_race = mobile_page.evaluate(
                 """async () => {
                     const first = MASTER.find(item => item.name !== '신선육(10호)-뼈한마리');
