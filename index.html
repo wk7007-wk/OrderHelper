@@ -564,6 +564,7 @@
   <span class="status-pill idle" id="sfaStatus">엑셀 대기</span>
   <span class="status-pill registration" id="registrationAccessStatus" hidden>임시 접속</span>
   <button class="primary" onclick="flushAutoSave('manual')">저장</button>
+  <button class="primary" id="phoneOverwriteBtn" type="button" onclick="forcePhoneCurrentOverRemote('button')" hidden>이 폰 내용으로 PC 덮어쓰기</button>
   <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
   <span class="meta" id="appVer"></span>
@@ -674,7 +675,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0724.0323';
+const APP_VERSION = '0727.0307';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -1433,6 +1434,15 @@ let salesRevision = 0;
 let pendingEntryZonePatches = new Map();
 let activeSyncResetMarker = { id: '', resetAt: 0 };
 let syncResetGeneration = 0;
+let phoneOverwriteInFlight = false;
+const phoneLocalSnapshotPresentAtBoot = (() => {
+  try {
+    const storedEntries = JSON.parse(localStorage.getItem('bbq_entries') || 'null');
+    return Array.isArray(storedEntries) && storedEntries.length > 0;
+  } catch {
+    return false;
+  }
+})();
 
 function canonicalItemName(name) {
   return ITEM_NAME_ALIASES[name] || name;
@@ -2045,6 +2055,75 @@ function maxFirebasePayloadRevision(...payloads) {
     const revision = firebasePayloadRevision(payload);
     return Math.max(maxValue, revision.stateRevision, revision.inventoryRevision, revision.savedAt);
   }, 0);
+}
+
+// 사용자가 충돌 화면에서 명시적으로 선택한 경우에만 폰의 전체 로컬 상태를 우선한다.
+// SFA 분석 ledger는 유실하지 않고 병합하되, 발주항목/재고/매칭/보정/예상매출은 폰 값 그대로 유지한다.
+function buildPhoneWinsPayload(currentRemote, historyRemote, localPayload, now = Date.now(), resolutionId = '') {
+  const local = localPayload && typeof localPayload === 'object' ? localPayload : {};
+  const salesCeiling = [currentRemote, historyRemote, local]
+    .reduce((maxValue, payload) => Math.max(maxValue, firebaseSalesPayloadRevision(payload).revision), 0);
+  const nextRevision = Math.max(
+    Number(now) || Date.now(),
+    maxFirebasePayloadRevision(currentRemote, historyRemote, local) + 1,
+    salesCeiling + 1
+  );
+  const resolvedAt = Number(now) || Date.now();
+  const id = String(resolutionId || `phone-${resolvedAt}-${nextRevision}`).slice(0, 160);
+  const forcedLocal = {
+    ...local,
+    savedAt: resolvedAt,
+    stateRevision: nextRevision,
+    inventoryRevision: nextRevision,
+    salesRevision: nextRevision,
+    dateKey: normalizeHistoryDateKey(local.dateKey) || kstDateKey(resolvedAt),
+    syncResolution: {
+      id,
+      mode: 'phone_overwrite_pc',
+      source: 'explicit_user_phone',
+      resolvedAt,
+      previousRemoteRevision: maxFirebasePayloadRevision(currentRemote, historyRemote)
+    }
+  };
+  let merged = mergeFirebasePayloadLedger(currentRemote, forcedLocal);
+  merged = mergeFirebasePayloadLedger(historyRemote, merged);
+  return merged;
+}
+
+async function putPhoneWinsTargets(localPayload, resolutionId, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 5) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const currentUrl = `${FB_URL}${FB_PATH}/current.json`;
+  const historyDateKey = normalizeHistoryDateKey(localPayload?.dateKey) || kstDateKey(Date.now());
+  const historyUrl = `${FB_URL}${FB_PATH}/history/${historyDateKey}.json`;
+  let currentResponse = null;
+  let historyResponse = null;
+  let payload = null;
+  try {
+    for (let attempt = 1; attempt <= Math.max(1, Math.min(8, Number(maxAttempts) || 5)); attempt += 1) {
+      const [currentRead, historyRead] = await Promise.all([
+        fetch(currentUrl, { headers: { 'X-Firebase-ETag': 'true' }, signal: controller.signal }),
+        fetch(historyUrl, { headers: { 'X-Firebase-ETag': 'true' }, signal: controller.signal })
+      ]);
+      if (!currentRead.ok || !historyRead.ok) throw new Error(`Firebase phone-wins read HTTP ${currentRead.status}/${historyRead.status}`);
+      const currentEtag = currentRead.headers?.get?.('ETag') || currentRead.headers?.get?.('etag');
+      const historyEtag = historyRead.headers?.get?.('ETag') || historyRead.headers?.get?.('etag');
+      if (!currentEtag || !historyEtag) throw new Error('Firebase phone-wins read missing ETag');
+      const [currentRemote, historyRemote] = await Promise.all([currentRead.json(), historyRead.json()]);
+      payload = buildPhoneWinsPayload(currentRemote, historyRemote, localPayload, Date.now(), resolutionId);
+      const body = JSON.stringify(payload);
+      [currentResponse, historyResponse] = await Promise.all([
+        fetch(currentUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': currentEtag }, body, signal: controller.signal }),
+        fetch(historyUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': historyEtag }, body, signal: controller.signal })
+      ]);
+      if (currentResponse.status === 412 || historyResponse.status === 412) continue;
+      return { currentResponse, historyResponse, payload, attempts: attempt };
+    }
+    return { currentResponse, historyResponse, payload, attempts: Math.max(1, Math.min(8, Number(maxAttempts) || 5)), conflict: true };
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+  }
 }
 
 function mergeConfirmedEntryZonePatchPayload(currentRemote, historyRemote, localPayload, patches) {
@@ -8720,6 +8799,8 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
       pendingSaveReason = commit.reason;
       pushSaveLog(saveReasonLabel(commit.reason) + ' 충돌', 'error');
       renderSaveState(result.localPatchPreserved ? '저장충돌 · 내 변경 보존됨 · 다시 저장' : '다른 기기 최신 저장 충돌 · 확인 필요', 'error');
+      const phoneOverwriteBtn = document.getElementById('phoneOverwriteBtn');
+      if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = false;
       console.error('[confirmed-save] remote newer conflict', commit.commitId, result.conflictReason);
       return false;
     }
@@ -8786,6 +8867,105 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
       if (latestQueue?.active) setTimeout(() => sendActiveConfirmedSave('queued'), 0);
       else applyPendingFBDataIfSafe();
     }
+  }
+}
+
+function consumePhoneOverwriteRequest() {
+  const params = new URLSearchParams(location.search || '');
+  if (params.get('phoneWins') !== '1') return false;
+  params.delete('phoneWins');
+  const query = params.toString();
+  const cleanUrl = `${location.pathname || '/OrderHelper/'}${query ? `?${query}` : ''}${location.hash || ''}`;
+  window.history?.replaceState?.({}, '', cleanUrl);
+  return true;
+}
+
+async function forcePhoneCurrentOverRemote(trigger = 'button') {
+  if (phoneOverwriteInFlight || saveInFlight) return false;
+  const phoneOverwriteBtn = document.getElementById('phoneOverwriteBtn');
+  if (!phoneLocalSnapshotPresentAtBoot) {
+    renderSaveState('중단 · 이 브라우저에 폰 저장본 없음', 'error');
+    if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = false;
+    toast('이 브라우저에 기존 폰 저장본이 없어 덮어쓰지 않았습니다');
+    return false;
+  }
+  const queue = readConfirmedSaveQueue();
+  if (!queue || confirmedSaveQueueBlocked) {
+    renderSaveState('중단 · 폰 저장기록 확인 필요', 'error');
+    return false;
+  }
+
+  flushDeferredInputWork();
+  if (saveRetryTimer) clearTimeout(saveRetryTimer);
+  saveRetryTimer = null;
+  syncResetGeneration += 1;
+  phoneOverwriteInFlight = true;
+  localDirty = true;
+  if (phoneOverwriteBtn) {
+    phoneOverwriteBtn.hidden = false;
+    phoneOverwriteBtn.disabled = true;
+  }
+  renderSaveState('폰 기준으로 PC 덮어쓰는 중', 'saving');
+  const localCommit = buildConfirmedSaveCommit('phoneOverwrite');
+  const localPayload = JSON.parse(localCommit.body);
+  const resolutionId = `phone-${Date.now()}-${localCommit.commitId}`;
+  try {
+    const result = await putPhoneWinsTargets(localPayload, resolutionId);
+    if (result.conflict) throw new Error('Firebase phone-wins CAS conflict');
+    const { currentResponse, historyResponse, payload } = result;
+    if (!currentResponse?.ok || !historyResponse?.ok) {
+      throw new Error(`Firebase phone-wins HTTP ${currentResponse?.status || 0}/${historyResponse?.status || 0}`);
+    }
+    const [currentVerify, historyVerify] = await Promise.all([
+      fetch(`${FB_URL}${FB_PATH}/current.json?_=${Date.now()}`),
+      fetch(`${FB_URL}${FB_PATH}/history/${payload.dateKey}.json?_=${Date.now()}`)
+    ]);
+    if (!currentVerify.ok || !historyVerify.ok) throw new Error('Firebase phone-wins verify read failed');
+    const [verifiedCurrent, verifiedHistory] = await Promise.all([currentVerify.json(), historyVerify.json()]);
+    const verified = [verifiedCurrent, verifiedHistory].every(source =>
+      source?.syncResolution?.id === resolutionId &&
+      source?.syncResolution?.mode === 'phone_overwrite_pc' &&
+      Number(source?.stateRevision || 0) === Number(payload.stateRevision || 0)
+    );
+    if (!verified) throw new Error('Firebase phone-wins verify mismatch');
+
+    writeConfirmedSaveQueue(emptyConfirmedSaveQueue());
+    pendingSave = false;
+    pendingSaveReason = 'enter';
+    pendingEntryZonePatches = new Map();
+    stateRevision = Number(payload.stateRevision || 0);
+    inventoryRevision = Number(payload.inventoryRevision || 0);
+    salesRevision = Number(payload.salesRevision || 0);
+    localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
+    localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
+    localStorage.setItem(SALES_REVISION_STORAGE_KEY, String(salesRevision));
+    localStorage.setItem('bbq_savedAt', String(payload.savedAt));
+    localStorage.setItem('bbq_phone_overwrite_receipt_v1', JSON.stringify({
+      id: resolutionId,
+      resolvedAt: payload.savedAt,
+      revision: payload.stateRevision,
+      trigger
+    }));
+    localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
+    sfaAnalysisHistory = mergeSfaAnalysisHistories(sfaAnalysisHistory, payload.sfaOrderLedger);
+    markSfaLedgerChanged();
+    localStorage.setItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON.stringify(sfaAnalysisHistoryForPayload()));
+    localDirty = false;
+    renderSaveState('완료 · 폰 기준 PC 동기화', 'saved');
+    document.getElementById('lastSaved').textContent = '충돌해결 ' + new Date(payload.savedAt).toLocaleTimeString('ko-KR');
+    if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = true;
+    toast('폰 발주항목을 기준으로 PC 동기화를 완료했습니다');
+    return true;
+  } catch (error) {
+    console.error('[phone-overwrite] failed', error);
+    localDirty = true;
+    renderSaveState('실패 · 폰 내용은 보존됨', 'error');
+    toast('덮어쓰기 실패 — 폰 내용은 그대로 보존했습니다');
+    if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = false;
+    return false;
+  } finally {
+    phoneOverwriteInFlight = false;
+    if (phoneOverwriteBtn) phoneOverwriteBtn.disabled = false;
   }
 }
 
@@ -8972,6 +9152,7 @@ function applyFBData(data) {
 
 // Firebase 폴링 (5초마다, 입력 중이면 보류)
 async function autoLoadFromFB(silent) {
+  if (phoneOverwriteInFlight) return;
   try {
     const res = await fetch(`${FB_URL}${FB_PATH}/current.json?_=` + Date.now());
     if (!res.ok) { console.warn('[autoLoad] HTTP', res.status); return; }
@@ -9167,7 +9348,11 @@ function startOrderHelperApp() {
   loadSfaOrderStatus(true);
   window.addEventListener('resize', updateStickyOffsets);
   // 디바이스 간 동기화: 페이지 열 때마다 + 5초 간격 폴링
-  autoLoadFromFB(true).then(() => retryConfirmedRemotePending('startup'));
+  if (consumePhoneOverwriteRequest()) {
+    forcePhoneCurrentOverRemote('query');
+  } else {
+    autoLoadFromFB(true).then(() => retryConfirmedRemotePending('startup'));
+  }
   setInterval(() => autoLoadFromFB(true), 5000);
   setInterval(() => loadUsageHistory(true), 300000);
   setInterval(() => loadSfaPriceHistory(true), 300000);

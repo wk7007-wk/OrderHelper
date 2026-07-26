@@ -31,7 +31,12 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0724.0323';/, 'APP_VERSION must match the KST expected-sales synchronization release time');
+mustMatch(/const APP_VERSION = '0727.0307';/, 'APP_VERSION must match the KST phone-wins conflict recovery release time');
+mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
+mustMatch(/function buildPhoneWinsPayload\(currentRemote, historyRemote, localPayload, now = Date\.now\(\), resolutionId = ''\)/, 'phone-wins payload builder missing');
+mustMatch(/mode: 'phone_overwrite_pc',[\s\S]*source: 'explicit_user_phone'/, 'phone-wins payload must carry an auditable explicit-user marker');
+mustMatch(/if \(!phoneLocalSnapshotPresentAtBoot\) \{[\s\S]*이 브라우저에 기존 폰 저장본이 없어 덮어쓰지 않았습니다/, 'phone-wins recovery must fail closed without a boot-time local snapshot');
+mustMatch(/if \(consumePhoneOverwriteRequest\(\)\) \{\s*forcePhoneCurrentOverRemote\('query'\);/, 'one-shot phone-wins URL must run before normal remote auto-load');
 mustMatch(/const USAGE_ANALYSIS_MAX_DAYS = 90;/, 'usage analysis must use a bounded recent history window');
 mustMatch(/const SFA_ORDER_REQUEST_PATH = '\/monitor\/main_pc\/sfa_order_request';/, 'SFA immediate analysis request path missing');
 mustMatch(/const SFA_ORDER_STATUS_PATH = '\/monitor\/main_pc\/sfa_order';/, 'SFA status path missing');
@@ -745,6 +750,8 @@ this.__OrderHelperApi = {
   sfaLedgerFromPayload,
   mergeFirebasePayloadLedger,
   firebaseSalesPayloadIsNewer,
+  buildPhoneWinsPayload,
+  putPhoneWinsTargets,
   mergeConfirmedEntryZonePatchPayload,
   mergeEntryZonePatchesIntoEntries,
   putFirebasePayloadWithLedgerCas,

@@ -3,9 +3,10 @@
 
 ## 파일 → 역할
 - APP_INTENT.md: 앱 목적, 사용자 결과, 절대 기준, Web+SiteBot 경계, read-only preflight, 공장 PC browser evidence, live write boundary, 완료 기준
-- index.html: 입력+출력 단일 9열 표, 재고 Enter/모바일 Next(change) 완료 저장·정렬, stable key/revision, deterministic 발주 resolver, 재고 1단위 가격·발주 1단위 가격을 분리한 예상액 카드와 title의 상세 실발주·provenance, `sfaPriceHistory/latest` provenance/null/0 검증, immutable run `sourceTable` 원문CSV export, current/history pair ETag-CAS와 confirmed queue, 수동값 보호, Firebase 동기화, 인증 게이트. 환산 방향은 `1발주 단위 = 재고/사용량 N개`이며 예상액은 추천 발주수량 × 발주 1단위 가격이다.
+- index.html: 입력+출력 단일 9열 표, 재고 Enter/모바일 Next(change) 완료 저장·정렬, stable key/revision, deterministic 발주 resolver, 재고 1단위 가격·발주 1단위 가격을 분리한 예상액 카드와 title의 상세 실발주·provenance, `sfaPriceHistory/latest` provenance/null/0 검증, immutable run `sourceTable` 원문CSV export, current/history pair ETag-CAS와 confirmed queue, 수동값 보호, Firebase 동기화, 인증 게이트. 충돌 시 명시적 `phoneWins` 복구만 폰 localStorage 전체 상태로 current/history를 덮고 동일 receipt를 재검증하며 SFA ledger는 병합 보존한다. 환산 방향은 `1발주 단위 = 재고/사용량 N개`이며 예상액은 추천 발주수량 × 발주 1단위 가격이다.
 - tests/orderhelper_static_checks.js: 기존 전체 정적/VM 회귀 + stable key/revision/명시 alias + AI latest top-level/fail-closed/수동값 보호 계약 검증
 - tests/orderhelper_inventory_matching_regression.js: 입력 재고→출력 합계→current/history keyed payload, duplicate zone/id, legacy name, 0/blank, pair-CAS active+queued Enter revision fence, 신규품목/별명/동명이름/빈 배열 회귀
+- tests/orderhelper_phone_wins_sync_regression.js: 명시적 폰 우선 충돌 해소에서 PC보다 높은 state/inventory/sales revision, 빈 배열·빈 object·0/null 보존, audit receipt 회귀
 - tests/orderhelper_autosave_regression.js + tests/orderhelper_autosave_browser.py: draft-only PUT 0, Enter/모바일 Next current-history 동일 CAS body, Enter+change dedupe, 주방냉동 21행 연속 완료 저장, active+queued, timeout/부분실패 snapshot retry, reload 복구, quota/corruption fail-closed 회귀
 - tests/orderhelper_single_grid_ledger_regression.js: 단일 표 정렬 2종, keyed focus/caret, 150행 입력 burst scheduler/render count, same-run retry/new-run append/duplicate/0/remote merge/누적 total, AI evidence 수동값 보호 회귀
 - tests/orderhelper_p1_review_regression.js: mirrored physical-origin dedupe/sourceRunIds, stale retry latest-wins, CAS 412 remote merge, same-zone 입력순, 2,000-event bounded payload/성능 회귀
