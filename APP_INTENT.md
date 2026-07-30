@@ -1,5 +1,16 @@
 # OrderHelper APP_INTENT.md
 
+> 제품 헌법 SOT: `ORDERHELPER_CONSTITUTION.md`
+> 사용자 프롬프트 근거: `ORDERHELPER_PROMPT_EVIDENCE.md`
+> digest receipt: `ORDERHELPER_CONSTITUTION_RECEIPT.json`
+> 구현 전 constitution version/hash를 작업 receipt와 테스트 baseline에 남긴다.
+> `index.html`과 아래의 장문 세부 기록은 v1 rollback/역사 문맥이다. v2 구현과 충돌하면 헌법의 최신 supersession을 적용하며 `phoneWins`, 작업우선 SFA 정렬, 대용량 current 전체 저장을 재도입하지 않는다.
+
+## v2 재작성 상태
+- `v2/`는 헌법 hash를 기준으로 만든 greenfield shadow package다.
+- foundation checkpoint는 one-grid, 최초 SFA순, 계산, local draft/confirmed outbox, per-field Lamport merge, offline/reload, 다중 구역, 숨김 만료, 390px/wide 브라우저 게이트까지 통과했다.
+- 실제 Firebase remote/auth, PC/SiteBot SFA bridge, legacy projection, live hosting, 폰/PC 물리 검증은 아직 완료 증거가 아니며 각각 별도 gate로 남긴다.
+
 ## 만든 이유
 - BBQ 재고를 사람이 빠르게 입력하고 발주량을 계산해 SFA 입력 부담을 줄인다.
 

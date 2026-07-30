@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f3ea">
+  <meta name="orderhelper-constitution-sha256" content="8cd45de2922894fe2be8b8e7424fe91cc490ec20d2ec9cea0a60164fcf21a575">
+  <title>OrderHelper v2</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="../sync/order-sync-v2.js"></script>
+  <script defer src="./order-storage-v2.js"></script>
+  <script defer src="./master-data.js"></script>
+  <script defer src="./orderhelper-v2.js"></script>
+  <script defer src="./order-sync-controller-v2.js"></script>
+</head>
+<body data-orderhelper-v2 data-runtime-mode="local-foundation">
+  <a class="skip-link" href="#orderGrid">발주표로 바로가기</a>
+
+  <section id="authGate" class="auth-gate" aria-labelledby="authGateTitle" data-auth-state="adapter-pending">
+    <div>
+      <p class="eyebrow">접속 확인</p>
+      <h1 id="authGateTitle">OrderHelper v2</h1>
+      <p>인증 어댑터 연결 전 미리보기입니다. 검증된 기기 또는 추가 인증이 확인되기 전에는 원격 작업을 실행하지 않습니다.</p>
+    </div>
+    <button type="button" disabled aria-disabled="true">인증 연결 대기</button>
+  </section>
+
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">재고 입력과 발주 판단을 한 표에서</p>
+      <h2>오늘의 발주표</h2>
+    </div>
+    <div class="header-actions" aria-label="화면 보조 작업">
+      <button id="snoozeButton" class="quiet-button" type="button" disabled aria-disabled="true">선택 품목 잠시 숨기기</button>
+      <select id="snoozeDays" aria-label="품목 숨김 기간" disabled>
+        <option value="1">1일</option>
+        <option value="3">3일</option>
+        <option value="7">7일</option>
+      </select>
+    </div>
+  </header>
+
+  <section id="syncReceiptBar" class="receipt-bar" aria-label="동기화 상태와 저장 영수증">
+    <div>
+      <span class="status-dot" aria-hidden="true"></span>
+      <output id="syncStatus" aria-live="polite">로컬 준비 중</output>
+    </div>
+    <div class="receipt-copy">
+      <span>Canonical receipt</span>
+      <code id="canonicalReceipt">아직 없음</code>
+    </div>
+  </section>
+
+  <main id="appShell">
+    <section class="planning-panel" aria-labelledby="planningTitle">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">기간과 예상매출</p>
+          <h2 id="planningTitle">발주 기준</h2>
+        </div>
+        <p class="helper-text">빈 매출은 기준 비중 1, 직접 입력한 0은 비중 0으로 구분합니다.</p>
+      </div>
+
+      <div class="planning-controls">
+        <label class="field-control" for="orderDays">
+          <span>발주일수</span>
+          <select id="orderDays" name="orderDays" data-order-days>
+            <option value="3">3일</option>
+            <option value="4">4일</option>
+          </select>
+        </label>
+        <label class="field-control" for="baseSales">
+          <span>기준매출</span>
+          <span class="input-with-unit"><input id="baseSales" name="baseSales" type="number" inputmode="decimal" value="280" min="0" step="0.1"><small>만원</small></span>
+        </label>
+        <fieldset id="dailySalesControls" class="sales-controls">
+          <legend>일별 예상매출</legend>
+          <label for="salesDay1"><span>1일차</span><input id="salesDay1" name="dailySales" type="number" inputmode="decimal" min="0" step="0.1" placeholder="기준"></label>
+          <label for="salesDay2"><span>2일차</span><input id="salesDay2" name="dailySales" type="number" inputmode="decimal" min="0" step="0.1" placeholder="기준"></label>
+          <label for="salesDay3"><span>3일차</span><input id="salesDay3" name="dailySales" type="number" inputmode="decimal" min="0" step="0.1" placeholder="기준"></label>
+          <label for="salesDay4"><span>4일차</span><input id="salesDay4" name="dailySales" type="number" inputmode="decimal" min="0" step="0.1" placeholder="기준"></label>
+        </fieldset>
+      </div>
+    </section>
+
+    <section class="grid-panel" aria-labelledby="gridTitle">
+      <div class="grid-toolbar">
+        <div>
+          <p class="eyebrow">입력과 결과가 이어지는 한 화면</p>
+          <h2 id="gridTitle">품목별 재고와 발주</h2>
+        </div>
+        <div class="view-switch" role="group" aria-label="표 정렬 기준">
+          <button id="inputOrderButton" type="button" data-view-mode="input" aria-pressed="true">입력순</button>
+          <button id="sfaOrderButton" type="button" data-view-mode="sfa" aria-pressed="false">SFA 발주순</button>
+        </div>
+      </div>
+
+      <div class="table-frame" tabindex="-1">
+        <table id="orderGrid">
+          <caption>재고 입력과 계산, SFA 근거를 같은 품목 행에서 확인하는 발주표</caption>
+          <thead>
+            <tr>
+              <th scope="col">품목</th>
+              <th scope="col">구역별 재고</th>
+              <th scope="col">재고합계</th>
+              <th scope="col">K 여유</th>
+              <th scope="col">L 하루사용량</th>
+              <th scope="col">필요재고</th>
+              <th scope="col">추천발주</th>
+              <th scope="col">SFA 연결</th>
+              <th scope="col">발주단가</th>
+              <th scope="col">예상금액</th>
+              <th scope="col"><span class="visually-hidden">상세</span></th>
+            </tr>
+          </thead>
+          <tbody id="orderRowsMount" data-role="order-rows" aria-live="polite">
+            <tr class="empty-row">
+              <td colspan="11">품목 모델을 불러오면 이 한 표에 재고 입력과 발주 결과가 표시됩니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside id="sfaEvidenceDrawer" class="detail-drawer" aria-labelledby="drawerTitle" data-detail-open="false">
+      <div class="drawer-heading">
+        <div>
+          <p class="eyebrow">선택한 품목</p>
+          <h2 id="drawerTitle">SFA 근거와 연결 상세</h2>
+        </div>
+        <button id="closeEvidenceDrawer" class="icon-button" type="button" aria-label="SFA 상세 닫기" disabled>닫기</button>
+      </div>
+      <div id="sfaEvidenceMount" class="drawer-content">
+        <p>표의 상세 버튼을 선택하면 원명, 단위, 실제 발주수량, 단가 provenance와 mapping 상태가 여기에 표시됩니다.</p>
+      </div>
+    </aside>
+
+    <section class="summary-panel" aria-labelledby="summaryTitle">
+      <div>
+        <p class="eyebrow">가격 근거가 확인된 행만 합산</p>
+        <h2 id="summaryTitle">전체 예상금액</h2>
+      </div>
+      <output id="totalExpectedAmount" aria-live="polite">계산 전</output>
+      <p id="excludedPriceCount">가격 미확정 0건</p>
+    </section>
+
+    <section class="external-actions" aria-labelledby="externalActionsTitle">
+      <div>
+        <p class="eyebrow">명시적 실행만 허용</p>
+        <h2 id="externalActionsTitle">내보내기와 SFA 분석</h2>
+        <p class="helper-text">Canonical 저장 영수증과 PC 사전점검 어댑터가 연결된 뒤 활성화됩니다.</p>
+      </div>
+      <div class="action-buttons">
+        <button id="exportCsvButton" type="button" disabled aria-disabled="true">CSV 내보내기</button>
+        <button id="requestSfaAnalysisButton" class="primary-button" type="button" disabled aria-disabled="true">SFA 분석 요청</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>OrderHelper v2 · canonical-first shadow shell</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "constitutionVersion": "20260731.0252-KST",
+  "effectiveAtKst": "2026-07-31T02:52:00+09:00",
+  "digestMethod": "sha256-utf8-raw-bytes",
+  "constitution": {
+    "path": "ORDERHELPER_CONSTITUTION.md",
+    "sha256": "8cd45de2922894fe2be8b8e7424fe91cc490ec20d2ec9cea0a60164fcf21a575"
+  },
+  "promptEvidence": {
+    "path": "ORDERHELPER_PROMPT_EVIDENCE.md",
+    "sha256": "5d6c7addac8bd8950d5c082462e309e5137b575734e590ce3846f42ef0921818",
+    "sourceRange": "2026-05-05..2026-07-30",
+    "normalization": "exact fork duplicates and voice-typo equivalents collapsed; unrelated app SFA prompts excluded"
+  },
+  "repositoryBaseline": "b032da2aede30fb3954c66fc68bb8aecb76798b7"
+}
