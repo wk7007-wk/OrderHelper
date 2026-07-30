@@ -8,8 +8,8 @@
 
 ## v2 재작성 상태
 - `v2/`는 헌법 hash를 기준으로 만든 greenfield shadow package다.
-- foundation checkpoint는 one-grid, 최초 SFA순, 계산, local draft/confirmed outbox, per-field Lamport merge, offline/reload, 다중 구역, 숨김 만료, 390px/wide 브라우저 게이트까지 통과했다.
-- 실제 Firebase remote/auth, PC/SiteBot SFA bridge, legacy projection, live hosting, 폰/PC 물리 검증은 아직 완료 증거가 아니며 각각 별도 gate로 남긴다.
+- foundation checkpoint는 one-grid, 최초 SFA순, 계산, local draft/confirmed outbox, per-field Lamport merge, exact dirty-path reload, offline/reload, 다중 구역, 숨김 만료, 390px/wide 브라우저 게이트까지 통과했다.
+- auth capability, 제한된 remote adapter, controller의 active+queued CAS/pull 코어는 외부 adapter 주입 테스트까지 통과했다. 실제 browser auth/bootstrap, Firebase 연결, PC/SiteBot SFA bridge, legacy projection, live hosting, 폰/PC 물리 검증은 아직 완료 증거가 아니며 각각 별도 gate로 남긴다.
 
 ## 만든 이유
 - BBQ 재고를 사람이 빠르게 입력하고 발주량을 계산해 SFA 입력 부담을 줄인다.

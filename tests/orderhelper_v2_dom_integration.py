@@ -278,6 +278,11 @@ def main():
                   };
                   document.meta.maxCounter = counter;
                   draft.dirty = true;
+                  draft.dirtyPaths = [
+                    ['entries', 'extra-zone-reload', 'itemKey'],
+                    ['entries', 'extra-zone-reload', 'zone'],
+                    ['entries', 'extra-zone-reload', 'stock']
+                  ];
                   draft.mutationCount += 1;
                   draft.updatedAt = Date.now();
                   localStorage.setItem(key, JSON.stringify(draft));
@@ -370,6 +375,7 @@ def main():
                   };
                   document.meta.maxCounter = counter;
                   draft.dirty = true;
+                  draft.dirtyPaths = [['settings', 'item:' + itemKey, 'hiddenUntil']];
                   draft.mutationCount += 1;
                   draft.updatedAt = Date.now();
                   localStorage.setItem(key, JSON.stringify(draft));

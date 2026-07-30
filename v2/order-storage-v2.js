@@ -38,6 +38,8 @@
       actorId: String(actorId),
       document: cloneJson(document),
       dirty: false,
+      dirtyPaths: [],
+      pullRefreshPending: false,
       mutationCount: 0,
       updatedAt: 0,
       lastConfirmedFingerprint: null
@@ -57,11 +59,45 @@
     if (!Number.isSafeInteger(mutationCount) || mutationCount < 0 || !Number.isFinite(updatedAt) || updatedAt < 0) {
       throw new StorageCorruptionError('draft metadata is invalid; persistence is halted');
     }
+    const dirty = source.dirty === true;
+    if (source.dirtyPaths === undefined && dirty) {
+      throw new StorageCorruptionError('dirty draft is missing exact dirty paths; persistence is halted');
+    }
+    const dirtyPaths = source.dirtyPaths === undefined ? [] : source.dirtyPaths;
+    if (!Array.isArray(dirtyPaths) || dirtyPaths.length > 4096) {
+      throw new StorageCorruptionError('draft dirty paths are invalid; persistence is halted');
+    }
+    const normalizedPaths = [];
+    const seenPaths = new Set();
+    dirtyPaths.forEach(path => {
+      if (!Array.isArray(path) || path.length !== 3 || path.some(part => typeof part !== 'string' || !part || part.length > 512)) {
+        throw new StorageCorruptionError('draft dirty path is invalid; persistence is halted');
+      }
+      const normalized = path.map(String);
+      const [collection, key, field] = normalized;
+      if (!Object.prototype.hasOwnProperty.call(source.document.collections?.[collection]?.[key] || {}, field)) {
+        throw new StorageCorruptionError('draft dirty path has no matching canonical field; persistence is halted');
+      }
+      const identity = JSON.stringify(normalized);
+      if (!seenPaths.has(identity)) {
+        seenPaths.add(identity);
+        normalizedPaths.push(normalized);
+      }
+    });
+    normalizedPaths.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    if (dirty && normalizedPaths.length === 0) {
+      throw new StorageCorruptionError('dirty draft has no exact dirty paths; persistence is halted');
+    }
+    if (!dirty && normalizedPaths.length !== 0) {
+      throw new StorageCorruptionError('clean draft contains dirty paths; persistence is halted');
+    }
     return {
       schemaVersion: SCHEMA_VERSION,
       actorId: String(actorId),
       document: cloneJson(source.document),
-      dirty: source.dirty === true,
+      dirty,
+      dirtyPaths: normalizedPaths,
+      pullRefreshPending: source.pullRefreshPending === true,
       mutationCount,
       updatedAt,
       lastConfirmedFingerprint: source.lastConfirmedFingerprint === null || source.lastConfirmedFingerprint === undefined

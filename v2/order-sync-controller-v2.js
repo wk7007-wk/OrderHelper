@@ -11,6 +11,8 @@
   if (!Sync || !StorageV2 || !ModelV2) throw new Error('OrderHelper v2 sync, storage, and model dependencies are required');
 
   const CONFIRM_REASONS = new Set(['enter', 'change']);
+  const MAX_SEQUENTIAL_FLUSHES = 8;
+  const controllerByDocument = new WeakMap();
 
   function cloneJson(value) {
     return JSON.parse(JSON.stringify(value));
@@ -18,7 +20,7 @@
 
   function createController(options = {}) {
     const storage = options.storage;
-    const remoteAdapter = options.remoteAdapter || null;
+    let remoteAdapter = options.remoteAdapter ? validateRemoteAdapter(options.remoteAdapter) : null;
     const now = typeof options.now === 'function' ? options.now : Date.now;
     const actor = Sync.createActor(storage, options.actorId ? { actorId: options.actorId } : {});
     let draft = StorageV2.loadDraft(storage, actor.actorId, Sync.emptyDocument(actor.epoch));
@@ -32,8 +34,23 @@
     let lastStatus = 'ready';
     let conflictCount = 0;
     let remoteAttemptCount = 0;
+    let syncPromise = null;
+    let autoFlushScheduled = false;
+    let resyncRequested = false;
+    let dirtyPaths = new Set((draft.dirtyPaths || []).map(path => JSON.stringify(path)));
+    let pullRefreshPending = draft.pullRefreshPending === true;
+
+    function fieldPath(collection, key, field) {
+      return JSON.stringify([collection, String(key), String(field)]);
+    }
+
+    function markDirtyFields(collection, key, fields) {
+      Object.keys(fields).forEach(field => dirtyPaths.add(fieldPath(collection, key, field)));
+    }
 
     function persistDraft() {
+      draft.dirtyPaths = Array.from(dirtyPaths).sort().map(encoded => JSON.parse(encoded));
+      draft.pullRefreshPending = pullRefreshPending;
       draft = StorageV2.saveDraft(storage, draft);
       Sync.persistActor(storage, actor);
     }
@@ -49,6 +66,7 @@
       // metadata.composing is deliberately informational. Composition and normal
       // input take the same local-only path and never call flush().
       draft.document = Sync.writeFields(draft.document, actor, collection, key, fields);
+      markDirtyFields(collection, key, fields);
       draft.dirty = true;
       draft.mutationCount += 1;
       draft.updatedAt = Number(now());
@@ -63,6 +81,7 @@
 
     function deleteDraftField(collection, key, field) {
       draft.document = Sync.deleteFields(draft.document, actor, collection, key, [field]);
+      markDirtyFields(collection, key, { [field]: true });
       draft.dirty = true;
       draft.mutationCount += 1;
       draft.updatedAt = Number(now());
@@ -80,42 +99,163 @@
       draft.dirty = false;
       draft.lastConfirmedFingerprint = Sync.stableHash(intent.document);
       draft.updatedAt = Number(now());
+      dirtyPaths = new Set();
       persistDraft();
       lastStatus = 'confirmed_pending';
+      scheduleAutoFlush();
       return { status: 'enqueued', reason, intentId: intent.intentId };
     }
 
-    async function flush() {
+    function validateRemoteAdapter(adapter) {
+      if (!adapter || typeof adapter.getCanonical !== 'function' || typeof adapter.putCanonical !== 'function') {
+        throw new TypeError('remote adapter requires canonical GET and PUT');
+      }
+      return adapter;
+    }
+
+    function attachRemoteAdapter(adapter) {
+      validateRemoteAdapter(adapter);
+      if (remoteAdapter === adapter) return { status: 'already_attached' };
+      if (remoteAdapter) throw new TypeError('remote adapter replacement is denied');
+      remoteAdapter = adapter;
+      if (getOutbox().active || pullRefreshPending) scheduleAutoFlush();
+      return { status: 'attached' };
+    }
+
+    function scheduleAutoFlush() {
+      if (!remoteAdapter) return;
+      if (syncPromise) {
+        resyncRequested = true;
+        return;
+      }
+      if (autoFlushScheduled) return;
+      autoFlushScheduled = true;
+      queueMicrotask(() => {
+        autoFlushScheduled = false;
+        syncNow().catch(() => {});
+      });
+    }
+
+    function visibleDocument(document) {
+      const collections = {};
+      Object.entries(document.collections || {}).forEach(([collection, rows]) => {
+        collections[collection] = {};
+        Object.entries(rows || {}).forEach(([key, fields]) => {
+          collections[collection][key] = {};
+          Object.entries(fields || {}).forEach(([field, register]) => {
+            collections[collection][key][field] = register.tombstone
+              ? { tombstone: true }
+              : { tombstone: false, value: register.value };
+          });
+        });
+      });
+      return Sync.canonicalJson({ collections, sfaHead: document.sfaHead?.value || null });
+    }
+
+    function preserveDirtyFields(mergedDocument, localDocument) {
+      if (!draft.dirty) return mergedDocument;
+      let output = mergedDocument;
+      const paths = Array.from(dirtyPaths);
+      paths.forEach(encoded => {
+        const [collection, key, field] = JSON.parse(encoded);
+        const register = localDocument.collections?.[collection]?.[key]?.[field];
+        if (!register) return;
+        output = register.tombstone
+          ? Sync.deleteFields(output, actor, collection, key, [field])
+          : Sync.writeFields(output, actor, collection, key, { [field]: register.value });
+      });
+      return output;
+    }
+
+    async function runSyncNow() {
+      conflictCount = 0;
       if (!remoteAdapter) {
         lastStatus = 'remote_unavailable';
         return { status: 'remote_unavailable' };
       }
       remoteAttemptCount += 1;
+      let lastCommit = null;
+      let currentConflictCount = 0;
       try {
-        const result = await Sync.flushOutbox({
-          storage,
-          actorId: actor.actorId,
-          adapter: remoteAdapter,
-          maxCasRetries: options.maxCasRetries
-        });
-        if (result.status === 'canonical_committed') {
-          draft.document = Sync.mergeDocuments(draft.document, result.document).document;
-          conflictCount = result.receipt.conflicts.length;
-          lastStatus = conflictCount ? 'canonical_conflict_resolved' : 'canonical_committed';
-          persistDraft();
+        for (let index = 0; index < MAX_SEQUENTIAL_FLUSHES; index += 1) {
+          if (!getOutbox().active) break;
+          const result = await Sync.flushOutbox({
+            storage,
+            actorId: actor.actorId,
+            adapter: remoteAdapter,
+            maxCasRetries: options.maxCasRetries
+          });
+          if (result.status !== 'canonical_committed') {
+            lastStatus = result.status;
+            return result;
+          }
+          lastCommit = result;
+          currentConflictCount = Math.max(currentConflictCount, result.receipt.conflicts.length);
           if (typeof options.onReceipt === 'function') options.onReceipt(cloneJson(result.receipt));
-        } else {
-          lastStatus = result.status;
         }
-        return result;
+        if (getOutbox().active) {
+          lastStatus = 'flush_limit_reached';
+          return { status: 'flush_limit_reached' };
+        }
+
+        const read = await remoteAdapter.getCanonical(Sync.CANONICAL_NODE);
+        if (!read || Number(read.status) < 200 || Number(read.status) >= 300) throw new Error('canonical pull failed');
+        const before = visibleDocument(draft.document);
+        const pulled = Sync.mergeDocuments(draft.document, read.body || Sync.emptyDocument());
+        draft.document = preserveDirtyFields(pulled.document, draft.document);
+        actor.epoch = Math.max(actor.epoch, draft.document.reset.epoch);
+        actor.counter = Math.max(actor.counter, draft.document.meta.maxCounter);
+        pullRefreshPending = false;
+        persistDraft();
+        const changed = before !== visibleDocument(draft.document);
+        if (changed && typeof options.onHydrate === 'function') options.onHydrate(cloneJson(draft.document));
+        if (pulled.conflicts.length && typeof options.onReceipt === 'function') {
+          options.onReceipt({
+            status: 'canonical_pulled',
+            canonicalFingerprint: Sync.stableHash(draft.document),
+            conflicts: cloneJson(pulled.conflicts)
+          });
+        }
+        conflictCount = Math.max(currentConflictCount, pulled.conflicts.length);
+        lastStatus = conflictCount ? 'canonical_conflict_resolved' : (lastCommit ? 'canonical_committed' : 'canonical_pulled');
+        return lastCommit
+          ? { ...lastCommit, document: cloneJson(draft.document) }
+          : { status: 'canonical_pulled', document: cloneJson(draft.document), conflicts: cloneJson(pulled.conflicts) };
       } catch (error) {
+        if (lastCommit) {
+          pullRefreshPending = true;
+          persistDraft();
+          lastStatus = currentConflictCount ? 'canonical_conflict_resolved_pull_pending' : 'canonical_committed_pull_pending';
+          conflictCount = currentConflictCount;
+          return {
+            ...lastCommit,
+            status: 'canonical_committed',
+            pull: { status: 'retry_pending', error: String(error?.message || error) }
+          };
+        }
         lastStatus = 'retry_pending';
         return { status: 'retry_pending', error: String(error?.message || error) };
       }
     }
 
+    function syncNow() {
+      if (syncPromise) return syncPromise;
+      syncPromise = runSyncNow().finally(() => {
+        syncPromise = null;
+        if (resyncRequested) {
+          resyncRequested = false;
+          scheduleAutoFlush();
+        }
+      });
+      return syncPromise;
+    }
+
+    function flush() {
+      return syncNow();
+    }
+
     function getStatus() {
-      return { lastStatus, conflictCount, remoteAttemptCount };
+      return { lastStatus, conflictCount, remoteAttemptCount, pullRefreshPending };
     }
 
     function probeSnapshot() {
@@ -136,6 +276,8 @@
       deleteDraftField,
       confirm,
       flush,
+      syncNow,
+      attachRemoteAdapter,
       getDraft: () => cloneJson(draft),
       getOutbox: () => cloneJson(getOutbox()),
       getStatus: () => ({ ...getStatus() }),
@@ -152,6 +294,8 @@
         value: Object.freeze({ snapshot: probeSnapshot })
       });
     }
+
+    if (remoteAdapter && (getOutbox().active || pullRefreshPending)) scheduleAutoFlush();
 
     return controller;
   }
@@ -182,6 +326,7 @@
 
   function bindDom(documentRef, options = {}) {
     if (!documentRef || typeof documentRef.querySelector !== 'function') return null;
+    if (controllerByDocument.has(documentRef)) return controllerByDocument.get(documentRef);
     const app = documentRef.querySelector('[data-orderhelper-v2]');
     const storage = options.storage || rootStorage();
     if (!app || !storage) return null;
@@ -220,6 +365,28 @@
         : '저장됨 · ' + String(receipt?.canonicalFingerprint || '');
     }
 
+    function hydrateRuntime(document) {
+      const active = documentRef.activeElement;
+      const identity = active?.dataset ? {
+        entryKey: active.dataset.entryKey || '',
+        field: active.dataset.field || '',
+        itemKey: active.closest?.('[data-item-key]')?.dataset.itemKey || '',
+        start: active.selectionStart,
+        end: active.selectionEnd
+      } : null;
+      runtime.hydrateCanonicalDocument(document);
+      if (!identity?.field || typeof documentRef.querySelectorAll !== 'function') return;
+      const replacement = Array.from(documentRef.querySelectorAll('input[data-field]')).find(input =>
+        input.dataset.field === identity.field &&
+        (identity.entryKey ? input.dataset.entryKey === identity.entryKey : input.closest?.('[data-item-key]')?.dataset.itemKey === identity.itemKey));
+      if (!replacement) return;
+      replacement.focus?.({ preventScroll: true });
+      if (Number.isInteger(identity.start) && typeof replacement.setSelectionRange === 'function') {
+        const length = String(replacement.value || '').length;
+        replacement.setSelectionRange(Math.min(identity.start, length), Math.min(identity.end, length));
+      }
+    }
+
     let controller;
     let unsubscribe = () => {};
     try {
@@ -231,7 +398,8 @@
         actorId: options.actorId,
         now: options.now,
         testProbeTarget: options.testProbeTarget,
-        onReceipt: showReceipt
+        onReceipt: showReceipt,
+        onHydrate: hydrateRuntime
       });
       if (!preflight.draftDocument) runtime.hydrateCanonicalDocument(controller.getDraft().document);
       unsubscribe = runtime.subscribe(event => {
@@ -261,6 +429,13 @@
 
     app.dataset.runtimeState = 'bound-local';
     setStatus(controller.getDraft().dirty ? '로컬 입력 복구됨 · Enter 저장' : '로컬 준비됨');
+    controllerByDocument.set(documentRef, controller);
+    return controller;
+  }
+
+  function requireDomController(documentRef) {
+    const controller = controllerByDocument.get(documentRef);
+    if (!controller) throw new Error('OrderHelper v2 DOM controller is not bound');
     return controller;
   }
 
@@ -270,5 +445,5 @@
     else bootstrap();
   }
 
-  return Object.freeze({ CONFIRM_REASONS, createController, bindDom });
+  return Object.freeze({ CONFIRM_REASONS, MAX_SEQUENTIAL_FLUSHES, createController, bindDom, requireDomController });
 }));

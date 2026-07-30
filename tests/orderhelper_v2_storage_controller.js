@@ -48,6 +48,10 @@ function valueAt(document, collection, key, field) {
   return document.collections[collection][key][field].value;
 }
 
+function nextTurn() {
+  return new Promise(resolve => setImmediate(resolve));
+}
+
 async function testDraftTypingIsLocalOnlyAndReloadsExactly() {
   const storage = memoryStorage();
   const remote = fakeRemote();
@@ -108,9 +112,10 @@ async function testIndependentPhoneAndPcChangesSurviveAndConflictIsReported() {
   pc.confirm('enter');
   await phone.flush();
   const conflict = await pc.flush();
-  assert.strictEqual(conflict.receipt.conflicts.length, 1);
-  assert.strictEqual(conflict.receipt.conflicts[0].path, 'entries/entry_chicken_0/stock');
-  assert.strictEqual(pc.getStatus().conflictCount, 1);
+  const conflictReceipt = conflict.receipt || displayedReceipt;
+  assert.strictEqual(conflictReceipt.conflicts.length, 1);
+  assert.strictEqual(conflictReceipt.conflicts[0].path, 'entries/entry_chicken_0/stock');
+  assert.strictEqual(pc.getStatus().conflictCount, 0, 'a later clean pull clears stale conflictCount');
   assert.strictEqual(displayedReceipt.conflicts.length, 1, 'receipt presentation callback must receive the visible conflict');
 }
 
@@ -207,6 +212,266 @@ async function testMissingDomRuntimeFailsClosedWithoutStorageMutation() {
   assert.strictEqual(storage.writes.length, 0, 'missing private runtime must not start persistence');
 }
 
+async function testAttachRemoteExactOnceAndInputDoesNotAutoSync() {
+  const storage = memoryStorage();
+  const remote = fakeRemote();
+  const replacement = fakeRemote();
+  const controller = ControllerV2.createController({ storage, actorId: 'attach.actor', now: () => 7000 });
+  controller.updateDraftField('entries', 'entry_oil_0', 'stock', '1', { composing: true });
+  await nextTurn();
+  assert.strictEqual(remote.calls.length, 0);
+  assert.strictEqual(controller.attachRemoteAdapter(remote).status, 'attached');
+  assert.strictEqual(controller.attachRemoteAdapter(remote).status, 'already_attached');
+  assert.throws(() => controller.attachRemoteAdapter(replacement), /replacement/);
+  assert.throws(() => controller.attachRemoteAdapter(null), /adapter/);
+  assert.strictEqual(remote.calls.length, 0, 'attaching without confirmed outbox must not fetch');
+}
+
+async function testSharedRemoteSyncPullAndDirtyPreservation() {
+  const remote = fakeRemote();
+  const phone = ControllerV2.createController({ storage: memoryStorage(), actorId: 'phone.actor', now: () => 8000 });
+  const pc = ControllerV2.createController({ storage: memoryStorage(), actorId: 'pc.actor', now: () => 8001 });
+  phone.attachRemoteAdapter(remote);
+  pc.attachRemoteAdapter(remote);
+
+  phone.updateDraftField('entries', 'entry_chicken_0', 'stock', 4);
+  phone.confirm('enter');
+  pc.updateDraftField('mappings', 'chicken', 'actualName', '황금올리브');
+  pc.confirm('change');
+  await phone.syncNow();
+  await pc.syncNow();
+  await phone.syncNow();
+  assert.strictEqual(valueAt(phone.getDraft().document, 'entries', 'entry_chicken_0', 'stock'), 4);
+  assert.strictEqual(valueAt(phone.getDraft().document, 'mappings', 'chicken', 'actualName'), '황금올리브');
+  assert.strictEqual(valueAt(pc.getDraft().document, 'entries', 'entry_chicken_0', 'stock'), 4);
+  assert.strictEqual(valueAt(pc.getDraft().document, 'mappings', 'chicken', 'actualName'), '황금올리브');
+
+  phone.updateDraftField('entries', 'entry_sauce_0', 'stock', '9');
+  const putsBeforePull = remote.calls.filter(call => call.method === 'PUT').length;
+  await phone.syncNow();
+  assert.strictEqual(valueAt(phone.getDraft().document, 'entries', 'entry_sauce_0', 'stock'), '9');
+  assert.strictEqual(remote.calls.filter(call => call.method === 'PUT').length, putsBeforePull, 'dirty unconfirmed draft must never be written remotely');
+  assert.strictEqual(remote.document.collections.entries.entry_sauce_0, undefined);
+}
+
+async function testAutoFlushCoalescesAndConfirmDuringFlushSurvives() {
+  const storage = memoryStorage();
+  let remoteDocument = Sync.emptyDocument();
+  let etag = 1;
+  let releaseFirstGet;
+  let firstGet = true;
+  const calls = [];
+  const remote = {
+    calls,
+    async getCanonical(path) {
+      calls.push({ method: 'GET', path });
+      if (firstGet) {
+        firstGet = false;
+        await new Promise(resolve => { releaseFirstGet = resolve; });
+      }
+      return { status: 200, etag: 'etag-' + etag, body: remoteDocument };
+    },
+    async putCanonical(path, body, suppliedEtag) {
+      calls.push({ method: 'PUT', path, etag: suppliedEtag });
+      if (suppliedEtag !== 'etag-' + etag) return { status: 412 };
+      remoteDocument = body;
+      etag += 1;
+      return { status: 200, etag: 'etag-' + etag };
+    }
+  };
+  const controller = ControllerV2.createController({ storage, actorId: 'phone.actor', now: () => 9000 });
+  controller.attachRemoteAdapter(remote);
+  controller.updateDraftField('entries', 'entry_oil_0', 'stock', 1);
+  controller.confirm('enter');
+  await Promise.resolve();
+  controller.updateDraftField('usage', 'oil', 'buffer', 2);
+  controller.confirm('change');
+  releaseFirstGet();
+  const result = await controller.syncNow();
+  assert.strictEqual(result.status, 'canonical_committed');
+  assert.strictEqual(controller.getOutbox().active, null);
+  assert.strictEqual(valueAt(remoteDocument, 'entries', 'entry_oil_0', 'stock'), 1);
+  assert.strictEqual(valueAt(remoteDocument, 'usage', 'oil', 'buffer'), 2);
+  assert.strictEqual(calls.filter(call => call.method === 'PUT').length, 2, 'active and queued intents flush once each');
+}
+
+async function testOfflineReloadRetryConflictReceiptAndPrivateRegistry() {
+  const remote = fakeRemote();
+  const phoneStorage = memoryStorage();
+  const phone = ControllerV2.createController({ storage: phoneStorage, actorId: 'phone.actor', now: () => 10000 });
+  phone.attachRemoteAdapter(remote);
+  remote.setOffline(true);
+  phone.updateDraftField('sales', 'day-1', 'amount', 0);
+  phone.confirm('change');
+  assert.strictEqual((await phone.syncNow()).status, 'retry_pending');
+  assert.ok(phone.getOutbox().active);
+  const restored = ControllerV2.createController({ storage: phoneStorage, now: () => 10001 });
+  restored.attachRemoteAdapter(remote);
+  remote.setOffline(false);
+  assert.strictEqual((await restored.syncNow()).status, 'canonical_committed');
+
+  assert.throws(() => ControllerV2.requireDomController({}), /not bound/i);
+  const source = fs.readFileSync(path.join(__dirname, '..', 'v2', 'order-sync-controller-v2.js'), 'utf8');
+  assert.match(source, /new WeakMap\(\)/);
+  assert.doesNotMatch(source, /window\s*\.\s*(?:controller|orderHelperController)|globalThis\s*\.\s*(?:controller|orderHelperController)/i);
+  assert.doesNotMatch(source, /setInterval|poll/i);
+}
+
+async function testConfirmDuringFinalPullSchedulesFollowupFlush() {
+  const storage = memoryStorage();
+  let remoteDocument = Sync.emptyDocument();
+  let etag = 1;
+  let getCount = 0;
+  let releasePull;
+  const remote = {
+    async getCanonical() {
+      getCount += 1;
+      if (getCount === 2) await new Promise(resolve => { releasePull = resolve; });
+      return { status: 200, etag: 'etag-' + etag, body: remoteDocument };
+    },
+    async putCanonical(path, body, suppliedEtag) {
+      if (suppliedEtag !== 'etag-' + etag) return { status: 412 };
+      remoteDocument = body;
+      etag += 1;
+      return { status: 200, etag: 'etag-' + etag };
+    }
+  };
+  const controller = ControllerV2.createController({ storage, actorId: 'phone.actor', now: () => 11000 });
+  controller.attachRemoteAdapter(remote);
+  controller.updateDraftField('entries', 'entry_oil_0', 'stock', 1);
+  controller.confirm('enter');
+  const firstSync = controller.syncNow();
+  while (!releasePull) await Promise.resolve();
+  controller.updateDraftField('usage', 'oil', 'buffer', 3);
+  controller.confirm('change');
+  releasePull();
+  await firstSync;
+  await nextTurn();
+  await controller.syncNow();
+  assert.strictEqual(controller.getOutbox().active, null);
+  assert.strictEqual(valueAt(remoteDocument, 'usage', 'oil', 'buffer'), 3);
+}
+
+async function testReloadedDirtyStockDoesNotReassertStaleMapping() {
+  const remoteActor = { actorId: 'server.actor', epoch: 0, counter: 0 };
+  const initialRemote = Sync.writeFields(Sync.emptyDocument(), remoteActor, 'mappings', 'chicken', { actualName: 'OLD' });
+  const remote = fakeRemote(initialRemote);
+  const phoneStorage = memoryStorage();
+  const phone = ControllerV2.createController({ storage: phoneStorage, actorId: 'phone.actor', now: () => 12000 });
+  phone.attachRemoteAdapter(remote);
+  await phone.syncNow();
+  phone.updateDraftField('entries', 'entry_chicken_0', 'stock', 9);
+
+  const restored = ControllerV2.createController({ storage: phoneStorage, now: () => 12001 });
+  restored.attachRemoteAdapter(remote);
+  const pc = ControllerV2.createController({ storage: memoryStorage(), actorId: 'pc.actor', now: () => 12002 });
+  pc.attachRemoteAdapter(remote);
+  await pc.syncNow();
+  pc.updateDraftField('mappings', 'chicken', 'actualName', 'NEW');
+  pc.confirm('change');
+  await pc.syncNow();
+
+  await restored.syncNow();
+  assert.strictEqual(valueAt(restored.getDraft().document, 'entries', 'entry_chicken_0', 'stock'), 9, 'actual dirty stock survives pull');
+  assert.strictEqual(valueAt(restored.getDraft().document, 'mappings', 'chicken', 'actualName'), 'NEW', 'unrelated stale mapping must not be treated as dirty');
+  restored.confirm('enter');
+  await restored.syncNow();
+  assert.strictEqual(valueAt(remote.document, 'mappings', 'chicken', 'actualName'), 'NEW', 'confirming dirty stock must not overwrite newer remote mapping');
+  assert.strictEqual(valueAt(remote.document, 'entries', 'entry_chicken_0', 'stock'), 9);
+}
+
+async function testDirtyDraftMissingExactPathsFailsClosed() {
+  const actorId = 'phone.actor';
+  const rawDraft = {
+    schemaVersion: StorageV2.SCHEMA_VERSION,
+    actorId,
+    document: Sync.emptyDocument(),
+    dirty: true,
+    mutationCount: 1,
+    updatedAt: 1,
+    lastConfirmedFingerprint: null
+  };
+  const storage = memoryStorage({
+    [Sync.DEFAULT_STORAGE_KEYS.actor]: JSON.stringify({ actorId, epoch: 0, counter: 0 }),
+    [StorageV2.DRAFT_KEY]: JSON.stringify(rawDraft)
+  });
+  assert.throws(() => ControllerV2.createController({ storage }), StorageV2.StorageCorruptionError);
+  assert.strictEqual(storage.getItem(StorageV2.DRAFT_KEY), JSON.stringify(rawDraft));
+}
+
+async function testFinalPullConflictIsVisibleThenClearsOnCleanPull() {
+  const storage = memoryStorage();
+  const receipts = [];
+  let remoteDocument = Sync.emptyDocument();
+  let putCount = 0;
+  const remote = {
+    async getCanonical() { return { status: 200, etag: 'etag-' + (putCount + 1), body: remoteDocument }; },
+    async putCanonical(path, body) {
+      putCount += 1;
+      const pcActor = { actorId: 'pc.actor', epoch: 0, counter: 5 };
+      const concurrent = Sync.writeFields(Sync.emptyDocument(), pcActor, 'mappings', 'chicken', { actualName: 'NEW' });
+      remoteDocument = Sync.mergeDocuments(body, concurrent).document;
+      return { status: 200, etag: 'etag-' + (putCount + 1) };
+    }
+  };
+  const controller = ControllerV2.createController({
+    storage,
+    actorId: 'phone.actor',
+    now: () => 13000,
+    onReceipt(receipt) { receipts.push(receipt); }
+  });
+  controller.attachRemoteAdapter(remote);
+  controller.updateDraftField('mappings', 'chicken', 'actualName', 'OLD');
+  controller.updateDraftField('inventory', 'oil', 'stock', 1);
+  controller.confirm('enter');
+  await controller.syncNow();
+  assert.strictEqual(receipts[0].conflicts.length, 0, 'commit itself is conflict-free');
+  assert.strictEqual(receipts.at(-1).status, 'canonical_pulled');
+  assert.strictEqual(receipts.at(-1).conflicts.length, 1, 'final pull conflict must be visible even after a commit');
+  assert.strictEqual(controller.getStatus().conflictCount, 1);
+  await controller.syncNow();
+  assert.strictEqual(controller.getStatus().conflictCount, 0, 'clean current sync clears stale conflict state');
+}
+
+async function testCommitSuccessSurvivesOfflineFinalPullWithoutDuplicatePut() {
+  const storage = memoryStorage();
+  let getCount = 0;
+  let putCount = 0;
+  let remoteDocument = Sync.emptyDocument();
+  let pullOffline = true;
+  const remote = {
+    async getCanonical() {
+      getCount += 1;
+      if (getCount >= 2 && pullOffline) throw new Error('offline final pull');
+      return { status: 200, etag: 'etag-' + (putCount + 1), body: remoteDocument };
+    },
+    async putCanonical(path, body) {
+      putCount += 1;
+      remoteDocument = body;
+      return { status: 200, etag: 'etag-' + (putCount + 1) };
+    }
+  };
+  const controller = ControllerV2.createController({ storage, actorId: 'phone.actor', now: () => 14000 });
+  controller.attachRemoteAdapter(remote);
+  controller.updateDraftField('inventory', 'oil', 'stock', 2);
+  controller.confirm('enter');
+  const committed = await controller.syncNow();
+  assert.strictEqual(committed.status, 'canonical_committed');
+  assert.strictEqual(committed.receipt.status, 'canonical_committed');
+  assert.strictEqual(committed.pull.status, 'retry_pending');
+  assert.strictEqual(controller.getOutbox().active, null);
+  assert.strictEqual(controller.getStatus().pullRefreshPending, true);
+  assert.strictEqual(putCount, 1);
+
+  const pendingReload = ControllerV2.createController({ storage, now: () => 14001 });
+  assert.strictEqual(pendingReload.getStatus().pullRefreshPending, true, 'pull refresh marker survives reload');
+
+  pullOffline = false;
+  assert.strictEqual((await controller.syncNow()).status, 'canonical_pulled');
+  assert.strictEqual(controller.getStatus().pullRefreshPending, false);
+  assert.strictEqual(putCount, 1, 'pull refresh must not re-enqueue or duplicate the successful PUT');
+}
+
 async function main() {
   const tests = [
     testDraftTypingIsLocalOnlyAndReloadsExactly,
@@ -216,7 +481,16 @@ async function main() {
     testMinimalTestProbeAndNoBuiltInNetwork,
     testMalformedDraftFailsClosed,
     testHydrateFieldsPreserveEntriesSalesAndHiddenSemantics,
-    testMissingDomRuntimeFailsClosedWithoutStorageMutation
+    testMissingDomRuntimeFailsClosedWithoutStorageMutation,
+    testAttachRemoteExactOnceAndInputDoesNotAutoSync,
+    testSharedRemoteSyncPullAndDirtyPreservation,
+    testAutoFlushCoalescesAndConfirmDuringFlushSurvives,
+    testOfflineReloadRetryConflictReceiptAndPrivateRegistry,
+    testConfirmDuringFinalPullSchedulesFollowupFlush,
+    testReloadedDirtyStockDoesNotReassertStaleMapping,
+    testDirtyDraftMissingExactPathsFailsClosed,
+    testFinalPullConflictIsVisibleThenClearsOnCleanPull,
+    testCommitSuccessSurvivesOfflineFinalPullWithoutDuplicatePut
   ];
   for (const test of tests) {
     await test();
