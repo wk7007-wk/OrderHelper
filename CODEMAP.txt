@@ -17,6 +17,7 @@
 - sync/order-sync-v2.js: 64KiB canonical budget, per-field Lamport/tombstone merge, durable active+queued outbox, ETag-CAS, v1 future-revision 격리, SFA head pointer.
 - v2/order-storage-v2.js + v2/order-sync-controller-v2.js: `orderhelper_v2_*` local draft/confirmed 경계, reload hydrate, corruption fail-closed. 실제 remote/auth adapter는 아직 연결 전이다.
 - v2/order-remote-v2.js: exact Firebase origin과 `syncV2/canonical`만 허용하는 ETag-CAS shadow adapter. 호출별 fresh capability, verifier/fetch timeout, 64KiB 제한을 적용하며 browser 기본 bootstrap에는 아직 주입하지 않는다.
+- v2/order-auth-v2.js: legacy 단말 identity read-only import, exact trusted hash 3개, PIN+factor, strict fresh 등록창, single-operation capability receipt를 담당하는 auth core. UI/factor/registration network adapter는 아직 미연결이다.
 - tests/orderhelper_sync_v2_core.js + tests/orderhelper_v2_*.js + tests/orderhelper_v2_dom_integration.py: 동시편집, flush interleaving, 계산/SFA순, sales·다중구역·숨김 reload, corruption, IME/caret, 390px/wide와 외부 request 0 회귀.
 - tests/orderhelper_static_checks.js: 기존 전체 정적/VM 회귀 + stable key/revision/명시 alias + AI latest top-level/fail-closed/수동값 보호 계약 검증
 - tests/orderhelper_inventory_matching_regression.js: 입력 재고→출력 합계→current/history keyed payload, duplicate zone/id, legacy name, 0/blank, pair-CAS active+queued Enter revision fence, 신규품목/별명/동명이름/빈 배열 회귀

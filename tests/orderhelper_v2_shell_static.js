@@ -25,6 +25,7 @@ function testSafeAssetBoundary() {
   assert.deepStrictEqual(scripts.map(attributes => attributes.match(/src="([^"]+)"/)[1]), [
     '../sync/order-sync-v2.js',
     './order-remote-v2.js',
+    './order-auth-v2.js',
     './order-storage-v2.js',
     './master-data.js',
     './orderhelper-v2.js',
