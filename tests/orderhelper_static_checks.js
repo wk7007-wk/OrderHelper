@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0727.0307';/, 'APP_VERSION must match the KST phone-wins conflict recovery release time');
+mustMatch(/const APP_VERSION = '0731.0104';/, 'APP_VERSION must match the KST mobile viewport-anchor release time');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
 mustMatch(/function buildPhoneWinsPayload\(currentRemote, historyRemote, localPayload, now = Date\.now\(\), resolutionId = ''\)/, 'phone-wins payload builder missing');
 mustMatch(/mode: 'phone_overwrite_pc',[\s\S]*source: 'explicit_user_phone'/, 'phone-wins payload must carry an auditable explicit-user marker');

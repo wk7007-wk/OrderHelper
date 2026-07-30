@@ -11,6 +11,7 @@
 - tests/orderhelper_single_grid_ledger_regression.js: 단일 표 정렬 2종, keyed focus/caret, 150행 입력 burst scheduler/render count, same-run retry/new-run append/duplicate/0/remote merge/누적 total, AI evidence 수동값 보호 회귀
 - tests/orderhelper_p1_review_regression.js: mirrored physical-origin dedupe/sourceRunIds, stale retry latest-wins, CAS 412 remote merge, same-zone 입력순, 2,000-event bounded payload/성능 회귀
 - tests/orderhelper_alias_arbitrary_save_regression.js + tests/orderhelper_alias_arbitrary_save_browser.py: 후보 밖 임의 별명의 버튼/비-IME Enter manual 확정, 명시 `연결 안 함` current/history 저장·effective 제외·새로고침 유지, 타이핑·blur·IME PUT 0, 동일 본문/ETag, 390px 회귀
+- tests/orderhelper_expand_viewport_browser.py: 390×844 펼침/접기의 토글·행 viewport anchor, 큰 행 sticky 아래 상단 정렬, 접기 위치 안정성과 수평 overflow 0을 Firebase write 없이 검증
 - /order/desk_q7m9r3a8: read-only preflight source. records/state 확인용 Firebase 경로.
 - ORDER_LIST_ANALYSIS_HANDOFF.md: 발주 자동화 조사/진단 인계
 - /root/SiteBot/main_auto.pyw: PC 다운로드/SFA 분석 실행자. `/monitor/main_pc/sfa_order_request`를 읽고 `/monitor/main_pc/status.sfa_order` 상태를 올린다.
