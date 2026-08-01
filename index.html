@@ -8355,8 +8355,8 @@ function render(options = {}) {
           : `<td class="qty order-qty ${isNeed?'pos':''}" data-column="order"><span class="order-cell">${outputOrderDisplay(item.name, orderText)}${renderOrderAnalysisSpan(item, g)}${renderOrderAmountSpan(item, g, resolvedOrderRow)}</span></td>`)
       : `<td class="qty order-qty dup" data-column="order">${hidden ? '' : outputOrderDisplay(item.name, orderText)}</td>`;
     const KL = isFirst
-      ? `<td data-column="k"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-field="k" value="${escapeHtml(displayDecimal(getK(item)))}"></td>
-         <td data-column="l"><span class="daily-cell"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-field="l" value="${escapeHtml(displayDecimal(getL(item)))}">${renderDailyAnalysisSpan(item.name)}${renderAiUsageAdvisorySpan(item.name)}</span></td>`
+      ? `<td data-column="k"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-field="k" value="${escapeHtml(displayDecimal(getK(item)))}" aria-label="${escapeHtml(`${item.name} 여유`)}"></td>
+         <td data-column="l"><span class="daily-cell"><input class="cell" type="number" step="0.1" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-field="l" value="${escapeHtml(displayDecimal(getL(item)))}" aria-label="${escapeHtml(`${item.name} 일사용`)}">${renderDailyAnalysisSpan(item.name)}${renderAiUsageAdvisorySpan(item.name)}</span></td>`
       : `<td class="qty dup-meta" data-column="k">${displayDecimal(getK(item))}</td><td class="qty dup-meta" data-column="l"><span>${displayDecimal(getL(item))}</span>${renderDailyAnalysisSpan(item.name)}${renderAiUsageAdvisorySpan(item.name)}</td>`;
     const snoozeBtn = isFirst
       ? (hidden
@@ -8365,9 +8365,9 @@ function render(options = {}) {
       : '';
 
     tr.innerHTML = `
-      <td data-column="zone"><input class="cell zone" type="text" list="zoneOptions" autocomplete="off" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="zone" value="${escapeHtml(ent.zone || '')}"></td>
+      <td data-column="zone"><input class="cell zone" type="text" list="zoneOptions" autocomplete="off" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="zone" value="${escapeHtml(ent.zone || '')}" aria-label="${escapeHtml(`${item.name} 구역`)}"></td>
       <td class="name" data-column="name" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}${inlineSiteControls}</td>
-      <td data-column="stock"><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="stock" value="${escapeHtml(ent.stock == null ? '' : ent.stock)}"></td>
+      <td data-column="stock"><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="stock" value="${escapeHtml(ent.stock == null ? '' : ent.stock)}" aria-label="${escapeHtml(`${item.name} 재고`)}"></td>
       ${needCell}
       ${orderCell}
       ${KL}

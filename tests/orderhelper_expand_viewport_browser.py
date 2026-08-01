@@ -3,6 +3,7 @@ import http.server
 import json
 import socketserver
 import threading
+from collections import Counter
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -32,6 +33,8 @@ def main():
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 390, "height": 844})
+            page_errors = []
+            page.on("pageerror", lambda error: page_errors.append(str(error)))
 
             def firebase_route(route, request):
                 cors = {
@@ -50,6 +53,88 @@ def main():
             page.route("**/*firebasedatabase.app/**", firebase_route)
             page.goto(origin, wait_until="domcontentloaded")
             page.evaluate("startOrderHelperApp(); unlockOrderHelper(); document.activeElement?.blur()")
+            page.evaluate(
+                """() => {
+                    const originalRows = entries.slice();
+                    for (let index = entries.length; index < 110; index += 1) {
+                      const source = originalRows[index % originalRows.length];
+                      const entryKey = newId();
+                      entries.push({
+                        id: entryKey,
+                        entryKey,
+                        itemKey: source.itemKey || itemKeyForName(source.name),
+                        name: source.name,
+                        zone: `검증구역${index}`,
+                        stock: null,
+                      });
+                    }
+                    render({ allowDuringGridEdit: true });
+                }"""
+            )
+
+            def assert_grid_accessibility(viewport):
+                page.set_viewport_size(viewport)
+                page.wait_for_timeout(100)
+                grid = page.evaluate(
+                    """() => {
+                        const labels = { zone: '구역', stock: '재고', k: '여유', l: '일사용' };
+                        const rows = Array.from(document.querySelectorAll('#tbody tr[data-entry-key]'));
+                        const inputs = rows.flatMap((row, rowIndex) => {
+                          const itemName = row.querySelector('[data-column="name"]')?.dataset.itemName || '';
+                          return Array.from(row.querySelectorAll('input.cell[data-field]')).map(input => ({
+                            rowIndex,
+                            itemName,
+                            field: input.dataset.field,
+                            expectedName: `${itemName} ${labels[input.dataset.field] || ''}`.trim(),
+                            ariaLabel: input.getAttribute('aria-label') || '',
+                          }));
+                        });
+                        const wrap = document.querySelector('.table-wrap');
+                        return {
+                          rowCount: rows.length,
+                          inputCount: inputs.length,
+                          inputs,
+                          pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                          wrapOverflow: wrap.scrollWidth - wrap.clientWidth,
+                        };
+                    }"""
+                )
+                assert grid["rowCount"] == 110, (viewport, grid["rowCount"])
+                assert all(item["ariaLabel"] == item["expectedName"] for item in grid["inputs"]), (viewport, grid["inputs"])
+                assert grid["pageOverflow"] <= 1, (viewport, grid["pageOverflow"])
+                assert grid["wrapOverflow"] <= 1, (viewport, grid["wrapOverflow"])
+
+                page.eval_on_selector_all(
+                    "#tbody tr[data-entry-key]",
+                    "rows => rows.forEach(row => row.classList.add('mobile-expanded'))",
+                )
+                cdp = page.context.new_cdp_session(page)
+                tree = cdp.send("Accessibility.getFullAXTree")
+                cdp.detach()
+                page.eval_on_selector_all(
+                    "#tbody tr[data-entry-key]",
+                    "rows => rows.forEach(row => row.classList.remove('mobile-expanded'))",
+                )
+                actual_names = Counter(
+                    node.get("name", {}).get("value", "")
+                    for node in tree.get("nodes", [])
+                    if node.get("role", {}).get("value") in {"combobox", "textbox", "spinbutton"}
+                )
+                expected_names = Counter(item["expectedName"] for item in grid["inputs"])
+                assert all(actual_names[name] >= count for name, count in expected_names.items()), (
+                    viewport,
+                    expected_names - actual_names,
+                    actual_names.most_common(20),
+                )
+                return {
+                    "rowCount": grid["rowCount"],
+                    "inputCount": grid["inputCount"],
+                    "pageOverflow": grid["pageOverflow"],
+                    "wrapOverflow": grid["wrapOverflow"],
+                    "samples": [item["ariaLabel"] for item in grid["inputs"][:4]],
+                }
+
+            mobile_accessibility = assert_grid_accessibility({"width": 390, "height": 844})
 
             result = page.evaluate(
                 """async () => {
@@ -134,7 +219,15 @@ def main():
             tall = result["tall"]["expanded"]
             assert tall["rowHeight"] > tall["usableHeight"], result["tall"]
             assert abs(tall["rowTop"] - tall["safeTop"]) <= 2, result["tall"]
+            desktop_accessibility = assert_grid_accessibility({"width": 1440, "height": 900})
             assert external_writes == [], external_writes
+            assert page_errors == [], page_errors
+            print(json.dumps({
+                "mobile": mobile_accessibility,
+                "desktop": desktop_accessibility,
+                "firebaseWrites": len(external_writes),
+                "pageErrors": len(page_errors),
+            }, ensure_ascii=False))
             browser.close()
     finally:
         server.shutdown()

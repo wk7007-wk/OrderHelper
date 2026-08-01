@@ -606,6 +606,10 @@ mustNotMatch(/<th>순서<\/th>/, 'output order controls header must be removed')
 mustNotMatch(/onclick="moveOutputItem/, 'output row must not include move buttons');
 mustMatch(/data-field="k" value="\$\{escapeHtml\(displayDecimal\(getK\(item\)\)\)\}"/, 'k field must still render with one decimal');
 mustMatch(/data-field="l" value="\$\{escapeHtml\(displayDecimal\(getL\(item\)\)\)\}"/, 'l field must still render with one decimal');
+mustMatch(/data-field="zone" value="\$\{escapeHtml\(ent\.zone \|\| ''\)\}" aria-label="\$\{escapeHtml\(`\$\{item\.name\} 구역`\)\}"/, 'zone input accessible name must include the escaped item and field names');
+mustMatch(/data-field="stock" value="\$\{escapeHtml\(ent\.stock == null \? '' : ent\.stock\)\}" aria-label="\$\{escapeHtml\(`\$\{item\.name\} 재고`\)\}"/, 'stock input accessible name must include the escaped item and field names');
+mustMatch(/data-field="k" value="\$\{escapeHtml\(displayDecimal\(getK\(item\)\)\)\}" aria-label="\$\{escapeHtml\(`\$\{item\.name\} 여유`\)\}"/, 'buffer input accessible name must include the escaped item and field names');
+mustMatch(/data-field="l" value="\$\{escapeHtml\(displayDecimal\(getL\(item\)\)\)\}" aria-label="\$\{escapeHtml\(`\$\{item\.name\} 일사용`\)\}"/, 'daily-usage input accessible name must include the escaped item and field names');
 mustMatch(/function recommendedDays\(\) \{\s*const d = new Date\(\)\.getDay\(\);\s*if \(d === 4 \|\| d === 5\) return 4;\s*return 3;\s*\}/, 'recommended order days must be 4 only on Thu/Fri and 3 otherwise');
 mustMatch(/setOrderDaysValue\(savedDaysRule === ORDER_DAYS_RULE_VERSION \? \(savedDays \|\| rec\) : rec\);/, 'old site-local recommendation values must be refreshed after rule changes');
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{safeEntryId\}" data-entry-key="\$\{safeEntryKey\}" data-item-key="\$\{escapeHtml\(itemKeyForName\(item\.name\)\)\}" data-field="k"/, 'k field must keep escaped stable row identity and be skipped by next navigation');
