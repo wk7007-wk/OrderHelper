@@ -31,7 +31,9 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0801.1351';/, 'APP_VERSION must match the KST auth-label release time');
+mustMatch(/const APP_VERSION = '0802.0302';/, 'APP_VERSION must match the KST contrast release time');
+mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
+mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
 mustMatch(/function buildPhoneWinsPayload\(currentRemote, historyRemote, localPayload, now = Date\.now\(\), resolutionId = ''\)/, 'phone-wins payload builder missing');
 mustMatch(/mode: 'phone_overwrite_pc',[\s\S]*source: 'explicit_user_phone'/, 'phone-wins payload must carry an auditable explicit-user marker');

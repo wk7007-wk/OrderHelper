@@ -14,16 +14,18 @@
     --desktop-zone-width: 106px;
     --desktop-name-width: 220px;
     --desktop-stock-width: 78px;
+    --solid-accent-bg: #c93653;
+    --solid-accent-fg: #fff;
   }
   body { margin: 0; font-family: -apple-system, 'Noto Sans KR', sans-serif; background: #1a1a2e; color: #e0e0e0; font-size: 13px; }
   .top { position: sticky; top: 0; z-index: 10; background: #16213e; border-bottom: 1px solid #0f3460; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .top h1 { font-size: 16px; margin: 0; }
-  .badge { background: #e94560; color: #fff; padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }
+  .badge { background: var(--solid-accent-bg); color: var(--solid-accent-fg); padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }
   .badge.zero { background: #27ae60; }
   .order-total-summary { display: inline-flex; align-items: center; min-height: 24px; padding: 3px 9px; border-radius: 12px; border: 1px solid rgba(56, 189, 248, 0.38); background: rgba(14, 165, 233, 0.13); color: #bae6fd; font-size: 11px; font-weight: 800; }
   .order-total-summary.unresolved { border-color: rgba(249, 115, 22, 0.45); background: rgba(249, 115, 22, 0.13); color: #fed7aa; }
   .top button { background: #0f3460; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
-  .top button.primary { background: #e94560; }
+  .top button.primary { background: var(--solid-accent-bg); color: var(--solid-accent-fg); }
   .top button.green { background: #27ae60; }
   .meta { font-size: 11px; color: #888; }
   .status-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.01em; }
@@ -59,7 +61,7 @@
   .sfa-row .reason { grid-column: 2 / 4; color: #9aa7b7; font-size: 11px; white-space: normal; }
   .sfa-tabs { display: flex; gap: 5px; flex-wrap: wrap; }
   .sfa-tab { background: rgba(15, 52, 96, 0.72); color: #cbd5e1; border: 1px solid rgba(49, 90, 141, 0.72); border-radius: 6px; padding: 6px 10px; font-size: 11px; font-weight: 800; cursor: pointer; }
-  .sfa-tab.active { background: #e94560; border-color: #e94560; color: #fff; }
+  .sfa-tab.active { background: var(--solid-accent-bg); border-color: var(--solid-accent-bg); color: var(--solid-accent-fg); }
   .sfa-match-row { display: grid; grid-template-columns: 68px minmax(150px, 1.2fr) minmax(160px, 1fr) minmax(110px, .7fr); gap: 8px; align-items: center; padding: 7px 8px; border: 1px solid rgba(49, 90, 141, 0.42); border-radius: 6px; background: rgba(15, 52, 96, 0.35); }
   .sfa-match-row.confirmed { border-color: rgba(34, 197, 94, 0.34); background: rgba(34, 197, 94, 0.08); }
   .sfa-match-row.manual { border-color: rgba(20, 184, 166, 0.36); background: rgba(20, 184, 166, 0.09); }
@@ -244,7 +246,7 @@
   .snooze-field input:focus { outline: none; border-color: #e94560; }
   .snooze-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .snooze-actions button { border: 0; border-radius: 6px; padding: 10px 14px; font-weight: 700; color: #fff; background: #0f3460; }
-  .snooze-actions button.primary { background: #e94560; }
+  .snooze-actions button.primary { background: var(--solid-accent-bg); color: var(--solid-accent-fg); }
 
   @media (min-width: 1000px) {
     :root {
@@ -279,7 +281,7 @@
   .pin-overlay input { font-size: 28px; padding: 14px; width: 180px; text-align: center; background: #0f3460; color: #fff; border: 2px solid #0f3460; border-radius: 8px; letter-spacing: 8px; }
   .pin-overlay input.device-name { width: 220px; font-size: 15px; letter-spacing: 0; }
   .pin-overlay input:focus { outline: none; border-color: #e94560; }
-  .pin-overlay button { padding: 12px 32px; font-size: 16px; background: #e94560; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+  .pin-overlay button { padding: 12px 32px; font-size: 16px; background: var(--solid-accent-bg); color: var(--solid-accent-fg); border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
   .pin-error { color: #ff4444; min-height: 18px; max-width: 320px; text-align: center; font-size: 13px; line-height: 1.35; }
   .pin-error.ok { color: #2ecc71; }
 
@@ -679,7 +681,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0801.1351';
+const APP_VERSION = '0802.0302';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
