@@ -543,7 +543,7 @@
   <label class="pin-input-label" for="deviceNameInput">단말 이름</label>
   <input class="device-name" type="text" id="deviceNameInput" maxlength="32" placeholder="단말명" autocomplete="off">
   <button onclick="checkPin()">확인</button>
-  <div class="pin-error" id="pinError"></div>
+  <div class="pin-error" id="pinError" role="status" aria-live="polite"></div>
 </div>
 
 <div class="app-shell">
