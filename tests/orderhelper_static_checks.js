@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0731.0104';/, 'APP_VERSION must match the KST mobile viewport-anchor release time');
+mustMatch(/const APP_VERSION = '0801.1351';/, 'APP_VERSION must match the KST auth-label release time');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
 mustMatch(/function buildPhoneWinsPayload\(currentRemote, historyRemote, localPayload, now = Date\.now\(\), resolutionId = ''\)/, 'phone-wins payload builder missing');
 mustMatch(/mode: 'phone_overwrite_pc',[\s\S]*source: 'explicit_user_phone'/, 'phone-wins payload must carry an auditable explicit-user marker');
@@ -47,6 +47,9 @@ mustMatch(/const DESKTOP_ACCESS_PATH = `\$\{FB_PATH\}\/desktopAccess`;/, 'deskto
 mustMatch(/const DESKTOP_GRACE_MS = 24 \* 60 \* 60 \* 1000;/, 'desktop grace window must be explicitly 24 hours');
 mustMatch(/radiusM: 700/, 'GPS auth radius must be temporarily 700m');
 mustMatch(/등록된 단말은 자동으로 열립니다\. 처음 사용하는 단말은 PIN을 입력하거나 관리자에게 문의하세요\./, 'employee auth UI must show only actionable guidance');
+mustMatch(/<label class="pin-input-label" for="pinInput">PIN 번호<\/label>\s*<input[^>]*id="pinInput"/, 'PIN input must retain a visible associated label');
+mustMatch(/<label class="pin-input-label" for="deviceNameInput">단말 이름<\/label>\s*<input[^>]*id="deviceNameInput"/, 'device-name input must retain a visible associated label');
+mustMatch(/\.pin-input-label \{[\s\S]*text-align: left;/, 'auth labels need compact visible styling');
 mustNotMatch(/등록된 개인폰·메인PC·공장PC|PIN \+ 승인 데스크탑|GPS 확인 실패\. 데스크탑 후보로 기록됨|단말ID \$\{/, 'employee auth UI must not expose device, GPS, candidate, or hash diagnostics');
 mustMatch(/function authUserMessage\(error\)[\s\S]*관리자에게 등록을 요청해 주세요\./, 'auth failures must use employee-safe guidance');
 mustMatch(/catch \(e\) \{\s*setPinMessage\(authUserMessage\(e\)\);/, 'raw auth errors must not be rendered to employees');

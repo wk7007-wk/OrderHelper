@@ -824,6 +824,34 @@ def main():
             auth_page.route("**/*firebasedatabase.app/**", lambda route: route.abort())
             auth_page.goto(origin, wait_until="domcontentloaded")
             auth_page.wait_for_timeout(50)
+            auth_labels = auth_page.evaluate(
+                """() => {
+                    const describe = id => {
+                        const input = document.getElementById(id);
+                        const label = document.querySelector(`label[for="${id}"]`);
+                        const rect = label?.getBoundingClientRect();
+                        input.value = id === 'pinInput' ? '1234' : 'factory-pc';
+                        return {
+                            labelText: label?.textContent.trim(),
+                            accessibleName: Array.from(input.labels || []).map(item => item.textContent.trim()).join(' '),
+                            visible: !!rect && rect.width > 0 && rect.height > 0,
+                            insideViewport: !!rect && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
+                        };
+                    };
+                    return {
+                        pin: describe('pinInput'),
+                        device: describe('deviceNameInput'),
+                        horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+                        verticalOverflow: document.documentElement.scrollHeight > innerHeight,
+                    };
+                }"""
+            )
+            assert auth_labels == {
+                "pin": {"labelText": "PIN 번호", "accessibleName": "PIN 번호", "visible": True, "insideViewport": True},
+                "device": {"labelText": "단말 이름", "accessibleName": "단말 이름", "visible": True, "insideViewport": True},
+                "horizontalOverflow": False,
+                "verticalOverflow": False,
+            }, auth_labels
             trusted_auth = auth_page.evaluate(
                 """async factoryHash => {
                     const hashes = Array.from(PASSWORDLESS_TRUSTED_DEVICE_HASHES);
@@ -995,7 +1023,7 @@ def main():
             assert active_patch["body"]["deviceNameTrust"] == "display_only"
             assert active_patch["body"]["autoApproved"] is False
             assert active_patch["body"]["publicIp"] == "203.0.113.9"
-            assert active_patch["body"]["appVersion"] == "0722.0229"
+            assert active_patch["body"]["appVersion"] == "0801.1351"
 
             for mode, hash_char in (("expired", "b"), ("disabled", "c"), ("network_fail", "d"), ("disable_after_first", "e")):
                 before_patches = len(registration_state["patches"])

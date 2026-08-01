@@ -275,6 +275,7 @@
   .pin-overlay.authed { display: none; }
   .pin-overlay h2 { margin: 0; font-size: 18px; }
   .pin-note { max-width: 300px; color: #aaa; font-size: 12px; line-height: 1.45; text-align: center; }
+  .pin-input-label { width: 220px; margin-bottom: -10px; color: #cbd5e1; font-size: 12px; font-weight: 700; text-align: left; }
   .pin-overlay input { font-size: 28px; padding: 14px; width: 180px; text-align: center; background: #0f3460; color: #fff; border: 2px solid #0f3460; border-radius: 8px; letter-spacing: 8px; }
   .pin-overlay input.device-name { width: 220px; font-size: 15px; letter-spacing: 0; }
   .pin-overlay input:focus { outline: none; border-color: #e94560; }
@@ -526,6 +527,7 @@
     .pin-overlay { padding: 24px; gap: 14px; }
     .pin-overlay h2 { font-size: 22px; }
     .pin-note, .pin-error { width: min(100%, 340px); max-width: 340px; font-size: 14px; line-height: 1.5; }
+    .pin-input-label { width: min(100%, 280px); margin-bottom: -9px; font-size: 13px; }
     .pin-overlay input, .pin-overlay input.device-name { width: min(100%, 280px); min-height: 54px; }
     .pin-overlay button { min-width: 128px; min-height: 48px; }
   }
@@ -536,7 +538,9 @@
 <div class="pin-overlay" id="pinOverlay">
   <h2>BBQ 발주</h2>
   <div class="pin-note">등록된 단말은 자동으로 열립니다. 처음 사용하는 단말은 PIN을 입력하거나 관리자에게 문의하세요.</div>
+  <label class="pin-input-label" for="pinInput">PIN 번호</label>
   <input type="password" inputmode="numeric" pattern="[0-9]*" id="pinInput" maxlength="4" placeholder="PIN" autocomplete="off">
+  <label class="pin-input-label" for="deviceNameInput">단말 이름</label>
   <input class="device-name" type="text" id="deviceNameInput" maxlength="32" placeholder="단말명" autocomplete="off">
   <button onclick="checkPin()">확인</button>
   <div class="pin-error" id="pinError"></div>
@@ -675,7 +679,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0731.0104';
+const APP_VERSION = '0801.1351';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
