@@ -71,6 +71,17 @@ def main():
                 "horizontalOverflow": False,
                 "verticalOverflow": False,
             }, auth
+            page.locator("#pinInput").fill("")
+            page.locator("#pinOverlay button").click()
+            page.wait_for_function("document.getElementById('pinError').textContent.includes('비밀번호 틀림')")
+            feedback = page.locator("#pinError").evaluate(
+                """element => ({
+                    role: element.getAttribute('role'),
+                    live: element.getAttribute('aria-live'),
+                    text: element.textContent,
+                })"""
+            )
+            assert feedback == {"role": "status", "live": "polite", "text": "비밀번호 틀림 (1/5)"}, feedback
             firebase_write_count = sum(row["method"] not in {"GET", "OPTIONS"} for row in firebase_requests)
             assert firebase_write_count == 0, firebase_requests
             assert not page_errors, page_errors
