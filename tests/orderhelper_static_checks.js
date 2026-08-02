@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0802.0302';/, 'APP_VERSION must match the KST contrast release time');
+mustMatch(/const APP_VERSION = '0802.0941';/, 'APP_VERSION must match the KST contrast release time');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -503,9 +503,11 @@ mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local s
 mustMatch(/let outputOrder = \[\];/, 'output order state missing');
 mustMatch(/const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';/, 'output order storage key missing');
 mustMatch(/const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';/, 'order day recommendation rule version missing');
-mustMatch(/function getOutputItems\(days\)/, 'output item sort helper missing');
-mustMatch(/function moveOutputItem\(name, direction\)/, 'output move helper missing');
-mustMatch(/return orderItemList\(\)\.filter\(item => calcG\(item, days\) > 0\)\.sort\(defaultOutputCompare\);/, 'output view must use default order plus user-created items');
+mustNotMatch(/function cleanOutputOrder\(order = outputOrder\)/, 'legacy output-order cleaner must be removed');
+mustNotMatch(/function outputRankMap\(\)/, 'legacy output-order rank helper must be removed');
+mustNotMatch(/function getOutputItems\(days\)/, 'legacy output item helper must be removed');
+mustNotMatch(/function moveOutputItem\(name, direction\)/, 'legacy output move helper must be removed');
+mustMatch(/const itemDiff = defaultOutputCompare\(left\.item, right\.item\);/, 'SFA output rows must keep the fixed default order comparator');
 mustMatch(/localStorage\.removeItem\(OUTPUT_ORDER_STORAGE_KEY\)/, 'stored custom output order must be cleared locally');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'outputOrder'\)\) outputOrder = \[\];/, 'Firebase sync must ignore saved custom output order');
 mustNotMatch(/outputOrder = visibleNames\.concat\(remaining\);/, 'output move must not persist custom order');
