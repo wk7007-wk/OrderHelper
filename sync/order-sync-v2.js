@@ -8,7 +8,12 @@
   const SCHEMA_VERSION = 2;
   const CONSTITUTION_SHA256 = '8cd45de2922894fe2be8b8e7424fe91cc490ec20d2ec9cea0a60164fcf21a575';
   const CANONICAL_NODE = '/order/desk_q7m9r3a8/syncV2/canonical';
-  const MAX_CANONICAL_BYTES = 64 * 1024;
+  // The live v1 snapshot contains roughly 2 MiB of SFA evidence and derived
+  // candidates. V2 deliberately excludes those read models, but 110 stable
+  // inventory entries plus user-confirmed mappings still need more than the
+  // original foundation-only 64 KiB fixture budget. Keep a 128 KiB hard
+  // ceiling well below the legacy payload while allowing the real state.
+  const MAX_CANONICAL_BYTES = 128 * 1024;
   const DEFAULT_STORAGE_KEYS = Object.freeze({
     actor: 'orderhelper_v2_actor_v1',
     outbox: 'orderhelper_v2_outbox_v1',
@@ -36,6 +41,18 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function assertFirebaseJsonKeys(value) {
+    if (Array.isArray(value)) {
+      value.forEach(assertFirebaseJsonKeys);
+      return;
+    }
+    if (!isRecord(value)) return;
+    Object.keys(value).forEach(key => {
+      canonicalKey(key, 'nested field key');
+      assertFirebaseJsonKeys(value[key]);
+    });
+  }
+
   function canonicalJson(value) {
     if (value === null || typeof value !== 'object') return JSON.stringify(value);
     if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
@@ -52,10 +69,69 @@
     return (hash >>> 0).toString(16).padStart(8, '0');
   }
 
+  const BASE64URL_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+  function utf8Bytes(value) {
+    const text = String(value);
+    if (typeof TextEncoder !== 'undefined') return Array.from(new TextEncoder().encode(text));
+    return Array.from(unescape(encodeURIComponent(text)), character => character.charCodeAt(0));
+  }
+
+  function base64UrlEncode(value) {
+    const bytes = utf8Bytes(value);
+    let output = '';
+    for (let index = 0; index < bytes.length; index += 3) {
+      const a = bytes[index];
+      const b = bytes[index + 1];
+      const c = bytes[index + 2];
+      output += BASE64URL_ALPHABET[a >> 2];
+      output += BASE64URL_ALPHABET[((a & 3) << 4) | (b === undefined ? 0 : b >> 4)];
+      if (b !== undefined) output += BASE64URL_ALPHABET[((b & 15) << 2) | (c === undefined ? 0 : c >> 6)];
+      if (c !== undefined) output += BASE64URL_ALPHABET[c & 63];
+    }
+    return output;
+  }
+
+  function base64UrlDecode(value) {
+    const encoded = String(value || '');
+    if (!encoded || !/^[A-Za-z0-9_-]+$/.test(encoded) || encoded.length % 4 === 1) {
+      throw new SyncValidationError('invalid encoded mapping key');
+    }
+    const bytes = [];
+    let buffer = 0;
+    let bits = 0;
+    for (const character of encoded) {
+      const digit = BASE64URL_ALPHABET.indexOf(character);
+      if (digit < 0) throw new SyncValidationError('invalid encoded mapping key');
+      buffer = (buffer << 6) | digit;
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        bytes.push((buffer >> bits) & 255);
+      }
+    }
+    try {
+      return decodeURIComponent(bytes.map(byte => '%' + byte.toString(16).padStart(2, '0')).join(''));
+    } catch (_) {
+      throw new SyncValidationError('invalid UTF-8 mapping key');
+    }
+  }
+
   function normalizeActorId(value) {
     const actorId = String(value || '').trim();
     if (!/^[A-Za-z0-9._-]{3,120}$/.test(actorId)) throw new SyncValidationError('invalid actor id');
     return actorId;
+  }
+
+  function canonicalKey(value, label = 'canonical key') {
+    const key = String(value ?? '');
+    const bytes = typeof TextEncoder !== 'undefined'
+      ? new TextEncoder().encode(key).length
+      : unescape(encodeURIComponent(key)).length;
+    if (!key || bytes > 768 || /[.#$\/\[\]\u0000-\u001F\u007F]/.test(key)) {
+      throw new SyncValidationError('invalid Firebase ' + label);
+    }
+    return key;
   }
 
   function validateStamp(stamp) {
@@ -88,7 +164,9 @@
     }
     if (register.tombstone === true) return { tombstone: true, stamp: validateStamp(register.stamp) };
     if (!Object.prototype.hasOwnProperty.call(register, 'value')) throw new SyncValidationError('register needs value or tombstone');
-    return { value: cloneJson(register.value), tombstone: false, stamp: validateStamp(register.stamp) };
+    const value = cloneJson(register.value);
+    assertFirebaseJsonKeys(value);
+    return { value, tombstone: false, stamp: validateStamp(register.stamp) };
   }
 
   function emptyDocument(epoch = 0) {
@@ -117,9 +195,11 @@
       const rows = source.collections?.[collection] || {};
       if (!isRecord(rows)) throw new SyncValidationError('invalid collection ' + collection);
       Object.keys(rows).sort().forEach(key => {
+        canonicalKey(key, 'row key');
         if (!isRecord(rows[key])) throw new SyncValidationError('invalid row ' + collection + '/' + key);
         const fields = {};
         Object.keys(rows[key]).sort().forEach(field => {
+          canonicalKey(field, 'field key');
           const register = normalizeRegister(rows[key][field]);
           if (register.stamp.epoch >= resetEpoch) fields[field] = register;
           out.meta.maxCounter = Math.max(out.meta.maxCounter, register.stamp.counter);
@@ -157,7 +237,9 @@
     const b = normalizeRegister(right);
     const winner = compareRegister(a, b) >= 0 ? a : b;
     const conflict = conflictFor(path, a, b, winner);
-    if (conflict && a.stamp.epoch === b.stamp.epoch && a.stamp.actorId !== b.stamp.actorId) conflicts.push(conflict);
+    const sameStampFromSharedActor = a.stamp.actorId === b.stamp.actorId && a.stamp.counter === b.stamp.counter;
+    if (conflict && a.stamp.epoch === b.stamp.epoch
+        && (a.stamp.actorId !== b.stamp.actorId || sameStampFromSharedActor)) conflicts.push(conflict);
     return winner;
   }
 
@@ -232,13 +314,15 @@
   function writeFields(documentSource, actor, collection, key, patch) {
     if (!COLLECTIONS.includes(collection)) throw new SyncValidationError('unknown collection');
     if (!isRecord(patch)) throw new SyncValidationError('field patch must be an object');
+    const rowKey = canonicalKey(key, 'row key');
     const document = normalizeDocument(documentSource);
     const stamp = nextStamp(actor, document);
-    const row = { ...(document.collections[collection][String(key)] || {}) };
+    const row = { ...(document.collections[collection][rowKey] || {}) };
     Object.keys(patch).sort().forEach(field => {
+      canonicalKey(field, 'field key');
       row[field] = { value: cloneJson(patch[field]), stamp: cloneJson(stamp) };
     });
-    document.collections[collection][String(key)] = row;
+    document.collections[collection][rowKey] = row;
     document.meta.maxCounter = Math.max(document.meta.maxCounter, stamp.counter);
     return normalizeDocument(document);
   }
@@ -246,11 +330,15 @@
   function deleteFields(documentSource, actor, collection, key, fields) {
     if (!COLLECTIONS.includes(collection)) throw new SyncValidationError('unknown collection');
     if (!Array.isArray(fields) || !fields.length) throw new SyncValidationError('fields to delete required');
+    const rowKey = canonicalKey(key, 'row key');
     const document = normalizeDocument(documentSource);
     const stamp = nextStamp(actor, document);
-    const row = { ...(document.collections[collection][String(key)] || {}) };
-    fields.forEach(field => { row[String(field)] = { tombstone: true, stamp: cloneJson(stamp) }; });
-    document.collections[collection][String(key)] = row;
+    const row = { ...(document.collections[collection][rowKey] || {}) };
+    fields.forEach(field => {
+      const fieldKey = canonicalKey(field, 'field key');
+      row[fieldKey] = { tombstone: true, stamp: cloneJson(stamp) };
+    });
+    document.collections[collection][rowKey] = row;
     document.meta.maxCounter = Math.max(document.meta.maxCounter, stamp.counter);
     return normalizeDocument(document);
   }
@@ -479,30 +567,119 @@
     }
   }
 
+  function legacyItemKeyForName(name) {
+    return 'item_' + encodeURIComponent(String(name || '').trim());
+  }
+
+  function legacyItemKeyByName(source) {
+    const index = new Map();
+    Object.entries(source.inventoryByItemKey || {}).forEach(([key, value]) => {
+      const name = String(value?.name || '').trim();
+      if (name) index.set(name, String(value?.itemKey || key));
+    });
+    (Array.isArray(source.entries) ? source.entries : Object.values(source.entries || {})).forEach(entry => {
+      const name = String(entry?.name || '').trim();
+      const itemKey = String(entry?.itemKey || '').trim();
+      if (name && itemKey) index.set(name, itemKey);
+    });
+    return index;
+  }
+
+  function compactAliasDrafts(source) {
+    const rows = Array.isArray(source) ? source : Object.values(source || {});
+    return rows.filter(row => ['confirmed', 'manual', 'unlinked'].includes(String(row?.status || ''))).map(row => {
+      const output = {};
+      [
+        'aliasName', 'aliasUnit', 'actualName', 'actualUnit', 'savedActualName',
+        'savedActualUnit', 'status', 'conversionStatus', 'conversionFactor',
+        'orderUnitToStockFactor', 'factorMeaning', 'rejectedCandidate'
+      ].forEach(key => {
+        if (Object.prototype.hasOwnProperty.call(row || {}, key)) output[key] = cloneJson(row[key]);
+      });
+      return output;
+    });
+  }
+
+  function mappingEntities(namespace, source) {
+    const pairs = Array.isArray(source)
+      ? source.map((value, index) => {
+          const identity = isRecord(value)
+            ? [value.aliasName, value.aliasUnit].map(part => String(part || '').trim()).filter(Boolean).join('|')
+            : '';
+          return [identity || ('legacy-' + index), value];
+        })
+      : Object.entries(isRecord(source) ? source : {});
+    const seen = new Map();
+    return pairs.map(([rawKey, value]) => {
+      const sourceKey = String(rawKey);
+      const rowKey = 'map-' + namespace + '-' + base64UrlEncode(sourceKey);
+      if (seen.has(rowKey) && seen.get(rowKey) !== sourceKey) {
+        throw new SyncValidationError('mapping key encoding collision');
+      }
+      if (seen.has(rowKey)) throw new SyncValidationError('duplicate mapping identity');
+      seen.set(rowKey, sourceKey);
+      // Namespace and source identity are reversibly encoded in the Firebase-
+      // safe row key. Repeating either as another stamped register would break
+      // the live 128 KiB gate.
+      const fields = {};
+      if (isRecord(value)) {
+        Object.keys(value).sort().forEach(field => {
+          const fieldKey = canonicalKey(field, 'mapping field key');
+          if (fieldKey === 'mappingNamespace' || fieldKey === 'sourceKey') {
+            throw new SyncValidationError('reserved mapping field key');
+          }
+          fields[fieldKey] = value[field];
+        });
+      } else {
+        fields.value = value;
+      }
+      return { rowKey, fields };
+    });
+  }
+
+  function mappingIdentityFromRowKey(rowKey) {
+    const key = canonicalKey(rowKey, 'mapping row key');
+    const namespaces = ['unitCorrections', 'aliasDrafts', 'alias', 'site'];
+    const namespace = namespaces.find(candidate => key.startsWith('map-' + candidate + '-'));
+    if (!namespace) throw new SyncValidationError('unknown mapping row namespace');
+    const encoded = key.slice(('map-' + namespace + '-').length);
+    return Object.freeze({ namespace, sourceKey: base64UrlDecode(encoded) });
+  }
+
   function legacyBuckets(payload) {
     const source = isRecord(payload) ? payload : {};
+    const itemKeyByName = legacyItemKeyByName(source);
     const mappings = {
       site: source.orderSiteMappings ?? {},
       alias: source.orderAliasMappings ?? {},
-      aliasDrafts: source.orderAliasMappingDrafts ?? {},
-      unitCorrections: source.orderUnitCorrections ?? {},
-      manualItems: source.orderManualItems ?? []
+      aliasDrafts: compactAliasDrafts(source.orderAliasMappingDrafts),
+      unitCorrections: source.orderUnitCorrections ?? {}
     };
-    const excluded = new Set([
-      'inventoryByItemKey', 'entries', 'orderSiteMappings', 'orderAliasMappings',
-      'orderAliasMappingDrafts', 'orderUnitCorrections', 'orderManualItems',
-      'sfaOrderLedger', 'sfaAnalysisHistory', 'sfaActualHistory', 'sfaAnalysisReadModel',
-      'sourceTable', 'dailySales', 'baseSales', 'salesWeights', 'salesRevision',
-      'stateRevision', 'inventoryRevision', 'savedAt', 'syncReset'
-    ]);
-    const settings = {};
-    Object.keys(source).sort().forEach(key => { if (!excluded.has(key)) settings[key] = cloneJson(source[key]); });
+    const usage = {};
+    const hidden = {};
+    Object.entries(source.overrides || {}).forEach(([name, value]) => {
+      if (!isRecord(value)) return;
+      const itemKey = itemKeyByName.get(name) || legacyItemKeyForName(name);
+      const row = {};
+      if (Object.prototype.hasOwnProperty.call(value, 'k')) row.buffer = value.k;
+      if (Object.prototype.hasOwnProperty.call(value, 'l')) row.dailyUsage = value.l;
+      if (Object.keys(row).length) usage[itemKey] = row;
+      if (Object.prototype.hasOwnProperty.call(value, 'hideUntil')) hidden[itemKey] = value.hideUntil;
+    });
     return {
-      inventory: source.inventoryByItemKey ?? {},
+      inventory: Array.isArray(source.entries) && source.entries.length ? {} : (source.inventoryByItemKey ?? {}),
       entries: source.entries ?? [],
+      usage,
+      hidden,
       mappings,
-      settings,
-      sales: { dailySales: source.dailySales ?? {}, baseSales: source.baseSales ?? {}, salesWeights: source.salesWeights ?? [], salesRevision: source.salesRevision ?? 0 }
+      manualItems: source.orderManualItems ?? [],
+      settings: {
+        orderDays: source.orderDays ?? null,
+        zoneOrder: source.zoneOrder ?? [],
+        dateKey: source.dateKey ?? null
+      },
+      acceptedAdvisory: source.aiUsageAccepted ?? null,
+      sales: { dailySales: source.dailySales ?? [], baseSales: source.baseSales ?? null }
     };
   }
 
@@ -517,17 +694,61 @@
     const buckets = legacyBuckets(payload);
     Object.keys(buckets.inventory).sort().forEach(key => {
       const value = buckets.inventory[key];
-      document = writeFields(document, actor, 'inventory', key, isRecord(value) && Object.keys(value).length ? value : { $value: value });
+      document = writeFields(document, actor, 'inventory', key, isRecord(value) && Object.keys(value).length ? value : { value });
     });
+    const usedEntryKeys = new Set();
     (Array.isArray(buckets.entries) ? buckets.entries : Object.values(buckets.entries || {})).forEach((entry, index) => {
-      const key = String(entry?.itemKey || entry?.key || entry?.name || 'legacy-' + index);
-      document = writeFields(document, actor, 'entries', key, isRecord(entry) && Object.keys(entry).length ? entry : { $value: entry });
+      const baseKey = String(entry?.entryKey || entry?.id || entry?.key || ('legacy-' + index));
+      let key = baseKey || ('legacy-' + index);
+      while (usedEntryKeys.has(key)) key = baseKey + '-' + index;
+      usedEntryKeys.add(key);
+      const fields = isRecord(entry) && Object.keys(entry).length ? {
+        itemKey: String(entry.itemKey || legacyItemKeyForName(entry.name || key)),
+        zone: String(entry.zone || '')
+      } : { value: entry };
+      if (isRecord(entry) && Object.prototype.hasOwnProperty.call(entry, 'stock') && entry.stock !== null && entry.stock !== '') {
+        fields.stock = entry.stock;
+      }
+      document = writeFields(document, actor, 'entries', key, fields);
+    });
+    Object.keys(buckets.usage).sort().forEach(itemKey => {
+      document = writeFields(document, actor, 'usage', itemKey, buckets.usage[itemKey]);
     });
     Object.keys(buckets.mappings).sort().forEach(namespace => {
-      document = writeFields(document, actor, 'mappings', namespace, { value: buckets.mappings[namespace] });
+      mappingEntities(namespace, buckets.mappings[namespace]).forEach(({ rowKey, fields }) => {
+        document = writeFields(document, actor, 'mappings', rowKey, fields);
+      });
     });
-    document = writeFields(document, actor, 'settings', 'legacy', Object.keys(buckets.settings).length ? buckets.settings : { $value: {} });
-    document = writeFields(document, actor, 'sales', 'legacy', buckets.sales);
+    if (buckets.manualItems.length) {
+      buckets.manualItems.forEach((item, index) => {
+        const key = String(item?.itemKey || item?.key || item?.name || ('manual-' + index));
+        document = writeFields(document, actor, 'manualItems', key, isRecord(item) ? item : { value: item });
+      });
+    }
+    if (buckets.acceptedAdvisory !== null && buckets.acceptedAdvisory !== undefined) {
+      document = writeFields(document, actor, 'acceptedAdvisory', 'latest', { value: buckets.acceptedAdvisory });
+    }
+    if (buckets.settings.orderDays !== null && buckets.settings.orderDays !== undefined) {
+      document = writeFields(document, actor, 'settings', 'order', { days: buckets.settings.orderDays });
+    }
+    document = writeFields(document, actor, 'zones', 'order', { value: buckets.settings.zoneOrder });
+    document = writeFields(document, actor, 'settings', 'migration', {
+      dateKey: buckets.settings.dateKey,
+      source: 'legacy_v1'
+    });
+    Object.keys(buckets.hidden).sort().forEach(itemKey => {
+      const raw = buckets.hidden[itemKey];
+      const parsed = typeof raw === 'string' ? Date.parse(raw + (raw.length <= 10 ? 'T23:59:59+09:00' : '')) : Number(raw);
+      document = writeFields(document, actor, 'settings', 'item:' + itemKey, {
+        hiddenUntil: Number.isFinite(parsed) && parsed > 0 ? parsed : false
+      });
+    });
+    if (buckets.sales.baseSales !== null && buckets.sales.baseSales !== undefined) {
+      document = writeFields(document, actor, 'sales', 'base', { amount: buckets.sales.baseSales });
+    }
+    (Array.isArray(buckets.sales.dailySales) ? buckets.sales.dailySales : Object.values(buckets.sales.dailySales || {})).slice(0, 31).forEach((value, index) => {
+      document = writeFields(document, actor, 'sales', 'day-' + (index + 1), { amount: value });
+    });
     if (options.sfaHead) document = setSfaHead(document, actor, options.sfaHead);
     assertCanonicalSizeBudget(document);
     return {
@@ -605,6 +826,7 @@
     flushOutbox,
     repairLegacyProjection,
     migrateLegacyPayload,
+    mappingIdentityFromRowKey,
     sfaFirstOrder
   });
 }));

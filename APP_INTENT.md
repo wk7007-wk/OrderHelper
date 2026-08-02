@@ -9,7 +9,10 @@
 ## v2 재작성 상태
 - `v2/`는 헌법 hash를 기준으로 만든 greenfield shadow package다.
 - foundation checkpoint는 one-grid, 최초 SFA순, 계산, local draft/confirmed outbox, per-field Lamport merge, exact dirty-path reload, offline/reload, 다중 구역, 숨김 만료, 390px/wide 브라우저 게이트까지 통과했다.
-- auth capability, 제한된 remote adapter, controller의 active+queued CAS/pull 코어는 외부 adapter 주입 테스트까지 통과했다. 실제 browser auth/bootstrap, Firebase 연결, PC/SiteBot SFA bridge, legacy projection, live hosting, 폰/PC 물리 검증은 아직 완료 증거가 아니며 각각 별도 gate로 남긴다.
+- auth capability, 제한된 remote adapter, controller의 active+queued CAS/pull 코어는 외부 adapter 주입 테스트까지 통과했다. 2026-08-03 read-only live `/current` 변환은 110/110 entry와 58개 mapping row를 보존하면서 2,204,365B legacy snapshot을 119,335B canonical로 축소해 128KiB gate를 통과했다. SFA ledger와 derived read model은 canonical에서 제외한다.
+- 매핑은 namespace 전체 blob이 아니라 source identity별 행과 field register로 저장한다. PC와 모바일의 서로 다른 품목/필드 수정은 합치고, 같은 필드의 동시 수정은 deterministic winner와 conflict receipt를 남긴다. RTDB 금지 키는 remote flush 전에 fail-closed한다.
+- cutover는 `personal-phone`과 `factory-pc`의 서로 다른 fresh physical readiness receipt가 동일 app version/source fingerprint를 증명해야만 허용한다. active 이후 control 오류나 rollback은 v1 write로 조용히 되돌아가지 않고 차단/read-only로 둔다.
+- 실제 browser auth/bootstrap, Firebase rules/canonical seed, PC/SiteBot SFA bridge, v1 projection, live hosting, 폰/PC 물리 shadow 검증은 아직 완료 증거가 아니며 각각 별도 gate로 남긴다. 현재 live v1은 그대로이며 v2 활성화나 Firebase write는 하지 않았다.
 
 ## 만든 이유
 - BBQ 재고를 사람이 빠르게 입력하고 발주량을 계산해 SFA 입력 부담을 줄인다.

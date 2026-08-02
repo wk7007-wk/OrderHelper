@@ -80,6 +80,16 @@ async function testSameFieldConflictIsDeterministicAndVisible() {
   sameDocument(Sync.mergeDocuments(phone, phone).document, phone, 'idempotent merge');
 }
 
+async function testSharedActorSameStampConflictIsNeverSilent() {
+  const base = Sync.emptyDocument();
+  const firstTab = Sync.writeFields(base, actor('shared.browser'), 'inventory', 'chicken', { stock: 3 });
+  const secondTab = Sync.writeFields(base, actor('shared.browser'), 'inventory', 'chicken', { stock: 9 });
+  const merged = Sync.mergeDocuments(firstTab, secondTab);
+  assert.strictEqual(merged.conflicts.length, 1, 'same-device tabs with an identical stamp must emit a conflict receipt');
+  assert.strictEqual(merged.conflicts[0].path, 'inventory/chicken/stock');
+  sameDocument(merged.document, Sync.mergeDocuments(secondTab, firstTab).document, 'same-actor tie must remain deterministic');
+}
+
 async function testOfflineQueueSurvivesReload() {
   const storage = memoryStorage();
   const localActor = Sync.createActor(storage, { actorId: 'phone.actor' });
@@ -169,7 +179,7 @@ async function testEmptyZeroNullAndLegacyFutureRevisionIsolation() {
   assert.strictEqual(valueAt(migrated.document, 'inventory', 'zero', 'optional'), null);
   assert.deepStrictEqual(valueAt(migrated.document, 'inventory', 'zero', 'list'), []);
   assert.deepStrictEqual(valueAt(migrated.document, 'inventory', 'zero', 'object'), {});
-  assert.deepStrictEqual(valueAt(migrated.document, 'inventory', 'emptyObject', '$value'), {});
+  assert.deepStrictEqual(valueAt(migrated.document, 'inventory', 'emptyObject', 'value'), {});
   const again = Sync.migrateLegacyPayload(legacy, localActor, { marker: migrated.marker, document: migrated.document });
   assert.strictEqual(again.status, 'already_migrated');
 }
@@ -329,6 +339,7 @@ async function main() {
     testBrowserGlobalAndStableActor,
     testIndependentSimultaneousChangesSurvive,
     testSameFieldConflictIsDeterministicAndVisible,
+    testSharedActorSameStampConflictIsNeverSilent,
     testOfflineQueueSurvivesReload,
     testBounded412Retry,
     testProjectionFailureKeepsCanonicalReceipt,
