@@ -68,6 +68,21 @@ async function run() {
   const writableReader = await Bootstrap.bootstrap({ reader: { async readControl() { return {}; }, async writeControl() {} }, now: () => now });
   assert.strictEqual(writableReader.status, 'reader_unavailable', 'bootstrap accepts a read-only source only');
 
+  // A receipt that expires while the control read is in flight must not enable
+  // canonical ownership.  Validating only against request start would create
+  // a short post-expiry write window.
+  let delayedClock = now;
+  Cutover.resetRuntimeForTest();
+  const expiredDuringRead = await Bootstrap.bootstrap({
+    reader: { async readControl() {
+      delayedClock = now + 1001;
+      return { control: active, receipt: receipt() };
+    } },
+    now: () => delayedClock,
+  });
+  assert.strictEqual(expiredDuringRead.status, 'unauthorized_or_stale');
+  assert.strictEqual(Cutover.claimWriteOwner('v2'), false, 'an expired-in-flight receipt never enables v2 writes');
+
   Cutover.resetRuntimeForTest();
   assert.strictEqual(Cutover.claimWriteOwner('v1'), true, 'bootstrap failures leave the existing v1 owner unchanged');
   console.log('PASS OrderHelper v2 authenticated read-only cutover bootstrap');

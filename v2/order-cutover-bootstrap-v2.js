@@ -77,11 +77,16 @@
   }
 
   async function bootstrap(options = {}) {
-    const now = Number(typeof options.now === 'function' ? options.now() : Date.now());
-    if (!Number.isFinite(now) || now <= 0) return Object.freeze({ status: 'clock_invalid' });
-    const result = await readWithTimeout(options.reader, now, options.timeoutMs);
+    const clock = typeof options.now === 'function' ? options.now : Date.now;
+    const requestedAt = Number(clock());
+    if (!Number.isFinite(requestedAt) || requestedAt <= 0) return Object.freeze({ status: 'clock_invalid' });
+    const result = await readWithTimeout(options.reader, requestedAt, options.timeoutMs);
     if (result.status) return result;
-    const receipt = normalizeReadReceipt(result.receipt, now);
+    // Control reads are asynchronous.  Re-sample the clock before accepting
+    // the capability receipt so it cannot authorize v2 after it has expired.
+    const validatedAt = Number(clock());
+    if (!Number.isFinite(validatedAt) || validatedAt <= 0) return Object.freeze({ status: 'clock_invalid' });
+    const receipt = normalizeReadReceipt(result.receipt, validatedAt);
     if (!receipt) return Object.freeze({ status: 'unauthorized_or_stale' });
     const control = normalizeBootstrapControl(result.control);
     if (!control) return Object.freeze({ status: 'control_invalid' });
