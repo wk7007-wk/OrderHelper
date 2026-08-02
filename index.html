@@ -681,7 +681,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0802.0302';
+const APP_VERSION = '0802.0941';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -7938,25 +7938,6 @@ function defaultOutputCompare(a, b) {
   const seqDiff = (a.sfaSeq || 9999) - (b.sfaSeq || 9999);
   if (seqDiff !== 0) return seqDiff;
   return (a.name || '').localeCompare(b.name || '', 'ko', { numeric: true, sensitivity: 'base' });
-}
-
-function cleanOutputOrder(order = outputOrder) {
-  return [];
-}
-
-function outputRankMap() {
-  outputOrder = [];
-  return new Map();
-}
-
-function getOutputItems(days) {
-  outputOrder = [];
-  return orderItemList().filter(item => calcG(item, days) > 0).sort(defaultOutputCompare);
-}
-
-function moveOutputItem(name, direction) {
-  outputOrder = [];
-  toast('출력순서는 최초순서 고정');
 }
 
 function outputNumberInput(name, field, value) {
