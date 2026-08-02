@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "coverageVersion": 2,
+  "coverageUpdatedAtKst": "2026-08-03T04:50:41+09:00",
   "constitutionVersion": "20260731.0252-KST",
   "effectiveAtKst": "2026-07-31T02:52:00+09:00",
   "digestMethod": "sha256-utf8-raw-bytes",
@@ -9,8 +11,8 @@
   },
   "promptEvidence": {
     "path": "ORDERHELPER_PROMPT_EVIDENCE.md",
-    "sha256": "5d6c7addac8bd8950d5c082462e309e5137b575734e590ce3846f42ef0921818",
-    "sourceRange": "2026-05-05..2026-07-30",
+    "sha256": "715d289c7b0b4eda7cc33dffd3dc1c34a47da2d49ddda194256551ec6c73d8cd",
+    "sourceRange": "2026-05-05..2026-08-02",
     "normalization": "exact fork duplicates and voice-typo equivalents collapsed; unrelated app SFA prompts excluded"
   },
   "repositoryBaseline": "b032da2aede30fb3954c66fc68bb8aecb76798b7"

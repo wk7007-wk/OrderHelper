@@ -4,7 +4,7 @@
 
 ## 판정 규칙
 
-- 최초 범위: 2026-05-05 최초 설계부터 2026-07-30 최신 지시까지의 local Codex user input_text.
+- 최초 범위: 2026-05-05 최초 설계부터 2026-08-02 최신 지시까지의 local Codex user input_text.
 - 최신의 명시적 정정이 이전 가정·구현·테스트를 대체한다.
 - 질문은 자동 규칙으로 승격하지 않고, 뒤의 사용자 확인 또는 반복 요구가 있는 경우만 채택한다.
 - 원문 전체는 아래 rollout 경로가 증거이며 이 문서는 짧은 의미만 보존한다.
@@ -36,6 +36,8 @@
 | 07-29 | Firebase/Google 트래픽 초과로 발주가 먹통이 됐다. | 대용량 polling/PUT 금지 |
 | 07-30 | 펼침 렌더로 화면이탈, 폰/PC 충돌, 국소패치 아닌 전체 greenfield 재작성, 최초 SFA순 복원. | v2 전체 scope |
 | 07-30 | 기존 사용자 프롬프트를 먼저 취합해 헌법을 세운 뒤 진행한다. | 구현 선행 gate |
+| 08-02 | 발주 PC와 모바일의 동기화 충돌을 없애고, 필요하면 새 경로로 다시 짜되 호환 write를 층층이 덧대지 않는다. | 작은 v2 canonical + fenced legacy projection |
+| 08-02 | 새로고침해도 작성 중인 값은 로컬에 그대로 보존돼야 한다. | exact dirty-path local draft reload |
 
 ## 명시적 supersession
 
@@ -45,6 +47,8 @@
 | 분석 평균을 K/L에 자동 할당 | 분석은 참고, 수동 K/L 자동 변경 금지 |
 | 매칭필요 → 발주양수 → 0의 작업 우선순위를 SFA순으로 사용 | MASTER 최초 `sfaSeq` 고정 |
 | 전체 LWW snapshot과 phoneWins | 독립 domain/key 병합, 전체 덮어쓰기 금지 |
+| v1 write 위에 호환 경로를 계속 추가 | v2 canonical 단일 owner와 명시적 projection/cutover |
+| 새로고침 때 remote current로 작성 중 값을 재초기화 | 원격 전송 전 local draft exact 보존·복구 |
 | 입력/출력/별명/단위 탭별 별도 상태 | 한 표와 한 resolver |
 | 매 입력마다 전체 계산·저장 | local row 계산과 완료 commit 분리 |
 | latest 엑셀 한 건 중심 | append-only run과 누적 evidence |
@@ -60,6 +64,7 @@
 - one-grid와 구조 정정: `/root/.codex/sessions/2026/07/13/rollout-2026-07-13T19-01-22-019f5cda-f894-7172-a7a3-dee11ed0f2d1.jsonl`
 - 폰/PC 충돌: `/root/.codex/sessions/2026/07/26/rollout-2026-07-26T17-48-14-019f9f8a-afcd-7c20-b60f-d547e8f0f7c7.jsonl`
 - 최신 greenfield/헌법 지시: `/root/.codex/sessions/2026/07/29/rollout-2026-07-29T14-50-32-019fae5b-162f-7511-8dc7-3d422c46681d.jsonl`
+- PC·모바일 충돌/새 경로/새로고침 로컬보존 최신 정정: `/root/.codex/sessions/2026/08/02/rollout-2026-08-02T19-32-52-019fc3f6-fe9c-7f71-9876-57107d3e302f.jsonl`
 
 ## 대조한 보조 자료
 
