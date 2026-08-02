@@ -2,10 +2,11 @@
   const syncApi = root?.OrderHelperSyncV2 || (typeof require === 'function' ? require('../sync/order-sync-v2.js') : null);
   const storageApi = root?.OrderHelperStorageV2 || (typeof require === 'function' ? require('./order-storage-v2.js') : null);
   const modelApi = root?.OrderHelperV2 || (typeof require === 'function' ? require('./orderhelper-v2.js') : null);
-  const api = factory(syncApi, storageApi, modelApi);
+  const cutoverApi = root?.OrderHelperCutoverV2 || (typeof require === 'function' ? require('./order-cutover-v2.js') : null);
+  const api = factory(syncApi, storageApi, modelApi, cutoverApi);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.OrderHelperSyncControllerV2 = api;
-}(typeof globalThis !== 'undefined' ? globalThis : this, function (Sync, StorageV2, ModelV2) {
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (Sync, StorageV2, ModelV2, CutoverV2) {
   'use strict';
 
   if (!Sync || !StorageV2 || !ModelV2) throw new Error('OrderHelper v2 sync, storage, and model dependencies are required');
@@ -113,14 +114,26 @@
       return adapter;
     }
 
+    function authorizeOfficialRemoteAdapter(adapter) {
+      if (adapter?.officialCanonicalAdapter !== true) return;
+      if (!CutoverV2 || typeof CutoverV2.claimWriteOwner !== 'function' || !CutoverV2.claimWriteOwner('v2')) {
+        throw new TypeError('canonical remote bootstrap is blocked until an active cutover route is installed');
+      }
+    }
+
     function attachRemoteAdapter(adapter) {
       validateRemoteAdapter(adapter);
       if (remoteAdapter === adapter) return { status: 'already_attached' };
       if (remoteAdapter) throw new TypeError('remote adapter replacement is denied');
+      authorizeOfficialRemoteAdapter(adapter);
       remoteAdapter = adapter;
       if (getOutbox().active || pullRefreshPending) scheduleAutoFlush();
       return { status: 'attached' };
     }
+
+    // Initial injection is also a remote-enable path.  Keep the check here,
+    // after the helper declarations, so it cannot bypass attachRemoteAdapter.
+    if (remoteAdapter) authorizeOfficialRemoteAdapter(remoteAdapter);
 
     function scheduleAutoFlush() {
       if (!remoteAdapter) return;

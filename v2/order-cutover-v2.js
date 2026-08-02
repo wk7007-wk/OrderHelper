@@ -17,6 +17,8 @@
   const SAFE_ID = /^[A-Za-z0-9._:-]{1,160}$/;
   const SAFE_HASH = /^[a-f0-9]{8,64}$/;
   const SAFE_DEVICE_HASH = /^[a-f0-9]{64}$/;
+  let installedControl = null;
+  let writeOwner = '';
 
   function boundedText(value, max = 80) {
     return String(value || '').trim().slice(0, max);
@@ -133,6 +135,43 @@
     return Object.freeze({ mode: 'legacy_active_no_cutover', allowV1Writes: true });
   }
 
+  // This is deliberately an in-memory fence.  A control document is only
+  // installed by a future authenticated/read-only bootstrap; loading this
+  // module never fetches or writes Firebase on its own.
+  function installRuntimeControl(controlSource) {
+    const route = selectRuntimeRoute(controlSource);
+    if (writeOwner && ((writeOwner === 'v1' && !route.allowV1Writes) ||
+        (writeOwner === 'v2' && route.mode !== 'canonical_active'))) {
+      return Object.freeze({ installed: false, reason: 'existing_write_owner_requires_reload', route });
+    }
+    installedControl = controlSource ? Object.freeze({ ...controlSource }) : null;
+    return Object.freeze({ installed: true, route });
+  }
+
+  function runtimeRoute() {
+    return selectRuntimeRoute(installedControl);
+  }
+
+  function claimWriteOwner(owner) {
+    if (owner !== 'v1' && owner !== 'v2') throw new TypeError('unknown OrderHelper write owner');
+    const route = runtimeRoute();
+    const allowed = owner === 'v1' ? route.allowV1Writes === true : route.mode === 'canonical_active';
+    if (!allowed || (writeOwner && writeOwner !== owner)) return false;
+    writeOwner = owner;
+    return true;
+  }
+
+  function releaseWriteOwner(owner) {
+    if (writeOwner !== owner) return false;
+    writeOwner = '';
+    return true;
+  }
+
+  function resetRuntimeForTest() {
+    installedControl = null;
+    writeOwner = '';
+  }
+
   return Object.freeze({
     CONTROL_NODE,
     READINESS_NODE,
@@ -143,5 +182,10 @@
     evaluateActivationCandidate,
     normalizeActiveControl,
     selectRuntimeRoute,
+    installRuntimeControl,
+    runtimeRoute,
+    claimWriteOwner,
+    releaseWriteOwner,
+    resetRuntimeForTest,
   });
 }));

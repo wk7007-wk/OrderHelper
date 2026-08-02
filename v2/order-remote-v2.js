@@ -192,7 +192,7 @@
       return { status, etag: responseEtag, body: responseBody };
     }
 
-    return Object.freeze({ getCanonical, putCanonical });
+    return Object.freeze({ getCanonical, putCanonical, officialCanonicalAdapter: true });
   }
 
   return Object.freeze({

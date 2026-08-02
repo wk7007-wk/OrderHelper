@@ -680,6 +680,8 @@
 </div>
 </div>
 
+<script src="./sync/order-sync-v2.js"></script>
+<script src="./v2/order-cutover-v2.js"></script>
 <script>
 const APP_VERSION = '0802.0941';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
@@ -2097,6 +2099,7 @@ function buildPhoneWinsPayload(currentRemote, historyRemote, localPayload, now =
 }
 
 async function putPhoneWinsTargets(localPayload, resolutionId, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 5) {
+  if (!claimLegacyOrderWriteOwner()) throw new Error('v1 order writes are fenced by active v2 cutover');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const currentUrl = `${FB_URL}${FB_PATH}/current.json`;
@@ -2154,6 +2157,7 @@ function mergeConfirmedEntryZonePatchPayload(currentRemote, historyRemote, local
 }
 
 async function putFirebasePayloadWithLedgerCas(url, localPayload, maxAttempts = FIREBASE_LEDGER_CAS_ATTEMPTS) {
+  if (!claimLegacyOrderWriteOwner()) throw new Error('v1 order writes are fenced by active v2 cutover');
   let lastResponse = null;
   let lastPayload = localPayload;
   const attempts = Math.max(1, Math.min(8, Number(maxAttempts) || FIREBASE_LEDGER_CAS_ATTEMPTS));
@@ -8712,6 +8716,7 @@ function buildConfirmedSaveCommit(reason = 'enter') {
 }
 
 async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = FIREBASE_LEDGER_CAS_ATTEMPTS) {
+  if (!claimLegacyOrderWriteOwner()) throw new Error('v1 order writes are fenced by active v2 cutover');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const currentUrl = `${FB_URL}${FB_PATH}/current.json`;
@@ -9019,7 +9024,16 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
 }
 
 function saveToFB(reason = 'manual') {
+  if (!claimLegacyOrderWriteOwner()) return false;
   return confirmCurrentSave(reason);
+}
+
+// Default/no-control keeps the live v1 flow unchanged.  Once a separately
+// authenticated bootstrap installs active or rollback control, this guard is
+// the single v1 order-write owner fence; it never fetches control itself.
+function claimLegacyOrderWriteOwner() {
+  const cutover = globalThis.OrderHelperCutoverV2;
+  return !cutover || typeof cutover.claimWriteOwner !== 'function' || cutover.claimWriteOwner('v1');
 }
 
 // 입력 포커스 추적 (실시간 동기화 시 덮어쓰기 방지)
