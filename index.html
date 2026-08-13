@@ -1410,6 +1410,14 @@ let conversionAnalysis = {};
 let sfaStatusInitialized = false;
 let lastSfaStatusKey = '';
 let sfaLastRequestAt = 0;
+let sfaLastRequestId = '';
+let sfaStatusPollTimer = 0;
+
+function createSfaRequestId(now = Date.now()) {
+  const suffix = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+    ? globalThis.crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  return `orderhelper-${now}-${suffix}`;
+}
 let sfaCompareVisible = false;
 let sfaActiveTab = 'gap';
 let lastSfaCompareSavedAt = 0;
@@ -5056,6 +5064,8 @@ function sfaStatusLabel(state) {
     init: '대기',
     idle: '대기',
     requested: '요청됨',
+    claimed: '접수됨',
+    running: '분석중',
     detected: '감지',
     waiting_stable: '대기',
     analyzing: '분석중',
@@ -5074,7 +5084,7 @@ function sfaStatusLabel(state) {
 function sfaStatusTone(state) {
   if (state === 'ok') return 'saved';
   if (state === 'already_applied' || state === 'idle' || state === 'init') return 'idle';
-  if (state === 'requested' || state === 'detected' || state === 'waiting_stable' || state === 'analyzing') return 'saving';
+  if (state === 'requested' || state === 'claimed' || state === 'running' || state === 'detected' || state === 'waiting_stable' || state === 'analyzing') return 'saving';
   if (state === 'no_file' || state === 'missing_dir' || state === 'missing_tool' || state === 'request_error' || state === 'error') return 'error';
   return 'idle';
 }
@@ -5111,7 +5121,7 @@ function sfaStatusToastText(data) {
   const day = data?.order_date ? ` ${data.order_date.slice(5)}` : '';
   if (state === 'ok') return `엑셀분석 완료${day}`;
   if (state === 'already_applied') return `엑셀분석 이미 처리됨${day}`;
-  if (state === 'analyzing') return `엑셀분석 중${day}`;
+  if (state === 'analyzing' || state === 'claimed' || state === 'running') return `엑셀분석 중${day}`;
   if (state === 'requested') return '엑셀분석 요청됨';
   if (state === 'no_file') return '엑셀 파일 없음';
   if (state === 'error' || state === 'request_error') return '엑셀분석 오류';
@@ -7288,7 +7298,13 @@ async function loadSfaOrderStatus(silent = true) {
     const res = await fetch(`${FB_URL}${SFA_ORDER_STATUS_PATH}.json?_=` + Date.now());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    renderSfaStatus(data || { state: 'idle' });
+    const status = data || { state: 'idle' };
+    if (sfaLastRequestId && status.requestId && status.requestId !== sfaLastRequestId) return;
+    renderSfaStatus(status);
+    if (sfaLastRequestId && ['claimed', 'running', 'requested'].includes(status.state)) {
+      clearTimeout(sfaStatusPollTimer);
+      sfaStatusPollTimer = setTimeout(() => loadSfaOrderStatus(true), 1500);
+    }
   } catch (e) {
     console.warn('[sfaOrder] status failed', e);
     renderSfaStatus({ state: 'request_error', error: e.message, updated_at: new Date().toISOString() });
@@ -7301,6 +7317,7 @@ async function requestSfaOrderAnalysis() {
   if (btn) btn.disabled = true;
   const now = Date.now();
   sfaLastRequestAt = now;
+  sfaLastRequestId = createSfaRequestId(now);
   const currentSaved = await flushCurrentBeforeSfaAnalysisRequest();
   if (!currentSaved) {
     sfaLastRequestAt = 0;
@@ -7311,6 +7328,8 @@ async function requestSfaOrderAnalysis() {
   }
   const sfaAnalysisState = buildSfaAnalysisPayloadState(lastSfaCompareData);
   const payload = {
+    requestId: sfaLastRequestId,
+    idempotencyKey: sfaLastRequestId,
     source: 'OrderHelper',
     mode: 'scan_pc_downloads',
     dirHint: 'C:\\Users\\wk771\\Downloads',
@@ -7351,7 +7370,8 @@ async function requestSfaOrderAnalysis() {
     renderSfaStatus({ state: 'requested', updated_at: new Date().toISOString() });
     renderSfaComparePanel(null);
     toast('PC 다운로드 폴더 분석 요청함');
-    setTimeout(() => loadSfaOrderStatus(false), 1500);
+    clearTimeout(sfaStatusPollTimer);
+    sfaStatusPollTimer = setTimeout(() => loadSfaOrderStatus(false), 1500);
   } catch (e) {
     console.warn('[sfaOrder] request failed', e);
     renderSfaStatus({ state: 'request_error', error: e.message, updated_at: new Date().toISOString() });
