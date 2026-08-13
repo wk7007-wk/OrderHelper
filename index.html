@@ -7267,8 +7267,9 @@ function renderSfaStatus(data) {
   if (sfaLastRequestAt && ['idle', 'ok', 'already_applied'].includes(state) && (!statusMs || statusMs < sfaLastRequestAt)) {
     return;
   }
-  if (sfaLastRequestAt && statusMs >= sfaLastRequestAt && ['ok', 'already_applied', 'no_file', 'error', 'request_error'].includes(state)) {
+  if (sfaLastRequestAt && statusMs >= sfaLastRequestAt && ['ok', 'already_applied', 'failed', 'no_file', 'error', 'request_error'].includes(state)) {
     sfaLastRequestAt = 0;
+    sfaLastRequestId = '';
   }
   const day = data?.order_date ? ` ${data.order_date.slice(5)}` : '';
   const time = shortStatusTime(data?.last_analyzed_at || data?.updated_at);
@@ -7317,10 +7318,12 @@ async function requestSfaOrderAnalysis() {
   if (btn) btn.disabled = true;
   const now = Date.now();
   sfaLastRequestAt = now;
-  sfaLastRequestId = createSfaRequestId(now);
+  // Retain the identity after a transport failure so a user retry is idempotent.
+  if (!sfaLastRequestId) sfaLastRequestId = createSfaRequestId(now);
   const currentSaved = await flushCurrentBeforeSfaAnalysisRequest();
   if (!currentSaved) {
     sfaLastRequestAt = 0;
+    sfaLastRequestId = '';
     renderSfaStatus({ state: 'request_error', error: 'current save pending', updated_at: new Date().toISOString() });
     toast('최신 저장 완료 후 다시 요청해주세요');
     if (btn) btn.disabled = false;
