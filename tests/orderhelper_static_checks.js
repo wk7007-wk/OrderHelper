@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0802.0941';/, 'APP_VERSION must match the KST contrast release time');
+mustMatch(/const APP_VERSION = '0816.2142';/, 'APP_VERSION must match the KST ops-ux release time');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -475,7 +475,12 @@ mustMatch(/const SALES_REVISION_STORAGE_KEY = 'bbq_sales_revision_v1';/, 'expect
 mustMatch(/scopes\.has\('sales'\) \|\| scopes\.has\('base'\)[\s\S]*salesRevision = nextMonotonicRevision\(salesRevision\);/, 'editing expected sales must advance its field-level revision');
 mustMatch(/function mergeFirebaseSalesState\(mergedPayload, remotePayload, localPayload\)/, 'Firebase CAS merge must resolve expected sales independently from inventory');
 mustMatch(/salesRevision: Number\(salesRevision \|\| 0\)/, 'confirmed payload must carry the expected-sales revision');
-mustMatch(/inp\.addEventListener\('change', \(\) => flushAutoSave\('salesChange'\)\);/g, 'leaving an expected-sales input must confirm it for cross-device sync');
+mustNotMatch(/baseSalesInput[\s\S]{0,900}addEventListener\('change', \(\) => flushAutoSave\('salesChange'\)\)/, 'base-sales blur must remain draft-only');
+mustNotMatch(/inp\.addEventListener\('change', \(\) => flushAutoSave\('salesChange'\)\)/, 'daily-sales blur must remain draft-only');
+mustMatch(/baseSalesInput[\s\S]{0,1200}e\.key !== 'Enter'[\s\S]{0,300}flushAutoSave\('enter'\)/, 'base-sales Enter must remain the explicit remote-save boundary');
+mustMatch(/function getVisibleStockInputs\(pendingOnly = false\)/, 'stock advance must expose visible-only input collection');
+mustMatch(/function focusNextPendingStock\(\)/, 'staff HUD must jump to the next empty stock cell');
+mustMatch(/id="workProgress"/, 'staff HUD must show remaining inventory work');
 mustMatch(/applyMergedSalesPayloadIfNewer\(payload\);\s*localStorage\.setItem\('bbq_savedAt'/, 'a save that preserves newer remote sales must refresh the local device');
 mustMatch(/async function flushCurrentBeforeSfaAnalysisRequest\(\) \{\s*flushDeferredInputWork\(\);/, 'SFA request save gate must flush pending input work first');
 mustMatch(/if \(!confirmCurrentSave\('sfaAnalysis'\)\) return false;\s*return waitForSaveIdle\(\);/, 'SFA request must wait for an Enter-equivalent confirmed save');
