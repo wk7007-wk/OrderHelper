@@ -28,6 +28,13 @@
   .top button.primary { background: var(--solid-accent-bg); color: var(--solid-accent-fg); }
   .top button.green { background: #27ae60; }
   .meta { font-size: 11px; color: #888; }
+  .work-progress { display: inline-flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 8px 4px 10px; border: 1px solid rgba(249, 115, 22, 0.4); border-radius: 12px; background: rgba(249, 115, 22, 0.12); }
+  .work-progress[data-pending="0"] { border-color: rgba(34, 197, 94, 0.38); background: rgba(34, 197, 94, 0.12); }
+  .work-progress-copy { display: grid; gap: 1px; }
+  .work-progress-count { font-size: 14px; font-weight: 900; color: #ffedd5; }
+  .work-progress[data-pending="0"] .work-progress-count { color: #bbf7d0; }
+  .work-progress-meta { font-size: 11px; font-weight: 700; color: #dbe4f0; }
+  .work-progress-next { min-height: 32px; padding: 6px 10px; }
   .status-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.01em; }
   .status-pill.idle { background: rgba(59, 130, 246, 0.16); color: #bfdbfe; border: 1px solid rgba(59, 130, 246, 0.35); }
   .status-pill.dirty { background: rgba(245, 158, 11, 0.16); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.35); }
@@ -302,6 +309,27 @@
     .top > label { display: flex; align-items: center; gap: 6px; min-height: 38px; font-size: 13px !important; }
     .top #orderDays { flex: 1; min-height: 36px; margin-left: 0 !important; font-size: 15px !important; }
     .top #cycleHint { justify-self: end; color: #aebbd0; font-size: 12px; line-height: 1.35; text-align: right; }
+    .work-progress {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 48px;
+      padding: 8px 10px;
+      border: 1px solid rgba(249, 115, 22, 0.45);
+      border-radius: 12px;
+      background: rgba(249, 115, 22, 0.12);
+    }
+    .work-progress[data-pending="0"] {
+      border-color: rgba(34, 197, 94, 0.4);
+      background: rgba(34, 197, 94, 0.12);
+    }
+    .work-progress-copy { display: grid; gap: 2px; min-width: 0; }
+    .work-progress-count { font-size: 18px; font-weight: 900; line-height: 1.15; color: #ffedd5; }
+    .work-progress[data-pending="0"] .work-progress-count { color: #bbf7d0; }
+    .work-progress-meta { font-size: 11px; font-weight: 700; color: #dbe4f0; }
+    .work-progress-next { min-height: 44px; padding: 8px 12px; font-size: 14px; font-weight: 800; }
     .top button { min-height: 40px; padding: 9px 10px; font-size: 13px; }
     .top .grid-sort-control { grid-column: 1 / -1; width: 100%; order: initial; }
     .top .grid-sort-control button { flex: 1; min-height: 36px; }
@@ -560,6 +588,13 @@
     </select>
   </label>
   <span class="meta" id="cycleHint"></span>
+  <div class="work-progress" id="workProgress" data-pending="0" aria-live="polite">
+    <div class="work-progress-copy">
+      <strong class="work-progress-count" id="workProgressCount">미입력 0개</strong>
+      <span class="work-progress-meta" id="workProgressMeta">완료 0 · 숨김 0</span>
+    </div>
+    <button class="work-progress-next" id="workProgressNext" type="button" onclick="focusNextPendingStock()">다음 미입력</button>
+  </div>
   <span class="grid-sort-control" role="group" aria-label="표 정렬">
     <button id="sortInputBtn" class="active" type="button" onclick="setGridSortMode('input')">구역 입력순</button>
     <button id="sortSfaBtn" type="button" onclick="setGridSortMode('sfa')" title="매칭 필요 → 발주량 있음 → 발주 없음 순서">SFA 발주순</button>
@@ -681,7 +716,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0802.0941';
+const APP_VERSION = '0816.2142';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -7498,10 +7533,72 @@ function shouldFallbackAdvanceFromChange(target, currentId) {
   return true;
 }
 
+function isActionableStockInput(inp) {
+  const row = inp?.closest?.('tr');
+  return Boolean(row && !row.classList.contains('row-hidden') && inp.dataset?.field === 'stock');
+}
+
+function collectStockWorkStats() {
+  let pending = 0;
+  let checked = 0;
+  let hidden = 0;
+  entries.forEach(entry => {
+    const item = orderItemByName(entry.name);
+    if (!item) return;
+    if (isItemHidden(item.name)) {
+      hidden += 1;
+      return;
+    }
+    if (isStockChecked(entry)) checked += 1;
+    else pending += 1;
+  });
+  return { pending, checked, hidden };
+}
+
+function refreshWorkProgress() {
+  const stats = collectStockWorkStats();
+  const bar = document.getElementById('workProgress');
+  const countEl = document.getElementById('workProgressCount');
+  const metaEl = document.getElementById('workProgressMeta');
+  const nextBtn = document.getElementById('workProgressNext');
+  if (bar) bar.dataset.pending = String(stats.pending);
+  if (countEl) countEl.textContent = stats.pending ? `미입력 ${stats.pending}개` : '재고 입력 완료';
+  if (metaEl) metaEl.textContent = `완료 ${stats.checked} · 숨김 ${stats.hidden}`;
+  if (nextBtn) nextBtn.disabled = stats.pending === 0;
+  return stats;
+}
+
+function getVisibleStockInputs(pendingOnly = false) {
+  const inputs = Array.from(document.querySelectorAll('input.cell[data-field="stock"]')).filter(isActionableStockInput);
+  if (!pendingOnly) return inputs;
+  const pending = inputs.filter(inp => !inp.closest('tr')?.classList.contains('row-checked'));
+  return pending.length ? pending : [];
+}
+
 function getNextStockInputId(currentId) {
-  const stockInputs = Array.from(document.querySelectorAll('input.cell[data-field="stock"]'));
+  const pending = getVisibleStockInputs(true);
+  if (pending.length) {
+    const pendingIdx = pending.findIndex(inp => inp.dataset.id === currentId);
+    if (pendingIdx === -1) return pending[0].dataset.id || null;
+    return pending[pendingIdx + 1]?.dataset.id || pending[0].dataset.id || null;
+  }
+  const stockInputs = getVisibleStockInputs(false);
   const idx = stockInputs.findIndex(inp => inp.dataset.id === currentId);
   return idx >= 0 ? stockInputs[idx + 1]?.dataset.id || null : null;
+}
+
+function focusNextPendingStock() {
+  const currentId = currentStockFocusId();
+  const nextId = getNextStockInputId(currentId);
+  if (!nextId) {
+    toast('미입력 재고가 없습니다.');
+    return false;
+  }
+  const moved = focusStockInputById(nextId);
+  if (moved) {
+    document.querySelector(`input.cell[data-field="stock"][data-id="${nextId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  return moved;
 }
 
 function focusStockInputById(id) {
@@ -8381,6 +8478,7 @@ function refreshNeedBadge(days = parseInt(document.getElementById('orderDays')?.
   orderItemList().forEach(it => { if (calcG(it, days) > 0) cnt++; });
   document.getElementById('badge').textContent = '발주 ' + cnt + '개';
   document.getElementById('badge').classList.toggle('zero', cnt === 0);
+  refreshWorkProgress();
 }
 
 function updateGForName(name, resolvedRowsByItemKey = null) {
@@ -8528,7 +8626,8 @@ function bindBaseSalesInput() {
     baseSales = Number.isFinite(n) && n > 0 ? n : null;
     scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'base' });
   });
-  inp.addEventListener('change', () => flushAutoSave('salesChange'));
+  // change/blur is still draft-only. Mobile keyboards often emit change
+  // without Enter; only the explicit Enter path confirms a remote save.
   inp.addEventListener('keydown', e => {
     if (e.isComposing || e.keyCode === 229 || e.key !== 'Enter') return;
     e.preventDefault();
@@ -8564,7 +8663,7 @@ function renderSalesInputs() {
       dailySales[parseInt(e.target.dataset.idx)] = num;
       scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'sales' });
     });
-    inp.addEventListener('change', () => flushAutoSave('salesChange'));
+    // Keep change/blur local-only; Enter is the explicit confirmation boundary.
     inp.addEventListener('keydown', e => {
       if (e.isComposing || e.keyCode === 229 || e.key !== 'Enter') return;
       e.preventDefault();
