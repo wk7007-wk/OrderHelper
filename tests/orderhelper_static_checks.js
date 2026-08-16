@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0817.0448';/, 'APP_VERSION must match the KST sort-then-focus stock-input release time');
+mustMatch(/const APP_VERSION = '0817.0504';/, 'APP_VERSION must match the KST idle derived-calc release time');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -446,7 +446,9 @@ mustMatch(/<span class="need-output-value">\$\{isNeed \? displayDecimal\(g\) : '
 mustMatch(/\$\{outputOrderDisplay\(item\.name, orderText\)\}\$\{renderOrderAnalysisSpan\(item, g\)\}\$\{renderOrderAmountSpan\(item, g, resolvedOrderRow\)\}/, 'same row must show recommended order, analysis, and mapped amount evidence');
 mustMatch(/document\.querySelectorAll\(`tr\[data-item-key="\$\{itemKey\}"\]`\)/, 'live calculation refresh must patch only rows with the same stable item key');
 mustMatch(/function scheduleDeferredInputWork\(options = \{\}\)/, 'input edits must use deferred calculation scheduler');
-mustMatch(/const resolvedRows = resolveUnifiedOrderRows\(lastSfaCompareData, null, days\);\s*const resolvedRowsByItemKey = new Map\(resolvedRows\.map\(row => \[row\.itemKey, row\]\)\);\s*names\.forEach\(name => updateDerivedOrderForName\(name, resolvedRowsByItemKey\)\);\s*renderOrderAmountSummary\(resolvedRows\);/, 'one deferred frame must share one resolver map across all dirty names and the total');
+mustMatch(/const resolvedRows = resolveUnifiedOrderRows\(lastSfaCompareData, null, job\.days\);\s*const resolvedRowsByItemKey = new Map\(resolvedRows\.map\(row => \[row\.itemKey, row\]\)\);/, 'one deferred job must share one resolver map across dirty names');
+mustMatch(/updateDerivedOrderForName\(name, job\.resolvedRowsByItemKey\)/, 'derived paint must reuse the shared resolver map');
+mustMatch(/if \(job\.resolvedRows\) renderOrderAmountSummary\(job\.resolvedRows\);/, 'amount summary must wait for the finished resolver batch');
 mustMatch(/let deferredInputRevision = 0;/, 'deferred input work must track a latest revision token');
 mustMatch(/scopes\.has\('entries'\)\) localStorage\.setItem\('bbq_entries', JSON\.stringify\(entries\)\);[\s\S]*localStorage\.setItem\(PENDING_SYNC_REVISION_STORAGE_KEY, String\(stateRevision\)\);/, 'input events must persist the changed durable draft before deferred work');
 mustNotMatch(/markDeferredInputDirty\([\s\S]*?scheduleAutoSave\(reason\)/, 'draft input must not schedule a remote save');
@@ -467,10 +469,13 @@ mustMatch(/function retryConfirmedRemotePending\(reason = 'recovery'\)/, 'durabl
 mustMatch(/window\.addEventListener\('online', \(\) => retryConfirmedRemotePending\('online'\)\);/, 'online recovery must retry only a confirmed save');
 mustMatch(/setOutputStockTotalByItemKey\(itemKey, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true, draftScope: 'entries' \}\);/, 'output stock edits must use the same stable item key and persist only the changed draft scope');
 mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], draftScope: 'overrides' \}\);/, 'output buffer/daily edits must persist only override drafts');
-mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*updateDerivedOrderForName\(ent\.name\);\s*scheduleDeferredInputWork\(\{ updateBadge: true, draftScope: 'entries' \}\);/, 'stock input must patch its row immediately without scheduling 90-day analysis per digit');
+mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*scheduleDeferredInputWork\(\{ names: \[ent\.name\], updateBadge: true, draftScope: 'entries' \}\);/, 'stock input must persist draft only and leave derived paint to idle work');
 mustMatch(/function logStockEvent\(e, phase\) \{\s*if \(!STOCK_FLOW_DEBUG\) return;/, 'stock key debug persistence must be disabled outside explicit diagnostics');
-mustMatch(/function commitStockInputAfterFocus\(target, reason\)[\s\S]*persistDraft: false,[\s\S]*flushAutoSave\(reason\);/, 'stock completion must move focus before heavy analysis and confirmed save');
-mustMatch(/function flushAutoSave\(reason\) \{\s*flushDeferredInputWork\(\);\s*if \(!reason \|\| reason === 'auto'\) return false;\s*renderZoneOptions\(entries\);\s*return saveToFB\(reason\);/, 'flushAutoSave must reject draft/auto calls and persist scheduled input before explicit commit');
+mustMatch(/function commitStockInputAfterFocus\(target, reason\)[\s\S]*persistDraft: false,[\s\S]*flushAutoSave\(reason\);/, 'stock completion must move focus before confirmed save');
+mustMatch(/function flushAutoSave\(reason\) \{\s*if \(!reason \|\| reason === 'auto'\) return false;\s*renderZoneOptions\(entries\);\s*return saveToFB\(reason\);/, 'flushAutoSave must reject draft/auto calls and must not force derived paint');
+mustMatch(/const CALC_IDLE_TIMEOUT_MS = 180;/, 'derived calculation must wait for an idle slice');
+mustMatch(/function scheduleIdleTask\(fn\)/, 'derived calculation must use idle time slices');
+mustMatch(/content: '계산 중';/, 'unstable derived values must show a loading label instead of a partial result');
 mustMatch(/const SALES_REVISION_STORAGE_KEY = 'bbq_sales_revision_v1';/, 'expected sales needs its own cross-device revision');
 mustMatch(/scopes\.has\('sales'\) \|\| scopes\.has\('base'\)[\s\S]*salesRevision = nextMonotonicRevision\(salesRevision\);/, 'editing expected sales must advance its field-level revision');
 mustMatch(/function mergeFirebaseSalesState\(mergedPayload, remotePayload, localPayload\)/, 'Firebase CAS merge must resolve expected sales independently from inventory');
@@ -872,6 +877,8 @@ this.__OrderHelperApi = {
     autoSaveTimer = null;
     if (deferredInputWorkHandle) cancelFrameTask(deferredInputWorkHandle);
     deferredInputWorkHandle = null;
+    derivedPaintJob = null;
+    clearDerivedResultsPending();
   },
   shouldApplyIncomingCurrent,
   setUnitCorrectionsForCheck(value) { orderUnitCorrections = sanitizeOrderUnitCorrections(value); },
@@ -944,7 +951,6 @@ this.__OrderHelperApi = {
   },
   gridPerfForCheck() { return { ...gridPerf, deferredRevision: deferredInputRevision }; },
   scheduleGridInputForCheck(name) {
-    updateDerivedOrderForName(name);
     scheduleDeferredInputWork({ names: [name] });
   },
   flushGridInputForCheck() {

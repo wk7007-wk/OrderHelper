@@ -20,10 +20,22 @@
   body { margin: 0; font-family: -apple-system, 'Noto Sans KR', sans-serif; background: #1a1a2e; color: #e0e0e0; font-size: 13px; }
   .top { position: sticky; top: 0; z-index: 10; background: #16213e; border-bottom: 1px solid #0f3460; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .top h1 { font-size: 16px; margin: 0; }
-  .badge { background: var(--solid-accent-bg); color: var(--solid-accent-fg); padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }
+  .badge { position: relative; background: var(--solid-accent-bg); color: var(--solid-accent-fg); padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }
   .badge.zero { background: #27ae60; }
-  .order-total-summary { display: inline-flex; align-items: center; min-height: 24px; padding: 3px 9px; border-radius: 12px; border: 1px solid rgba(56, 189, 248, 0.38); background: rgba(14, 165, 233, 0.13); color: #bae6fd; font-size: 11px; font-weight: 800; }
+  .order-total-summary { position: relative; display: inline-flex; align-items: center; min-height: 24px; padding: 3px 9px; border-radius: 12px; border: 1px solid rgba(56, 189, 248, 0.38); background: rgba(14, 165, 233, 0.13); color: #bae6fd; font-size: 11px; font-weight: 800; }
   .order-total-summary.unresolved { border-color: rgba(249, 115, 22, 0.45); background: rgba(249, 115, 22, 0.13); color: #fed7aa; }
+  .app-shell.results-pending #badge,
+  .app-shell.results-pending #orderAmountSummary { color: transparent; }
+  .app-shell.results-pending #badge::after,
+  .app-shell.results-pending #orderAmountSummary::after { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #dbeafe; content: '계산 중'; }
+  .app-shell.results-pending .need-output-value,
+  .app-shell.results-pending .output-order-value,
+  .app-shell.results-pending .order-analysis,
+  .app-shell.results-pending .order-amount,
+  tr.calc-pending .need-output-value,
+  tr.calc-pending .output-order-value,
+  tr.calc-pending .order-analysis,
+  tr.calc-pending .order-amount { visibility: hidden; }
   .top button { background: #0f3460; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
   .top button.primary { background: var(--solid-accent-bg); color: var(--solid-accent-fg); }
   .top button.green { background: #27ae60; }
@@ -716,7 +728,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0817.0448';
+const APP_VERSION = '0817.0504';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -1432,6 +1444,10 @@ let zoneOrder = [];
 const ZONE_ORDER_STORAGE_KEY = 'bbq_zone_order_v1';
 let lastGridFocus = null;
 const gridPerf = { fullRenders: 0, keyedRowPatches: 0, deferredRuns: 0, scheduledFrames: 0, resolverRuns: 0 };
+const CALC_IDLE_TIMEOUT_MS = 180;
+const CALC_APPLY_SLICE = 8;
+let uiBusyUntil = 0;
+let derivedPaintJob = null;
 let saveLogs = [];
 let debugLogs = [];
 let outputOrder = [];
@@ -8052,10 +8068,54 @@ function scheduleFrameTask(fn) {
   return { kind: 'timer', id: setTimeout(fn, 0) };
 }
 
+function scheduleIdleTask(fn) {
+  if (typeof requestIdleCallback === 'function') {
+    return { kind: 'idle', id: requestIdleCallback(deadline => fn(deadline), { timeout: CALC_IDLE_TIMEOUT_MS }) };
+  }
+  return { kind: 'timer', id: setTimeout(() => fn({ timeRemaining() { return 0; }, didTimeout: true }), 0) };
+}
+
 function cancelFrameTask(handle) {
   if (!handle) return;
-  if (handle.kind === 'raf' && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(handle.id);
+  if (handle.kind === 'idle' && typeof cancelIdleCallback === 'function') cancelIdleCallback(handle.id);
+  else if (handle.kind === 'raf' && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(handle.id);
   else clearTimeout(handle.id);
+}
+
+function markUiBusy() {
+  uiBusyUntil = Date.now() + 80;
+}
+
+function derivedCalcShouldYield(deadline) {
+  if (Date.now() < uiBusyUntil) return true;
+  if (deadline && typeof deadline.timeRemaining === 'function') return deadline.timeRemaining() < 1 && !deadline.didTimeout;
+  return false;
+}
+
+function clearDerivedResultsPending() {
+  const shell = document.querySelector('.app-shell');
+  if (shell) {
+    shell.classList.remove('results-pending');
+    shell.removeAttribute('aria-busy');
+  }
+  document.querySelectorAll('tr.calc-pending').forEach(row => row.classList.remove('calc-pending'));
+}
+
+function markDerivedResultsPending(allRows, names) {
+  clearDerivedResultsPending();
+  const shell = document.querySelector('.app-shell');
+  if (allRows) {
+    if (shell) {
+      shell.classList.add('results-pending');
+      shell.setAttribute('aria-busy', 'true');
+    }
+    return;
+  }
+  (names || []).forEach(name => {
+    const itemKey = itemKeyForName(name);
+    document.querySelectorAll(`tr[data-item-key="${itemKey}"]`).forEach(row => row.classList.add('calc-pending'));
+  });
+  if (shell && (names || []).length) shell.setAttribute('aria-busy', 'true');
 }
 
 function markDeferredInputDirty(reason = 'auto', draftScope = 'all') {
@@ -8092,25 +8152,89 @@ function updateDerivedOrderForName(name, resolvedRowsByItemKey = null) {
   updateGForName(name, resolvedRowsByItemKey);
 }
 
-function runDeferredInputWork() {
-  deferredInputWorkHandle = null;
-  if (!deferredInputWork.dirty) return;
-  gridPerf.deferredRuns += 1;
-  const revision = deferredInputRevision;
-  const work = deferredInputWork;
-  deferredInputWork = emptyDeferredInputWork();
-  if (revision !== deferredInputRevision) return;
-  if (work.updateSales) updateSalesAvg();
-  if (work.recomputeUsage) recomputeUsageAnalysis();
+function startDerivedPaintJob(work, revision) {
   const names = work.allNames ? orderItemList().map(item => item.name) : Array.from(work.names);
-  const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
-  if (work.updateBadge) refreshNeedBadge(days);
-  if (work.recomputeUsage) names.forEach(name => updateDailyAnalysisForName(name));
-  if (!names.length) return;
-  const resolvedRows = resolveUnifiedOrderRows(lastSfaCompareData, null, days);
-  const resolvedRowsByItemKey = new Map(resolvedRows.map(row => [row.itemKey, row]));
-  names.forEach(name => updateDerivedOrderForName(name, resolvedRowsByItemKey));
-  renderOrderAmountSummary(resolvedRows);
+  return {
+    revision,
+    names,
+    days: parseInt(document.getElementById('orderDays')?.value || recommendedDays()),
+    updateSales: work.updateSales,
+    updateBadge: work.updateBadge,
+    recomputeUsage: work.recomputeUsage,
+    allNames: work.allNames,
+    phase: 'prepare',
+    applyIndex: 0,
+    resolvedRows: null,
+    resolvedRowsByItemKey: null
+  };
+}
+
+function finishDerivedPaintJob(job) {
+  if (job.updateSales) updateSalesAvg();
+  if (job.updateBadge) refreshNeedBadge(job.days);
+  if (job.recomputeUsage) job.names.forEach(name => updateDailyAnalysisForName(name));
+  if (job.resolvedRows) renderOrderAmountSummary(job.resolvedRows);
+  clearDerivedResultsPending();
+  derivedPaintJob = null;
+}
+
+function continueDerivedPaint(deadline) {
+  deferredInputWorkHandle = null;
+  runDeferredInputWork(deadline || { timeRemaining() { return 0; }, didTimeout: true });
+}
+
+function runDeferredInputWork(deadline = null) {
+  const sync = deadline == null;
+  if (!derivedPaintJob) {
+    if (!deferredInputWork.dirty) return;
+    gridPerf.deferredRuns += 1;
+    const revision = deferredInputRevision;
+    const work = deferredInputWork;
+    deferredInputWork = emptyDeferredInputWork();
+    if (revision !== deferredInputRevision) return;
+    derivedPaintJob = startDerivedPaintJob(work, revision);
+  }
+  const job = derivedPaintJob;
+  if (!sync && job.revision !== deferredInputRevision) {
+    derivedPaintJob = null;
+    return;
+  }
+  if (job.phase === 'prepare') {
+    if (job.recomputeUsage) recomputeUsageAnalysis();
+    job.phase = job.names.length ? 'resolve' : 'finish';
+    if (!sync && job.phase !== 'finish' && derivedCalcShouldYield(deadline)) {
+      deferredInputWorkHandle = scheduleIdleTask(continueDerivedPaint);
+      return;
+    }
+  }
+  if (job.phase === 'resolve') {
+    const resolvedRows = resolveUnifiedOrderRows(lastSfaCompareData, null, job.days);
+    const resolvedRowsByItemKey = new Map(resolvedRows.map(row => [row.itemKey, row]));
+    job.resolvedRows = resolvedRows;
+    job.resolvedRowsByItemKey = resolvedRowsByItemKey;
+    job.phase = 'apply';
+    if (!sync && derivedCalcShouldYield(deadline)) {
+      deferredInputWorkHandle = scheduleIdleTask(continueDerivedPaint);
+      return;
+    }
+  }
+  if (job.phase === 'apply') {
+    while (job.applyIndex < job.names.length) {
+      const name = job.names[job.applyIndex];
+      updateDerivedOrderForName(name, job.resolvedRowsByItemKey);
+      job.applyIndex += 1;
+      if (!sync && job.applyIndex % CALC_APPLY_SLICE === 0 && derivedCalcShouldYield(deadline)) {
+        deferredInputWorkHandle = scheduleIdleTask(continueDerivedPaint);
+        return;
+      }
+    }
+    job.phase = 'finish';
+  }
+  if (job.phase === 'finish') finishDerivedPaintJob(job);
+  if (deferredInputWork.dirty && !derivedPaintJob) {
+    if (sync) runDeferredInputWork(null);
+    else deferredInputWorkHandle = scheduleIdleTask(continueDerivedPaint);
+  }
 }
 
 function scheduleDeferredInputWork(options = {}) {
@@ -8127,19 +8251,20 @@ function scheduleDeferredInputWork(options = {}) {
   if (options.persistDraft !== false) {
     markDeferredInputDirty(options.saveReason || deferredInputWork.saveReason || 'auto', options.draftScope || 'all');
   }
+  derivedPaintJob = null;
+  markDerivedResultsPending(deferredInputWork.allNames, deferredInputWork.names);
   if (deferredInputWorkHandle) return;
   gridPerf.scheduledFrames += 1;
-  const handle = scheduleFrameTask(runDeferredInputWork);
-  deferredInputWorkHandle = handle;
+  deferredInputWorkHandle = scheduleIdleTask(continueDerivedPaint);
 }
 
 function flushDeferredInputWork() {
-  if (!deferredInputWork.dirty) return;
   if (deferredInputWorkHandle) {
     cancelFrameTask(deferredInputWorkHandle);
     deferredInputWorkHandle = null;
   }
-  runDeferredInputWork();
+  if (!deferredInputWork.dirty && !derivedPaintJob) return;
+  runDeferredInputWork(null);
 }
 
 function commitStockInputAfterFocus(target, reason) {
@@ -8173,8 +8298,7 @@ function bindCellInputs() {
         const stock = v === '' ? null : Number(v);
         ent.stock = stock == null || !Number.isFinite(stock) ? null : stock;
         markInventoryMutation();
-        updateDerivedOrderForName(ent.name);
-        scheduleDeferredInputWork({ updateBadge: true, draftScope: 'entries' });
+        scheduleDeferredInputWork({ names: [ent.name], updateBadge: true, draftScope: 'entries' });
       } else if (f === 'zone') {
         ent.zone = v;
         markInventoryMutation();
@@ -8189,8 +8313,7 @@ function bindCellInputs() {
         if (num === null) delete overrides[n][f];
         else overrides[n][f] = num;
         if (Object.keys(overrides[n]).length === 0) delete overrides[n];
-        updateDerivedOrderForName(n);
-        scheduleDeferredInputWork({ updateBadge: true, draftScope: 'overrides' });
+        scheduleDeferredInputWork({ names: [n], updateBadge: true, draftScope: 'overrides' });
       }
     });
     inp.addEventListener('change', e => {
@@ -8767,7 +8890,6 @@ function hasConfirmedSaveQueue() {
 }
 
 function buildConfirmedSaveCommit(reason = 'enter') {
-  flushDeferredInputWork();
   migrateRuntimeItemNames();
   const now = Date.now();
   const revision = Number(stateRevision || 0);
@@ -9308,7 +9430,6 @@ function scheduleAutoSave() {
   return false;
 }
 function flushAutoSave(reason) {
-  flushDeferredInputWork();
   if (!reason || reason === 'auto') return false;
   renderZoneOptions(entries);
   return saveToFB(reason);
@@ -9335,8 +9456,10 @@ function retryConfirmedRemotePending(reason = 'recovery') {
   return true;
 }
 
+document.addEventListener('scroll', markUiBusy, { passive: true, capture: true });
+document.addEventListener('touchmove', markUiBusy, { passive: true, capture: true });
 document.addEventListener('visibilitychange', () => {
-  flushDeferredInputWork();
+  if (document.visibilityState === 'hidden') flushDeferredInputWork();
   retryConfirmedRemotePending(document.visibilityState === 'hidden' ? 'visibility' : 'visible');
 });
 window.addEventListener('online', () => retryConfirmedRemotePending('online'));
