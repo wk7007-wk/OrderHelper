@@ -716,7 +716,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0816.2151';
+const APP_VERSION = '0816.2212';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -4483,13 +4483,14 @@ function updateOutputOrderForName(name, resolvedRowsByItemKey = null) {
     output.textContent = isNeed ? displayOrderQty(item, days) : '';
     const qtyCell = output.closest('td.order-qty');
     if (qtyCell) qtyCell.classList.toggle('pos', isNeed);
+    if (!resolvedRowsByItemKey) return;
     const wrap = output.closest('.order-cell');
     const marker = wrap?.querySelector('.order-analysis');
     if (marker) marker.outerHTML = renderOrderAnalysisSpan(item, g);
     const amount = wrap?.querySelector('.order-amount');
     if (amount && resolvedRowsByItemKey) amount.outerHTML = renderOrderAmountSpan(item, g, resolvedRow);
   });
-  if (gridSortMode === 'sfa') {
+  if (gridSortMode === 'sfa' && resolvedRowsByItemKey) {
     const rows = Array.from(document.querySelectorAll('#tbody tr[data-item-key]')).filter(row => row.dataset.itemKey === itemKey);
     const matchNeeded = rows.some(row => row.classList.contains('sfa-match-needed'));
     const state = isItemHidden(item.name)
@@ -7524,13 +7525,7 @@ function shouldFallbackAdvanceFromChange(target, currentId) {
   const active = document.activeElement;
   if (!active || active === document.body) return true;
   if (active === target) return true;
-  const nextStockId = getNextStockInputId(currentId);
-  const activeField = active?.dataset?.field || '';
-  const activeId = active?.dataset?.id || '';
-  if (activeField === 'stock' && activeId === nextStockId) return false;
-  console.info('[stock-key]', `change correction current=${currentId} active=${activeId}/${activeField} nextStock=${nextStockId || '-'}`);
-  pushDebugLog(`보정 current=${currentId} active=${activeId}/${activeField || '-'} nextStock=${nextStockId || '-'}`, 'warn');
-  return true;
+  return false;
 }
 
 function isActionableStockInput(inp) {
@@ -7605,6 +7600,7 @@ function focusStockInputById(id) {
   if (!id) return false;
   const target = document.querySelector(`input.cell[data-field="stock"][data-id="${id}"]`);
   if (!target) return false;
+  if (document.activeElement === target) return true;
   target.focus();
   target.select();
   return true;
@@ -7660,6 +7656,31 @@ function reorderRenderedGridRows() {
   return true;
 }
 
+let pendingGridReorderHandle = null;
+
+function cancelIdleGridReorder() {
+  if (!pendingGridReorderHandle) return;
+  const handle = pendingGridReorderHandle;
+  pendingGridReorderHandle = null;
+  if (handle.kind === 'idle' && typeof cancelIdleCallback === 'function') cancelIdleCallback(handle.id);
+  else cancelFrameTask(handle);
+}
+
+function scheduleIdleGridReorder() {
+  if (gridSortMode !== 'input' || pendingGridReorderHandle) return;
+  const run = () => {
+    pendingGridReorderHandle = null;
+    if (snoozeDialogOpen()) return;
+    reorderRenderedGridRows();
+    refreshWorkProgress();
+  };
+  if (typeof requestIdleCallback === 'function') {
+    pendingGridReorderHandle = { kind: 'idle', id: requestIdleCallback(run, { timeout: 400 }) };
+    return;
+  }
+  pendingGridReorderHandle = scheduleFrameTask(run);
+}
+
 function renderAndFocusStock(nextId, source, currentId) {
   const focusNext = () => {
     const moved = focusStockInputById(nextId);
@@ -7668,14 +7689,9 @@ function renderAndFocusStock(nextId, source, currentId) {
     pushDebugLog('입력이동 ' + msg, moved ? 'sync' : 'warn');
     return moved;
   };
-  if (gridSortMode === 'input') {
-    // Confirmed completion only reorders existing rows. Rebuilding tbody here
-    // blurs the edited input and can emit a second stale change event.
-    if (!reorderRenderedGridRows()) render({ allowDuringGridEdit: true });
-    queueMicrotask(focusNext);
-    return Boolean(nextId);
-  }
-  return focusNext();
+  focusNext();
+  if (gridSortMode === 'input') scheduleIdleGridReorder();
+  return Boolean(nextId);
 }
 
 function sortStockRowsAndKeepFlow(currentId, source = 'sort') {
@@ -8157,16 +8173,15 @@ function flushDeferredInputWork() {
 function commitStockInputAfterFocus(target, reason) {
   const entry = entries.find(row => row.id === target?.dataset?.id);
   const name = entry?.name || '';
-  setTimeout(() => {
-    scheduleDeferredInputWork({
-      names: name ? [name] : [],
-      recomputeUsage: true,
-      updateBadge: true,
-      persistDraft: false,
-      saveReason: reason
-    });
-    flushAutoSave(reason);
-  }, 0);
+  if (name) pendingConfirmedCalcNames.add(name);
+  pendingConfirmedCalcUsage = true;
+  scheduleDeferredInputWork({
+    names: name ? [name] : [],
+    updateBadge: true,
+    persistDraft: false,
+    saveReason: reason
+  });
+  scheduleConfirmedSave(reason);
 }
 
 function bindCellInputs() {
@@ -8186,6 +8201,7 @@ function bindCellInputs() {
         ent.stock = stock == null || !Number.isFinite(stock) ? null : stock;
         markInventoryMutation();
         updateDerivedOrderForName(ent.name);
+        refreshWorkProgress();
         scheduleDeferredInputWork({ updateBadge: true, draftScope: 'entries' });
       } else if (f === 'zone') {
         ent.zone = v;
@@ -8365,6 +8381,7 @@ function render(options = {}) {
     return false;
   }
   pendingGridRender = false;
+  cancelIdleGridReorder();
   gridPerf.fullRenders += 1;
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
@@ -9315,11 +9332,48 @@ async function autoLoadFromFB(silent) {
 }
 
 // 타이핑은 local draft만 저장한다. remote commit은 Enter/명시 액션만 수행한다.
+const CONFIRMED_SAVE_DEBOUNCE_MS = 280;
 let autoSaveTimer = null;
+let confirmedSaveTimer = null;
+let confirmedSaveReason = '';
+const pendingConfirmedCalcNames = new Set();
+let pendingConfirmedCalcUsage = false;
+
 function scheduleAutoSave() {
   return false;
 }
+
+function scheduleConfirmedSave(reason) {
+  if (!reason || reason === 'auto') return false;
+  confirmedSaveReason = reason;
+  if (confirmedSaveTimer) clearTimeout(confirmedSaveTimer);
+  confirmedSaveTimer = setTimeout(() => {
+    confirmedSaveTimer = null;
+    flushAutoSave(confirmedSaveReason);
+  }, CONFIRMED_SAVE_DEBOUNCE_MS);
+  return true;
+}
+
+function flushScheduledConfirmedSave() {
+  if (!confirmedSaveTimer && !pendingConfirmedCalcUsage && !pendingConfirmedCalcNames.size) return false;
+  if (confirmedSaveTimer) {
+    clearTimeout(confirmedSaveTimer);
+    confirmedSaveTimer = null;
+  }
+  return flushAutoSave(confirmedSaveReason || 'enter');
+}
+
 function flushAutoSave(reason) {
+  if (pendingConfirmedCalcUsage || pendingConfirmedCalcNames.size) {
+    deferredInputWork.dirty = true;
+    deferredInputWork.recomputeUsage = deferredInputWork.recomputeUsage || pendingConfirmedCalcUsage;
+    deferredInputWork.updateBadge = true;
+    pendingConfirmedCalcNames.forEach(name => {
+      if (name) deferredInputWork.names.add(name);
+    });
+    pendingConfirmedCalcNames.clear();
+    pendingConfirmedCalcUsage = false;
+  }
   flushDeferredInputWork();
   if (!reason || reason === 'auto') return false;
   renderZoneOptions(entries);
@@ -9348,7 +9402,8 @@ function retryConfirmedRemotePending(reason = 'recovery') {
 }
 
 document.addEventListener('visibilitychange', () => {
-  flushDeferredInputWork();
+  if (document.visibilityState === 'hidden') flushScheduledConfirmedSave();
+  else flushDeferredInputWork();
   retryConfirmedRemotePending(document.visibilityState === 'hidden' ? 'visibility' : 'visible');
 });
 window.addEventListener('online', () => retryConfirmedRemotePending('online'));
@@ -9357,7 +9412,7 @@ window.addEventListener('storage', event => {
   confirmedSaveQueueBlocked = false;
   retryConfirmedRemotePending('storage');
 });
-window.addEventListener('pagehide', () => flushDeferredInputWork());
+window.addEventListener('pagehide', () => flushScheduledConfirmedSave());
 
 function handleOrderDaysChange() {
   setOrderDaysValue(document.getElementById('orderDays')?.value);

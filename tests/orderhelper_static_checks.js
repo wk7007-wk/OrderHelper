@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0816.2151';/, 'APP_VERSION must match the KST SFA original-sort release time');
+mustMatch(/const APP_VERSION = '0816.2212';/, 'APP_VERSION must match the KST no-jank stock-input release time');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -467,10 +467,12 @@ mustMatch(/function retryConfirmedRemotePending\(reason = 'recovery'\)/, 'durabl
 mustMatch(/window\.addEventListener\('online', \(\) => retryConfirmedRemotePending\('online'\)\);/, 'online recovery must retry only a confirmed save');
 mustMatch(/setOutputStockTotalByItemKey\(itemKey, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], recomputeUsage: true, draftScope: 'entries' \}\);/, 'output stock edits must use the same stable item key and persist only the changed draft scope');
 mustMatch(/setOverrideValue\(name, field, value\);\s*scheduleDeferredInputWork\(\{ names: \[name\], draftScope: 'overrides' \}\);/, 'output buffer/daily edits must persist only override drafts');
-mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*updateDerivedOrderForName\(ent\.name\);\s*scheduleDeferredInputWork\(\{ updateBadge: true, draftScope: 'entries' \}\);/, 'stock input must patch its row immediately without scheduling 90-day analysis per digit');
+mustMatch(/ent\.stock = stock == null \|\| !Number\.isFinite\(stock\) \? null : stock;\s*markInventoryMutation\(\);\s*updateDerivedOrderForName\(ent\.name\);\s*refreshWorkProgress\(\);\s*scheduleDeferredInputWork\(\{ updateBadge: true, draftScope: 'entries' \}\);/, 'stock input must patch its row immediately without scheduling 90-day analysis per digit');
 mustMatch(/function logStockEvent\(e, phase\) \{\s*if \(!STOCK_FLOW_DEBUG\) return;/, 'stock key debug persistence must be disabled outside explicit diagnostics');
-mustMatch(/function commitStockInputAfterFocus\(target, reason\)[\s\S]*persistDraft: false,[\s\S]*flushAutoSave\(reason\);/, 'stock completion must move focus before heavy analysis and confirmed save');
-mustMatch(/function flushAutoSave\(reason\) \{\s*flushDeferredInputWork\(\);\s*if \(!reason \|\| reason === 'auto'\) return false;\s*renderZoneOptions\(entries\);\s*return saveToFB\(reason\);/, 'flushAutoSave must reject draft/auto calls and persist scheduled input before explicit commit');
+mustMatch(/function commitStockInputAfterFocus\(target, reason\)[\s\S]*persistDraft: false,[\s\S]*scheduleConfirmedSave\(reason\);/, 'stock completion must move focus before heavy analysis and debounce confirmed save');
+mustMatch(/const CONFIRMED_SAVE_DEBOUNCE_MS = 280;/, 'confirmed save debounce must stay under one mobile keystroke interval');
+mustMatch(/function scheduleConfirmedSave\(reason\)/, 'rapid Enter/Next must share one confirmed save');
+mustMatch(/function flushAutoSave\(reason\) \{[\s\S]*flushDeferredInputWork\(\);\s*if \(!reason \|\| reason === 'auto'\) return false;\s*renderZoneOptions\(entries\);\s*return saveToFB\(reason\);/, 'flushAutoSave must reject draft/auto calls and persist scheduled input before explicit commit');
 mustMatch(/const SALES_REVISION_STORAGE_KEY = 'bbq_sales_revision_v1';/, 'expected sales needs its own cross-device revision');
 mustMatch(/scopes\.has\('sales'\) \|\| scopes\.has\('base'\)[\s\S]*salesRevision = nextMonotonicRevision\(salesRevision\);/, 'editing expected sales must advance its field-level revision');
 mustMatch(/function mergeFirebaseSalesState\(mergedPayload, remotePayload, localPayload\)/, 'Firebase CAS merge must resolve expected sales independently from inventory');
@@ -571,8 +573,8 @@ mustMatch(/activeGridCellInput\(\) \|\| snoozeDialogOpen\(\)/, 'background rende
 mustNotMatch(/prompt\(/, 'snooze must not use browser prompt');
 mustMatch(/function shouldFallbackAdvanceFromChange\(target, currentId\)/, 'change fallback guard missing');
 mustMatch(/if \(active === target\) return true;/, 'mobile change while focused must advance');
-mustMatch(/activeField === 'stock' && activeId === nextStockId/, 'already-correct next stock focus must not be overridden');
-mustMatch(/change correction current=\$\{currentId\}/, 'wrong active focus must be logged');
+mustMatch(/function shouldFallbackAdvanceFromChange\(target, currentId\)[\s\S]*if \(active === target\) return true;\s*return false;/, 'already-moved caret must not be stolen by change');
+mustNotMatch(/change correction current=/, 'change must not force-correct an already moved caret');
 mustMatch(/dateKey, orderDays: days/, 'daily history payload must include KST date key');
 mustMatch(/function setOrderDaysValue\(value\)/, 'orderDays setter must exist for cross-device sync');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderDays'\)\) setOrderDaysValue\(data\.orderDays\);/, 'Firebase sync must apply orderDays to the selector');
@@ -628,7 +630,8 @@ mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{safeEntryId\}" data-entry-key=
 mustMatch(/class="cell zone" type="text"[^>]*tabindex="-1"/, 'zone field must be skipped by keyboard next navigation');
 mustMatch(/<button class="add" tabindex="-1"/, 'row action buttons must be skipped by keyboard next navigation');
 mustMatch(/return renderAndFocusStock\(nextId, source, currentId\);/, 'stock advance must move within the current DOM order');
-mustMatch(/function renderAndFocusStock\([^)]*\)[\s\S]*if \(gridSortMode === 'input'\) \{[\s\S]*reorderRenderedGridRows\(\)[\s\S]*queueMicrotask\(focusNext\);/, 'stock Enter must reorder existing rows without replacing the focused tbody');
+mustMatch(/function renderAndFocusStock\([^)]*\)[\s\S]*focusNext\(\);[\s\S]*if \(gridSortMode === 'input'\) scheduleIdleGridReorder\(\);/, 'stock Enter must focus the next cell first and only idle-reorder existing rows');
+mustNotMatch(/function renderAndFocusStock\([^)]*\)[\s\S]{0,400}render\(\{ allowDuringGridEdit: true \}\)/, 'stock advance must never rebuild tbody');
 mustMatch(/if \(!options\.allowDuringGridEdit && \(activeGridCellInput\(\) \|\| snoozeDialogOpen\(\)\)\) \{\s*pendingGridRender = true;\s*return false;/, 'background full renders must defer while a grid input or snooze dialog is active');
 mustMatch(/if \(stockEnterHandledTargets\.has\(e\.target\)\) \{\s*return;\s*\}/, 'all stale changes from the exact Enter-handled DOM input must stay suppressed');
 mustNotMatch(/skipStockRenderOnceId/, 'global entry-id dedupe can suppress the wrong replacement input');
@@ -868,6 +871,11 @@ this.__OrderHelperApi = {
   cancelAutosaveForCheck() {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
     autoSaveTimer = null;
+    if (confirmedSaveTimer) clearTimeout(confirmedSaveTimer);
+    confirmedSaveTimer = null;
+    pendingConfirmedCalcNames.clear();
+    pendingConfirmedCalcUsage = false;
+    cancelIdleGridReorder();
     if (deferredInputWorkHandle) cancelFrameTask(deferredInputWorkHandle);
     deferredInputWorkHandle = null;
   },
