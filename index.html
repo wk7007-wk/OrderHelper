@@ -597,7 +597,7 @@
   </div>
   <span class="grid-sort-control" role="group" aria-label="표 정렬">
     <button id="sortInputBtn" class="active" type="button" onclick="setGridSortMode('input')">구역 입력순</button>
-    <button id="sortSfaBtn" type="button" onclick="setGridSortMode('sfa')" title="매칭 필요 → 발주량 있음 → 발주 없음 순서">SFA 발주순</button>
+    <button id="sortSfaBtn" type="button" onclick="setGridSortMode('sfa')" title="최초 SFA 생성 순서">SFA 발주순</button>
   </span>
   <button id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis()">엑셀분석</button>
   <button id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel()">오차보기</button>
@@ -716,7 +716,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0816.2142';
+const APP_VERSION = '0816.2151';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -7655,9 +7655,7 @@ function reorderRenderedGridRows() {
     applySfaOrderRowState(row, sfaOrderRowState(orderItemByName(entry.name), hidden, sfaSortContext));
     orderedDomRows.push(row);
   }
-  const finalRows = gridSortMode === 'sfa'
-    ? [...unmatchedRows, ...orderedDomRows, ...otherTrailingRows]
-    : [...orderedDomRows, ...otherTrailingRows, ...unmatchedRows];
+  const finalRows = [...orderedDomRows, ...otherTrailingRows, ...unmatchedRows];
   finalRows.forEach(row => tbody.appendChild(row));
   return true;
 }
@@ -7960,8 +7958,6 @@ function applySfaOrderRowState(row, state) {
 }
 
 function compareSfaRows(left, right, context = null) {
-  const priorityDiff = sfaWorkRowPriority(left, context) - sfaWorkRowPriority(right, context);
-  if (priorityDiff !== 0) return priorityDiff;
   const itemDiff = defaultOutputCompare(left.item, right.item);
   if (itemDiff !== 0) return itemDiff;
   const zoneDiff = normalizedZone(left.entry.zone).localeCompare(normalizedZone(right.entry.zone), 'ko', { numeric: true, sensitivity: 'base' });
@@ -8397,8 +8393,6 @@ function render(options = {}) {
   const inlineSiteRows = buildOrderSiteMatches(lastSfaCompareData);
   const inlineUnmatchedRows = unmatchedInlineSiteRows(inlineSiteRows);
 
-  if (gridSortMode === 'sfa') appendInlineUnmatchedSiteRows(tbody, inlineUnmatchedRows);
-
   const shownItems = new Set();
   orderedRows.forEach(({ entry: ent, item, hidden }) => {
     const isFirst = !shownItems.has(item.name);
@@ -8462,7 +8456,7 @@ function render(options = {}) {
     tbody.appendChild(tr);
   });
 
-  if (gridSortMode !== 'sfa') appendInlineUnmatchedSiteRows(tbody, inlineUnmatchedRows);
+  appendInlineUnmatchedSiteRows(tbody, inlineUnmatchedRows);
 
   bindCellInputs();
   bindGridRowActions(tbody);

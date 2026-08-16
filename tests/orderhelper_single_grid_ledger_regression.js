@@ -55,8 +55,8 @@ const sfaWorkPriorityContext = api.sfaSortContextForCheck(
 );
 assert.deepStrictEqual(
   plain(api.gridRowsForCheck(sfaWorkPriorityFixture, 'sfa', sfaWorkPriorityContext)),
-  ['unmatched-last', 'positive-later', 'zero-first'],
-  'SFA work order must be unmatched alias, positive order quantity, then zero quantity'
+  ['zero-first', 'positive-later', 'unmatched-last'],
+  'SFA view must keep the original SFA sequence even when alias or quantity bands differ'
 );
 assert.deepStrictEqual(
   plain(api.unmatchedInlineSiteRows([
