@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0816.2142';/, 'APP_VERSION must match the KST ops-ux release time');
+mustMatch(/const APP_VERSION = '0816.2151';/, 'APP_VERSION must match the KST SFA original-sort release time');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -589,7 +589,7 @@ mustMatch(/flushAutoSave\('orderDays'\)/, 'orderDays changes must be saved to Fi
 mustMatch(/function setGridSortMode\(mode\) \{[\s\S]*flushDeferredInputWork\(\);[\s\S]*gridSortMode = nextMode;[\s\S]*updateGridSortButtons\(\);[\s\S]*renderZoneOptions\(entries\);[\s\S]*if \(reorderRenderedGridRows\(\)\) \{[\s\S]*restoreGridFocus\(focusSnapshot\);[\s\S]*return;[\s\S]*render\(\{ focusSnapshot, allowDuringGridEdit: true \}\);/, 'sort context switch must use DOM row reorder before falling back to a full render');
 mustNotMatch(/flushAutoSave\('sortSwitch'\)/, 'sort-only UI changes must not confirm an unentered draft');
 mustMatch(/const flowEpoch = stockFlowEpoch;[\s\S]*if \(flowEpoch !== stockFlowEpoch\) return;/, 'sort switch must fence a stale blur-driven stock advance');
-mustMatch(/function compareGridRows\(left, right, mode = gridSortMode, context = null\)/, 'single grid needs explicit input-zone and SFA work sort contexts');
+mustMatch(/function compareGridRows\(left, right, mode = gridSortMode, context = null\)/, 'single grid needs explicit input-zone and SFA original-order sort contexts');
 mustMatch(/return mode === 'sfa' \? compareSfaRows\(left, right, context\) : compareInputRows\(left, right\);/, 'sort context must only change row order');
 mustMatch(/function sfaOrderRowState\(item, hidden = false, context = null\)/, 'SFA work view must classify match-needed, order-needed, and no-order rows');
 mustMatch(/return Number\(qty\) > 0 \? 'order-needed' : 'order-none';/, 'SFA order emphasis must follow the effective positive order quantity');
@@ -600,9 +600,11 @@ mustMatch(/#tbody tr\.sfa-order-needed \{ background:[\s\S]*border: 2px solid #f
 mustMatch(/#tbody tr\.sfa-order-none:not\(\.row-hidden\) \{ background:[\s\S]*border-left-color: #475569/, 'mobile SFA no-order rows must remain visibly subdued');
 mustMatch(/function sfaAliasNeedsAttention\(aliasRow\)[\s\S]*aliasRow\.status !== 'unlinked' && !isUserSelectedAliasStatus\(aliasRow\.status\)/, 'SFA work sort must recognize unmatched, conflicting, and unconfirmed aliases');
 mustMatch(/function buildSfaWorkSortContext\([\s\S]*orderQtyByItemKey: new Map\(orderItemList\(\)\.map\(item => \[itemKeyForName\(item\.name\), outputOrderQty\(item, safeDays\)\]\)\)/, 'SFA work sort must cache effective order quantities once per sort');
-mustMatch(/function sfaWorkRowPriority\(row, context = null\)[\s\S]*if \(sfaAliasNeedsAttention\(aliasRow\)\) return 0;[\s\S]*return Number\(qty\) > 0 \? 1 : 2;/, 'SFA work sort must put alias attention first, positive order quantities second, and zero quantities last');
-mustMatch(/function compareSfaRows\(left, right, context = null\) \{\s*const priorityDiff = sfaWorkRowPriority\(left, context\) - sfaWorkRowPriority\(right, context\);[\s\S]*const itemDiff = defaultOutputCompare\(left\.item, right\.item\);/, 'SFA work priority must precede the stable initial SFA order');
-mustMatch(/if \(gridSortMode === 'sfa'\) appendInlineUnmatchedSiteRows\(tbody, inlineUnmatchedRows\);[\s\S]*orderedRows\.forEach[\s\S]*if \(gridSortMode !== 'sfa'\) appendInlineUnmatchedSiteRows\(tbody, inlineUnmatchedRows\);/, 'unmatched SFA source rows must render above the work list only in SFA mode');
+mustMatch(/function sfaWorkRowPriority\(row, context = null\)[\s\S]*if \(sfaAliasNeedsAttention\(aliasRow\)\) return 0;[\s\S]*return Number\(qty\) > 0 \? 1 : 2;/, 'SFA emphasis may still classify alias attention and order quantity');
+mustMatch(/function compareSfaRows\(left, right, context = null\) \{\s*const itemDiff = defaultOutputCompare\(left\.item, right\.item\);/, 'SFA view must sort only by the original SFA sequence');
+mustNotMatch(/const priorityDiff = sfaWorkRowPriority\(left, context\) - sfaWorkRowPriority\(right, context\);/, 'SFA view must not regroup rows by work priority');
+mustMatch(/appendInlineUnmatchedSiteRows\(tbody, inlineUnmatchedRows\);/, 'unmatched SFA source rows stay after the original SFA list');
+mustNotMatch(/if \(gridSortMode === 'sfa'\) appendInlineUnmatchedSiteRows/, 'SFA view must not lift unmatched rows above the original sequence');
 mustMatch(/function inputRowPriority\(entry, hidden\)[\s\S]*if \(hidden\) return 2;[\s\S]*if \(isStockChecked\(entry\)\) return 1;[\s\S]*return 0;/, 'input sort must keep unchecked rows before completed and hidden rows');
 mustMatch(/function compareInputRows\(left, right\) \{[\s\S]*const zoneRankDiff = zoneOrderIndex\(leftZone\) - zoneOrderIndex\(rightZone\);[\s\S]*const priorityDiff = inputRowPriority\(left\.entry, left\.hidden\) - inputRowPriority\(right\.entry, right\.hidden\);/, 'input sorting must keep each route category together before applying completion priority inside the group');
 mustMatch(/entries\.map\(\(ent, inputIndex\) =>/, 'input sorting must retain each row original input position');
