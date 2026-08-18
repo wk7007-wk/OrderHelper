@@ -1,9 +1,25 @@
 # OrderHelper 코드맵
 # 의도 기준: APP_INTENT.md (BBQ 재고 입력과 발주량 계산 흐름 보호)
 
+# 장기 제품 규칙: ORDERHELPER_CONSTITUTION.md
+# 사용자 프롬프트 근거: ORDERHELPER_PROMPT_EVIDENCE.md
+# 재현 가능한 hash: ORDERHELPER_CONSTITUTION_RECEIPT.json
+# 구현 시작 게이트: constitution version/hash 대조 후 승인된 acceptance만 코드에 반영
+
 ## 파일 → 역할
+- ORDERHELPER_CONSTITUTION.md: 최초 설계부터 최신 정정까지 통합한 OrderHelper 제품 규칙 단일 기준
+- ORDERHELPER_PROMPT_EVIDENCE.md: 중복·음성오타를 정규화한 사용자 프롬프트 날짜별 근거와 supersession
+- ORDERHELPER_CONSTITUTION_RECEIPT.json: constitution/evidence SHA-256과 effective time을 고정한 구현 입력 receipt
 - APP_INTENT.md: 앱 목적, 사용자 결과, 절대 기준, Web+SiteBot 경계, read-only preflight, 공장 PC browser evidence, live write boundary, 완료 기준
-- index.html: 입력+출력 단일 9열 표, 재고 Enter/모바일 Next(change) 완료 저장·정렬, stable key/revision, deterministic 발주 resolver, 재고 1단위 가격·발주 1단위 가격을 분리한 예상액 카드와 title의 상세 실발주·provenance, `sfaPriceHistory/latest` provenance/null/0 검증, immutable run `sourceTable` 원문CSV export, current/history pair ETag-CAS와 confirmed queue, 수동값 보호, Firebase 동기화, 인증 게이트. 충돌 시 명시적 `phoneWins` 복구만 폰 localStorage 전체 상태로 current/history를 덮고 동일 receipt를 재검증하며 SFA ledger는 병합 보존한다. 환산 방향은 `1발주 단위 = 재고/사용량 N개`이며 예상액은 추천 발주수량 × 발주 1단위 가격이다.
+- index.html: 현재 live v1 rollback 기준. 기존 current/history와 SFA/auth 호환 확인용이며 v2 설계 입력이 아니다. v1의 whole-snapshot/phoneWins/작업우선 정렬은 v2에 재도입하지 않는다.
+- v2/index.html + v2/styles.css: 헌법 기반 one-grid shadow shell. 88품목, 11열, 390px/PC 동일 DOM, 외부 실행 disabled/fail-closed.
+- v2/master-data.js + v2/orderhelper-v2.js: immutable 88품목 MASTER, 최초 SFA순, 단일 resolver, row-local 입력 계산, rAF 매출 batch, 다중 구역과 숨김 만료 runtime.
+- sync/order-sync-v2.js: 실제 110행을 보존하는 128KiB canonical hard budget, per-field Lamport/tombstone merge, durable active+queued outbox, ETag-CAS, v1 future-revision 격리, SFA head pointer.
+- v2/order-storage-v2.js + v2/order-sync-controller-v2.js: `orderhelper_v2_*` local draft/confirmed 경계, exact dirty-path reload, corruption fail-closed, active+queued CAS drain, pull conflict receipt와 중복 PUT 없는 pull 재시도. remote는 명시 adapter 주입으로만 붙으며 browser auth/bootstrap에는 아직 연결하지 않는다.
+- v2/order-remote-v2.js: exact Firebase origin과 `syncV2/canonical`만 허용하는 ETag-CAS shadow adapter. 호출별 fresh capability, verifier/fetch timeout, 128KiB 제한을 적용하며 browser 기본 bootstrap에는 아직 주입하지 않는다.
+- v2/order-auth-v2.js: legacy 단말 identity read-only import, exact trusted hash 3개, PIN+factor, strict fresh 등록창, single-operation capability receipt를 담당하는 auth core. UI/factor/registration network adapter는 아직 미연결이다.
+- v2/order-cutover-v2.js: 폰+공장PC 두 물리 receipt가 일치할 때만 shadow→active 후보를 허용하고, active/rollback에서 v1 write로 silent fallback하지 않는 cutover gate.
+- tests/orderhelper_sync_v2_core.js + tests/orderhelper_v2_live_shape_migration.js + tests/orderhelper_v2_cutover.js + tests/orderhelper_v2_*.js + tests/orderhelper_v2_dom_integration.py: 동시편집, flush interleaving, 실제 110행/매핑 분해 migration, 두 기기 cutover, 계산/SFA순, sales·다중구역·숨김 reload, corruption, IME/caret, 390px/wide와 외부 request 0 회귀.
 - tests/orderhelper_static_checks.js: 기존 전체 정적/VM 회귀 + stable key/revision/명시 alias + AI latest top-level/fail-closed/수동값 보호 계약 검증
 - tests/orderhelper_inventory_matching_regression.js: 입력 재고→출력 합계→current/history keyed payload, duplicate zone/id, legacy name, 0/blank, pair-CAS active+queued Enter revision fence, 신규품목/별명/동명이름/빈 배열 회귀
 - tests/orderhelper_phone_wins_sync_regression.js: 명시적 폰 우선 충돌 해소에서 PC보다 높은 state/inventory/sales revision, 빈 배열·빈 object·0/null 보존, audit receipt 회귀
