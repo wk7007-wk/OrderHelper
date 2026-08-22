@@ -112,3 +112,6 @@
 
 ## 2026-08-23 PIN-only login
 - APP_VERSION 0823.0408 removes `#deviceNameInput` / 단말 이름 from the PIN overlay. Note and locked copy are `PIN을 입력하세요.` Trusted passwordless hashes still auto-unlock. Correct PIN hash unlocks immediately without `verifyAuthFactor()` as a blocker. `ensureAuthDevice()` stays null-safe and defaults leftover desktopAccess logging names to `단말`.
+
+## 2026-08-23 agent-pc passwordless trust
+- APP_VERSION 0823.0416 adds SHA-256 `50329b86dec951289d905364f156d5fd620400284d984a818cd84fd2e21e3395` to PASSWORDLESS_TRUSTED_DEVICE_HASHES and AUTH_GEO.allowedDevices as enabled agent-pc / user_this_pc. Existing three hashes stay. restoreAuthIfPossible still auto-unlocks trusted hashes without PIN. PIN overlay stays PIN-only (no 단말기명). PIN_HASH, MASTER dailies, prices, and buffers unchanged.

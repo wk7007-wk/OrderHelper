@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0823.0408';/, 'APP_VERSION must match the KST PIN-only login overlay release');
+mustMatch(/const APP_VERSION = '0823.0416';/, 'APP_VERSION must match the KST agent-pc passwordless trust release');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -64,8 +64,9 @@ mustMatch(/id="saveState">동기화됨<\/span>[\s\S]*id="lastSaved"/, 'employee 
 mustMatch(/function renderSaveLogs\(\) \{\s*document\.getElementById\('inputTools'\)\?\.classList\.remove\('hidden'\);\s*\}/, 'save logs must remain internal instead of rendering employee chips');
 mustMatch(/function renderDesktopAccessPanel\(\)[\s\S]*if \(!AUTH_DEBUG\) \{[\s\S]*body\.replaceChildren\(\);/, 'live employee DOM must not render desktop-access records');
 mustMatch(/async function toggleDesktopAccessPanel\(\) \{\s*if \(!AUTH_DEBUG\) return;/, 'live employee UI must not open the desktop-access panel');
-mustMatch(/const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object\.freeze\(\[[\s\S]*20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491[\s\S]*b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6[\s\S]*3478b8091ca76988cdc84079f963c4c224b1d440d2748439bf9ca0a61952c6d3[\s\S]*\]\);/, 'passwordless access must be limited to the three freshly verified token hashes');
+mustMatch(/const PASSWORDLESS_TRUSTED_DEVICE_HASHES = Object\.freeze\(\[[\s\S]*20d3878e2c09054563c1008f264a1e04fffe6aa844de86304233f08b04764491[\s\S]*b102528da17d98d3c8879417170b85552ddbb4059bf2c4f0684801db3e0c4eb6[\s\S]*3478b8091ca76988cdc84079f963c4c224b1d440d2748439bf9ca0a61952c6d3[\s\S]*50329b86dec951289d905364f156d5fd620400284d984a818cd84fd2e21e3395[\s\S]*\]\);/, 'passwordless access must be limited to the four verified token hashes');
 mustMatch(/"3478b8091ca76988cdc84079f963c4c224b1d440d2748439bf9ca0a61952c6d3":\{"enabled":true,"label":"factory-pc-codex-in-app","source":"verified_registration_window","registeredAt":1784230390832\}/, 'Codex in-app browser trust metadata must remain tied to the verified exact hash');
+mustMatch(/"50329b86dec951289d905364f156d5fd620400284d984a818cd84fd2e21e3395":\{"enabled":true,"label":"agent-pc","source":"user_this_pc"/, 'agent-pc Chrome trust metadata must remain tied to the verified exact hash');
 mustNotMatch(/d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08|c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c|8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635/, 'stale personal, main-PC, and unverified factory hashes must be removed');
 mustMatch(/function isPasswordlessTrustedDeviceHash\(hash\)/, 'exact static trusted-device hash predicate missing');
 mustMatch(/if \(isPasswordlessTrustedDeviceHash\(id\)\) \{[\s\S]*unlockOrderHelper\(\);[\s\S]*return true;/, 'trusted restore must unlock before PIN, network, or GPS factors');

@@ -57,3 +57,6 @@
 
 ## 2026-08-23 PIN-only login
 - index.html/tests: APP_VERSION 0823.0408 drops `#deviceNameInput` from the PIN overlay. Unregistered browsers unlock with PIN_HASH only. Trusted device hashes still auto-unlock. Tests forbid deviceNameInput and forbid checkPin() awaiting verifyAuthFactor() after a correct PIN.
+
+## 2026-08-23 agent-pc passwordless trust
+- index.html/tests: APP_VERSION 0823.0416 adds agent-pc hash 50329b86dec951289d905364f156d5fd620400284d984a818cd84fd2e21e3395 to the passwordless list and allowedDevices. PIN-only overlay for unknown devices unchanged.
