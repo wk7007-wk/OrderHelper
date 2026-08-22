@@ -57,9 +57,11 @@ def main():
                             insideViewport: !!rect && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,
                         };
                     };
+                    const note = document.querySelector('#pinOverlay .pin-note');
                     return {
                         pin: inspect('pinInput', '1234'),
-                        device: inspect('deviceNameInput', 'factory-pc'),
+                        deviceNameInput: document.getElementById('deviceNameInput'),
+                        noteText: note?.textContent.trim() || '',
                         horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
                         verticalOverflow: document.documentElement.scrollHeight > innerHeight,
                     };
@@ -67,7 +69,8 @@ def main():
             )
             assert auth == {
                 "pin": {"value": "1234", "labelText": "PIN 번호", "accessibleName": "PIN 번호", "visible": True, "insideViewport": True},
-                "device": {"value": "factory-pc", "labelText": "단말 이름", "accessibleName": "단말 이름", "visible": True, "insideViewport": True},
+                "deviceNameInput": None,
+                "noteText": "PIN을 입력하세요.",
                 "horizontalOverflow": False,
                 "verticalOverflow": False,
             }, auth

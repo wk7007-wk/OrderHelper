@@ -579,11 +579,9 @@
 
 <div class="pin-overlay" id="pinOverlay">
   <h2>BBQ 발주</h2>
-  <div class="pin-note">등록된 단말은 자동으로 열립니다. 처음 사용하는 단말은 PIN을 입력하거나 관리자에게 문의하세요.</div>
+  <div class="pin-note">PIN을 입력하세요.</div>
   <label class="pin-input-label" for="pinInput">PIN 번호</label>
   <input type="password" inputmode="numeric" pattern="[0-9]*" id="pinInput" maxlength="4" placeholder="PIN" autocomplete="off">
-  <label class="pin-input-label" for="deviceNameInput">단말 이름</label>
-  <input class="device-name" type="text" id="deviceNameInput" maxlength="32" placeholder="단말명" autocomplete="off">
   <button onclick="checkPin()">확인</button>
   <div class="pin-error" id="pinError" role="status" aria-live="polite"></div>
 </div>
@@ -728,7 +726,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0823.0405';
+const APP_VERSION = '0823.0408';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -1030,9 +1028,10 @@ function readAuthDevice() {
 }
 function ensureAuthDevice() {
   let data = readAuthDevice();
-  const name = (document.getElementById('deviceNameInput')?.value || '').trim() || '단말';
+  const typedName = (document.getElementById('deviceNameInput')?.value || '').trim();
+  const name = typedName || data?.name || '단말';
   if (data?.token) {
-    if (data.name !== name) {
+    if (typedName && data.name !== name) {
       data = { ...data, name };
       localStorage.setItem(AUTH_GEO.deviceKey, JSON.stringify(data));
     }
@@ -1462,18 +1461,12 @@ async function checkPin() {
   }
   const h = await hashPin(inp.value);
   if (h === PIN_HASH) {
-    try {
-      await verifyAuthFactor();
-      pinAttempts = 0;
-      localStorage.removeItem('bbq_desk_auth_until');
-      sessionStorage.removeItem('bbq_desk_auth');
-      setPinMessage('인증되었습니다.', true);
-      inp.value = '';
-      unlockOrderHelper();
-    } catch (e) {
-      setPinMessage(authUserMessage(e));
-      inp.value = '';
-    }
+    pinAttempts = 0;
+    localStorage.removeItem('bbq_desk_auth_until');
+    sessionStorage.removeItem('bbq_desk_auth');
+    setPinMessage('인증되었습니다.', true);
+    inp.value = '';
+    unlockOrderHelper();
   } else {
     pinAttempts++;
     if (pinAttempts >= PIN_MAX_ATTEMPTS) {
@@ -1513,7 +1506,7 @@ async function restoreAuthIfPossible() {
     console.warn('[registrationWindow] restore kept locked', error);
   }
   if (AUTH_DEBUG) setPinMessage('개발 검증 모드입니다. PIN을 입력해 주세요.', true);
-  else setPinMessage('등록되지 않은 단말입니다. PIN을 입력하거나 관리자에게 등록을 요청해 주세요.');
+  else setPinMessage('PIN을 입력하세요.');
   document.getElementById('pinInput').focus();
   return false;
 }

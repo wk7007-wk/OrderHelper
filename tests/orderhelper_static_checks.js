@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0823.0405';/, 'APP_VERSION must match the KST MATE-daily inbound-window daily usage release');
+mustMatch(/const APP_VERSION = '0823.0408';/, 'APP_VERSION must match the KST PIN-only login overlay release');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -48,13 +48,14 @@ mustMatch(/const SFA_PRICE_HISTORY_PATH = `\$\{FB_PATH\}\/sfaPriceHistory\/lates
 mustMatch(/const DESKTOP_ACCESS_PATH = `\$\{FB_PATH\}\/desktopAccess`;/, 'desktop access Firebase path missing');
 mustMatch(/const DESKTOP_GRACE_MS = 24 \* 60 \* 60 \* 1000;/, 'desktop grace window must be explicitly 24 hours');
 mustMatch(/radiusM: 700/, 'GPS auth radius must be temporarily 700m');
-mustMatch(/등록된 단말은 자동으로 열립니다\. 처음 사용하는 단말은 PIN을 입력하거나 관리자에게 문의하세요\./, 'employee auth UI must show only actionable guidance');
+mustMatch(/<div class="pin-note">PIN을 입력하세요\.<\/div>/, 'employee auth UI must show PIN-only guidance');
 mustMatch(/<label class="pin-input-label" for="pinInput">PIN 번호<\/label>\s*<input[^>]*id="pinInput"/, 'PIN input must retain a visible associated label');
-mustMatch(/<label class="pin-input-label" for="deviceNameInput">단말 이름<\/label>\s*<input[^>]*id="deviceNameInput"/, 'device-name input must retain a visible associated label');
+mustNotMatch(/id="deviceNameInput"|for="deviceNameInput"/, 'PIN overlay must not include a device-name field');
 mustMatch(/\.pin-input-label \{[\s\S]*text-align: left;/, 'auth labels need compact visible styling');
 mustNotMatch(/등록된 개인폰·메인PC·공장PC|PIN \+ 승인 데스크탑|GPS 확인 실패\. 데스크탑 후보로 기록됨|단말ID \$\{/, 'employee auth UI must not expose device, GPS, candidate, or hash diagnostics');
 mustMatch(/function authUserMessage\(error\)[\s\S]*관리자에게 등록을 요청해 주세요\./, 'auth failures must use employee-safe guidance');
-mustMatch(/catch \(e\) \{\s*setPinMessage\(authUserMessage\(e\)\);/, 'raw auth errors must not be rendered to employees');
+mustNotMatch(/if \(h === PIN_HASH\) \{[\s\S]{0,400}await verifyAuthFactor\(\)/, 'correct PIN must unlock without a device-registration blocker');
+mustMatch(/if \(h === PIN_HASH\) \{[\s\S]*?unlockOrderHelper\(\);/, 'correct PIN hash must unlock immediately');
 mustMatch(/id="desktopAccessBtn"[^>]*hidden aria-hidden="true"/, 'employee UI must hide the desktop-access diagnostics button');
 mustMatch(/id="desktopAccessPanel" hidden aria-hidden="true"/, 'employee UI must hide the desktop-access diagnostics panel');
 mustMatch(/#registrationAccessStatus\[hidden\] \{ display: none !important; \}/, 'inactive registration access badge must remain visually hidden');
@@ -68,7 +69,7 @@ mustMatch(/"3478b8091ca76988cdc84079f963c4c224b1d440d2748439bf9ca0a61952c6d3":\{
 mustNotMatch(/d21a6620a9a24efe29e7b6921076e2ccd25c6f9b977154e9f8dfe4653d21bd08|c1aa36e7f5eabff58103bbc86257f3350c222b55c0d883592e438f021721681c|8b8cfc89e46c908775a0a28de9bad6d0a3e214536dc181e4cbef5582c7c8d635/, 'stale personal, main-PC, and unverified factory hashes must be removed');
 mustMatch(/function isPasswordlessTrustedDeviceHash\(hash\)/, 'exact static trusted-device hash predicate missing');
 mustMatch(/if \(isPasswordlessTrustedDeviceHash\(id\)\) \{[\s\S]*unlockOrderHelper\(\);[\s\S]*return true;/, 'trusted restore must unlock before PIN, network, or GPS factors');
-mustMatch(/등록되지 않은 단말입니다\. PIN을 입력하거나 관리자에게 등록을 요청해 주세요\./, 'unknown-device guidance must remain actionable without diagnostics');
+mustMatch(/else setPinMessage\('PIN을 입력하세요\.'\);/, 'unregistered browsers must ask for PIN only');
 mustNotMatch(/device\.name[\s\S]{0,120}isPasswordlessTrustedDeviceHash/, 'device labels must never authorize passwordless entry');
 mustMatch(/const REGISTRATION_WINDOW_MAX_MS = 60 \* 60 \* 1000;/, 'registration window must be capped at one hour');
 mustMatch(/function activeRegistrationWindow\(source, now = Date\.now\(\)\)/, 'strict registration-window validator missing');
