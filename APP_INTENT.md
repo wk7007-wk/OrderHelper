@@ -100,3 +100,9 @@
 - APP_VERSION 0722.0204 keeps the same inventory grid semantics across devices. Mobile remains a vertically aligned compact list; PC fluidly expands the sticky zone/name/stock tracks, order evidence column, and route-group editor across the available viewport instead of leaving wide-screen space unused.
 - The detail toggle restores the full editable card (usage, daily amount, unit, row actions, matching controls, and amount evidence) only when requested; collapsed rows remain compact with no horizontal overflow.
 - Remaining verification pointer: live GitHub Pages reflection plus actual Codex in-app-browser list screenshot after deployment, without live order/payment/Firebase writes.
+
+## 2026-08-23 handoff
+- Matching: SFA original names for 필크런치플레이크/소스, 버라이어티팩패키지, 피자비닐봉투, BBQ종이봉투(대) are new MASTER targets with daily 0. One-off 햄야채볶음밥, 등심돈까스(통살), 황금죽 are not MASTER. Do not alias 피자비닐봉투 onto 비닐-BBQ비닐봉투(소), merge 대/소 vinyl bags, merge BBQ종이봉투(대) onto JHP종이봉투(대)or(소), merge 1호/2호 containers, or merge 마늘/파더스 two-piece chicken.
+- `BBQ두마리치킨(파더스치킨)(국내산)` and `(신규)BBQ비닐쇼핑백(대)` are aliases only onto existing MASTER `두마리치킨,파더스` and `비닐-(신규)BBQ비닐쇼핑백(대)`.
+- Static `DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS`: 냉동-핫윙,비비윙스 N=10 and 냉동-떡볶이(16개) N=16. Check in 개, order in 박스, qty=ceil(need/N). User-saved corrections still override; do not write these N values to live Firebase.
+- Baseline sales default is 264.83만원. Need scales by expected/baseline ratio, not by adding expected onto baseline.

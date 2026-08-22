@@ -162,6 +162,30 @@ async function verifyConfirmedSaveRevisionFence() {
   assert.strictEqual(api.saveStatusForCheck().localDirty, false, 'only the latest revision response may clear localDirty');
 }
 
+const remainingNewMasters = ['BBQ필크런치플레이크', 'BBQ필크런치소스', 'BBQ버라이어티팩패키지', '피자비닐봉투', 'BBQ종이봉투(대)'];
+remainingNewMasters.forEach(name => {
+  assert(api.MASTER.some(item => item.name === name && item.daily === 0), `${name} must remain a new unconfirmed MASTER`);
+});
+['햄야채볶음밥', '등심돈까스(통살)', '황금죽'].forEach(name => {
+  assert(!api.MASTER.some(item => item.name === name), `${name} one-off MASTER must be removed`);
+});
+assert.strictEqual(api.canonicalItemNameForActual('BBQ두마리치킨(파더스치킨)(국내산)'), '두마리치킨,파더스');
+assert.strictEqual(api.canonicalItemNameForActual('(신규)BBQ비닐쇼핑백(대)'), '비닐-(신규)BBQ비닐쇼핑백(대)');
+assert.strictEqual(api.canonicalItemNameForActual('BBQ종이봉투(대)'), '');
+assert.strictEqual(api.canonicalItemNameForActual('피자비닐봉투'), '');
+assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ종이봉투(대)').unit, '봉/봉');
+const wing = api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스');
+const tteok = api.MASTER.find(item => item.name === '냉동-떡볶이(16개)');
+assert.strictEqual(wing.daily, 4);
+assert.strictEqual(tteok.daily, 3);
+assert.strictEqual(wing.unit, '개/박스');
+assert.strictEqual(tteok.unit, '개/박스');
+api.setUnitCorrectionsForCheck({});
+assert.strictEqual(api.conversionFactorForItem(wing), 10, '비비윙스 static N=10');
+assert.strictEqual(api.conversionFactorForItem(tteok), 16, '떡볶이 static N=16');
+assert.strictEqual(api.recommendedOrderQty(wing, 5), 1, 'short 5개 -> 1 BOX');
+assert.strictEqual(api.recommendedOrderQty(tteok, 17), 2, 'short 17개 -> 2 BOX');
+
 verifyConfirmedSaveRevisionFence()
   .then(() => console.log('OrderHelper inventory/matching regression OK'))
   .catch(error => {

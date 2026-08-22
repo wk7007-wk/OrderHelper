@@ -667,7 +667,7 @@
   <span class="meta">예상매출 (만)</span>
   <label class="base-sales-control">
     <span class="day-label">기준</span>
-    <input id="baseSalesInput" class="sales" type="number" placeholder="280">
+    <input id="baseSalesInput" class="sales" type="number" placeholder="264.83">
     <span class="day-label">만</span>
   </label>
   <span id="salesInputs"></span>
@@ -728,7 +728,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0817.0504';
+const APP_VERSION = '0823.0245';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -751,13 +751,19 @@ const LEGACY_PACK_MULTIPLE_ITEMS = new Set([
   '냉동-바사칸윙',
   '냉동-떡볶이(16개)'
 ]);
+// Static site defaults: 1 order unit (BOX) = N stock units (개). Qty = ceil(need / N).
+// Not written to Firebase; user-saved orderUnitCorrections still override.
+const DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS = Object.freeze({
+  '냉동-핫윙,비비윙스': 10,
+  '냉동-떡볶이(16개)': 16,
+});
 const CHICKEN_EACH_PRICE_MIN = 6000;
 const CHICKEN_EACH_PRICE_MAX = 12000;
 const WHOLE_CHICKEN_PRICE_ITEMS = new Set(['두마리치킨,파더스', '신선육(10호)-뼈한마리']);
 const DESKTOP_ACCESS_PATH = `${FB_PATH}/desktopAccess`;
 const USAGE_ANALYSIS_MAX_DAYS = 90;
-const DEFAULT_BASE_SALES = 280;
-const BASE_SALES_STORAGE_VERSION = 'formula-280';
+const DEFAULT_BASE_SALES = 264.83;
+const BASE_SALES_STORAGE_VERSION = 'formula-264.83';
 const DEFAULT_SNOOZE_DAYS = 5;
 const MAX_SNOOZE_DAYS = 365;
 const SAVE_REQUEST_TIMEOUT_MS = 20000;
@@ -1320,7 +1326,7 @@ document.getElementById('pinInput').addEventListener('input', e => {
   if (e.target.value.length === 4) checkPin();
 });
 
-// 89 품목 마스터 (Excel 발주리스트 2026-05-08 스냅샷, D 순 정렬)
+// 93 품목 마스터 (Excel 발주리스트 2026-05-08 스냅샷 + 2026-08-23 SFA 원문 5종, D 순 정렬)
 const MASTER = [
   {sfaSeq:3,name:"(신)올리브오일",unit:"캔/캔",policy:"전부",buffer:3.7,daily:0.5},
   {sfaSeq:3.3,name:"냉동-핫윙,비비윙스",unit:"개/박스",policy:"전부",buffer:3,daily:4},
@@ -1346,6 +1352,7 @@ const MASTER = [
   {sfaSeq:17.1,name:"냉동-고추튀김",unit:"개/개",policy:"여유",buffer:0.2,daily:0.19},
   {sfaSeq:18,name:"BBQ싱싱옥수수콘립",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.35},
   {sfaSeq:18.1,name:"냉동-떡볶이(16개)",unit:"개/박스",policy:"전부",buffer:3,daily:3},
+  {sfaSeq:18.2,name:"BBQ필크런치플레이크",unit:"개/박스",policy:"",buffer:0,daily:0},
   {sfaSeq:19,name:"신선육(10호)-뼈한마리",unit:"박/박스",policy:"전부",buffer:0.8,daily:2},
   {sfaSeq:20,name:"통다리바베큐,자메이카",unit:"개/개",policy:"전부",buffer:4,daily:6},
   {sfaSeq:21,name:"신선순살(720g)",unit:"박/박스",policy:"전부",buffer:1,daily:2},
@@ -1360,6 +1367,7 @@ const MASTER = [
   {sfaSeq:27.1,name:"레몬보이",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
   {sfaSeq:28,name:"배달소스-(신)스모크소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0.1},
   {sfaSeq:29,name:"볼케이노핫소스",unit:"박스/박스",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:29.1,name:"BBQ필크런치소스",unit:"봉/봉",policy:"",buffer:0,daily:0},
   {sfaSeq:29.5,name:"산가측정페이퍼",unit:"",policy:"전부",buffer:1,daily:0},
   {sfaSeq:30,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1,daily:1.5},
   {sfaSeq:30.1,name:"치킨무(벌크)",unit:"팩/박스",policy:"여유",buffer:1,daily:0},
@@ -1379,12 +1387,15 @@ const MASTER = [
   {sfaSeq:47,name:"BBQ박스패키지(대)",unit:"박/박스",policy:"여유",buffer:0.3,daily:0.2},
   {sfaSeq:48,name:"BBQ박스패키지(중)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.5},
   {sfaSeq:49,name:"BBQ박스패키지(소)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.2},
+  {sfaSeq:49.1,name:"BBQ버라이어티팩패키지",unit:"박/박스",policy:"",buffer:0,daily:0},
   {sfaSeq:50,name:"트레이(중)",unit:"박/박스",policy:"여유",buffer:0.6,daily:0.55},
   {sfaSeq:51,name:"트레이(소)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.6},
   {sfaSeq:52,name:"비닐-BBQ비닐봉투(소)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.25},
+  {sfaSeq:52.1,name:"피자비닐봉투",unit:"봉/봉",policy:"",buffer:0,daily:0},
   {sfaSeq:53,name:"비닐-(신규)BBQ비닐쇼핑백(대)",unit:"봉/봉",policy:"전부",buffer:1,daily:0},
   {sfaSeq:54,name:"비닐-(신규)BBQ비닐쇼핑백(중)",unit:"봉/봉",policy:"여유",buffer:1,daily:0.6},
   {sfaSeq:54.1,name:"JHP종이봉투(대)or(소)",unit:"묶/묶음",policy:"여유",buffer:0.3,daily:0.1},
+  {sfaSeq:54.2,name:"BBQ종이봉투(대)",unit:"봉/봉",policy:"",buffer:0,daily:0},
   {sfaSeq:55,name:"종이쇼핑백",unit:"박/박스",policy:"여유",buffer:1,daily:0},
   {sfaSeq:56,name:"치킨간지",unit:"박스/박스",policy:"",buffer:0.2,daily:0.1},
   {sfaSeq:56,name:"알루미늄캔(뚜껑포함)",unit:"",policy:"",buffer:0.5,daily:0.1},
@@ -1426,6 +1437,8 @@ const SFA_ACTUAL_ITEM_ALIASES = Object.freeze({
   "JHP종이봉투(대)": "JHP종이봉투(대)or(소)",
   "BBQ뿜치킹시즈닝(58G,조리용)": "BBQ뿜치킹시즈닝(58g)",
   "BBQ뿜치킹시즈닝(20G,소포장별도판매용)": "BBQ뿜치킹시즈닝(25g)",
+  "BBQ두마리치킨(파더스치킨)(국내산)": "두마리치킨,파더스",
+  "(신규)BBQ비닐쇼핑백(대)": "비닐-(신규)BBQ비닐쇼핑백(대)",
 });
 
 const LEGACY_ORDER_ACTUAL_ALIAS_MIGRATIONS = Object.freeze({
@@ -3475,11 +3488,18 @@ function applyOrderUnitCorrectionQty(item, qty) {
   return roundOrderQty(out);
 }
 
+function defaultOrderUnitToStockFactorForItem(item) {
+  const factor = Number(DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS[canonicalItemName(item?.name || '')]);
+  return Number.isFinite(factor) && factor > 0 ? factor : null;
+}
+
 function conversionFactorForItem(item) {
   const parts = orderUnitParts(item);
   const manualFactor = manualUnitFactorForItem(item);
   if (manualFactor) return manualFactor;
   if (isOrderAliasUnlinked(item?.name)) return parts.same ? 1 : null;
+  const staticDefault = defaultOrderUnitToStockFactorForItem(item);
+  if (staticDefault) return staticDefault;
   const analysis = conversionAnalysis[item.name];
   // 재고 이동 추론은 evidence-only다. 사용자가 명시적으로 채택해 manual factor로 저장하기 전에는 계산에 적용하지 않는다.
   if (parts.same) return 1;
@@ -5518,6 +5538,7 @@ function conversionSourceLabel(source) {
   if (source === 'unit') return '단위패턴';
   if (source === 'same') return '동일단위';
   if (source === 'saved') return '저장값';
+  if (source === 'staticDefault') return '정적기본';
   return source || '분석';
 }
 
@@ -5746,6 +5767,10 @@ function conversionCandidatesForAlias(item, data = lastSfaCompareData, usageReco
   if (manualFactor) {
     addConversionCandidate(map, manualFactor, 'manualUnit', 0.99, '단위 보정 탭 사용자 환산값');
   }
+  const staticDefault = defaultOrderUnitToStockFactorForItem(item);
+  if (staticDefault) {
+    addConversionCandidate(map, staticDefault, 'staticDefault', 0.995, '정적 기본 1발주=N재고');
+  }
   (data?.comparison?.matched || []).forEach(row => {
     const expectedName = canonicalItemName(row?.expected_name || '');
     if (expectedName !== item.name) return;
@@ -5785,7 +5810,7 @@ function conversionCandidateReason(candidate) {
 function conversionCandidateCanBeDefault(candidate, item) {
   const factor = normalizeConversionFactor(candidate?.factor);
   if (!factor) return false;
-  if (candidate.source === 'manualUnit' || candidate.source === 'same') return true;
+  if (candidate.source === 'manualUnit' || candidate.source === 'same' || candidate.source === 'staticDefault') return true;
   // One comparison can suggest a ratio, but a fractional ratio such as
   // 1.5 / 1 is not enough evidence to become an applied default.
   if (candidate.source === 'compare') return Math.abs(factor - Math.round(factor)) < 0.0005;
