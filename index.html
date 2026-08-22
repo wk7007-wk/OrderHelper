@@ -728,7 +728,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0823.0245';
+const APP_VERSION = '0823.0345';
 const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 const FB_PATH = '/order/desk_q7m9r3a8';
@@ -757,6 +757,211 @@ const DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS = Object.freeze({
   '냉동-핫윙,비비윙스': 10,
   '냉동-떡볶이(16개)': 16,
 });
+
+// Static 1-order-unit KRW defaults from SFA 2026-06-01..08-22 amount/qty.
+// Live excel / sfaPriceHistory win; these fill 오늘 발주 예상 총액 when evidence is missing.
+const DEFAULT_ORDER_UNIT_PRICES = Object.freeze({
+  "신선육(10호)-뼈한마리": 124000,
+  "(신)올리브오일": 192500,
+  "신선북채(신)-다리": 51750,
+  "통다리바베큐,자메이카": 11990,
+  "올리브치킨용배터믹스-파우다": 23100,
+  "신선순살(720g)": 35000,
+  "벌크신선통날개": 55300,
+  "냉동-핫윙,비비윙스": 123200,
+  "치킨무(배달용)": 24200,
+  "BBQ양념치킨소스": 16500,
+  "BBQ박스패키지(중)": 40700,
+  "냉동-떡볶이(16개)": 63360,
+  "올리브마리네이드(신)": 15950,
+  "냉동-바사칸윙": 126500,
+  "(신)스모크치킨": 23375,
+  "BBQ박스패키지(대)": 42900,
+  "냉동-치즈볼-BBQ황금알치즈볼": 19800,
+  "핫앤크리스피마리네이드": 22000,
+  "BBQ박스패키지(소)": 34100,
+  "냉동-크런치너겟,순살크래커": 88000,
+  "(컵소스)BBQ양념치킨소스(배달용)": 53900,
+  "냉동-멘보샤": 15873,
+  "통다리바베큐소스(1kg)": 7920,
+  "비닐-(신규)BBQ비닐쇼핑백(중)": 8360,
+  "냉동-레귤러컷(감자튀김)": 12870,
+  "골든크리스피배터믹스(맵소반죽)": 11990,
+  "두마리치킨,파더스": 68200,
+  "냉동-오감볼": 4290,
+  "먹태버터맛,매운맛": 44000,
+  "BBQ뿜치킹시즈닝(58g)": 47850,
+  "BBQ필크런치플레이크": 36740,
+  "냉동-치즈볼-BBQ치즈볼(크림)": 11880,
+  "트레이(중)": 7260,
+  "냉동-닭껍데기(국내산)": 2050,
+  "트레이(소)": 5830,
+  "극한갈비소스": 16384,
+  "BBQ필크런치소스": 19140,
+  "냉동-오징어튀김(오징어다리아님)": 24750,
+  "냉동-모둠감자튀김,모듬": 4180,
+  "냉동-치즈볼-더블치즈볼": 7920,
+  "냉동-고추튀김": 16720,
+  "냉동-타르타르새우": 9900,
+  "냉동-치즈스틱": 88000,
+  "소독저(젓가락)": 11550,
+  "땡쇼크소스": 13200,
+  "햇반": 24288,
+  "냉동-BBQ소떡소떡": 7700,
+  "치킨무(벌크)": 16456,
+  "냉동-롱김말이": 5940,
+  "맵소디소스": 16500,
+  "블랙페퍼시즈닝(15g)": 42900,
+  "BBQ뿜치킹시즈닝(25g)": 18150,
+  "BBQ싱싱옥수수콘립": 4180,
+  "파인마요": 11000,
+  "볼케이노핫소스": 15972,
+  "(신)위생장갑(200매)": 3157,
+  "비닐-BBQ비닐봉투(소)": 4290,
+  "배달소스-(신)비비소스": 10230,
+  "직사각용기1(190,감자)": 11501,
+  "BBQ버라이어티팩패키지": 38500,
+  "알루미늄캔(뚜껑포함)": 35200,
+  "냉동-가지튀김": 6600,
+  "빠리배터믹스": 11550,
+  "종이쇼핑백": 27500,
+  "내프킨,냅킨": 27500,
+  "레몬보이": 11220,
+  "치플레소스": 20185,
+  "배달소스-순살크래커소스": 16720,
+  "안신스티커,BBQ테이프(N)": 10633,
+  "여과지필터(320*535)(14)": 30250,
+  "고추,가위,소금,종이호일,레몬보이,검정봉투": 14520,
+  "배달소스-(신)스모크소스": 3190,
+  "직사각용기2(230,치즈스틱)": 13420,
+  "JHP종이봉투(대)or(소)": 5692,
+  "물티슈(500)": 11000,
+  "일회용 케찹": 11000,
+  "산가측정페이퍼": 20900,
+  "피자비닐봉투": 12650,
+  "비닐-(신규)BBQ비닐쇼핑백(대)": 9570,
+  "스티커T_컷팅칼(떡볶이스티커)": 1375,
+  "BBQ종이봉투(대)": 4620,
+  "(신)롤백(500매)": 4257,
+  "수제맥주 공케그(빈통)": 0,
+});
+const DAILY_USAGE_STORAGE_VERSION = 'sfa-avg-20260601-0822';
+const DAILY_USAGE_STORAGE_KEY = 'bbq_dailyUsageVersion';
+const CALIBRATED_DAILY_ITEM_NAMES = Object.freeze([
+  "신선육(10호)-뼈한마리",
+  "(신)올리브오일",
+  "신선북채(신)-다리",
+  "통다리바베큐,자메이카",
+  "올리브치킨용배터믹스-파우다",
+  "신선순살(720g)",
+  "벌크신선통날개",
+  "냉동-핫윙,비비윙스",
+  "치킨무(배달용)",
+  "BBQ양념치킨소스",
+  "BBQ박스패키지(중)",
+  "냉동-떡볶이(16개)",
+  "올리브마리네이드(신)",
+  "(신)스모크치킨",
+  "BBQ박스패키지(대)",
+  "냉동-치즈볼-BBQ황금알치즈볼",
+  "핫앤크리스피마리네이드",
+  "BBQ박스패키지(소)",
+  "(컵소스)BBQ양념치킨소스(배달용)",
+  "통다리바베큐소스(1kg)",
+  "비닐-(신규)BBQ비닐쇼핑백(중)",
+  "냉동-레귤러컷(감자튀김)",
+  "골든크리스피배터믹스(맵소반죽)",
+  "냉동-오감볼",
+  "먹태버터맛,매운맛",
+  "BBQ뿜치킹시즈닝(58g)",
+  "냉동-치즈볼-BBQ치즈볼(크림)",
+  "트레이(중)",
+  "냉동-닭껍데기(국내산)",
+  "트레이(소)",
+  "극한갈비소스",
+  "BBQ필크런치소스",
+  "냉동-오징어튀김(오징어다리아님)",
+  "냉동-모둠감자튀김,모듬",
+  "냉동-치즈볼-더블치즈볼",
+  "냉동-고추튀김",
+  "냉동-타르타르새우",
+  "냉동-치즈스틱",
+  "소독저(젓가락)",
+  "땡쇼크소스",
+  "햇반",
+  "냉동-BBQ소떡소떡",
+  "치킨무(벌크)",
+  "냉동-롱김말이",
+  "맵소디소스",
+  "블랙페퍼시즈닝(15g)",
+  "BBQ뿜치킹시즈닝(25g)",
+  "BBQ싱싱옥수수콘립",
+  "파인마요",
+  "볼케이노핫소스",
+  "(신)위생장갑(200매)",
+  "비닐-BBQ비닐봉투(소)",
+  "배달소스-(신)비비소스",
+  "직사각용기1(190,감자)",
+  "BBQ버라이어티팩패키지",
+  "알루미늄캔(뚜껑포함)",
+  "냉동-가지튀김",
+  "빠리배터믹스",
+  "종이쇼핑백",
+  "내프킨,냅킨",
+  "레몬보이",
+  "치플레소스",
+  "배달소스-순살크래커소스",
+  "안신스티커,BBQ테이프(N)",
+  "여과지필터(320*535)(14)",
+  "고추,가위,소금,종이호일,레몬보이,검정봉투",
+  "배달소스-(신)스모크소스",
+  "직사각용기2(230,치즈스틱)",
+  "JHP종이봉투(대)or(소)",
+  "물티슈(500)",
+  "일회용 케찹",
+  "산가측정페이퍼",
+  "피자비닐봉투",
+  "비닐-(신규)BBQ비닐쇼핑백(대)",
+  "BBQ종이봉투(대)",
+  "(신)롤백(500매)",
+  "수제맥주 공케그(빈통)",
+]);
+function defaultOrderUnitPriceForItem(item) {
+  const name = canonicalItemName(item?.name || item || '');
+  const price = Number(DEFAULT_ORDER_UNIT_PRICES[name]);
+  return Number.isFinite(price) && price > 0 ? price : null;
+}
+function staticDefaultPriceEvidenceForItem(item) {
+  const unitPrice = defaultOrderUnitPriceForItem(item);
+  if (!Number.isFinite(unitPrice)) return null;
+  return {
+    valid: true,
+    unitPrice,
+    actualOrderQty: null,
+    amount: null,
+    actualUnitPrice: unitPrice,
+    basis: 'STATIC_SFA_PERIOD_UNIT_PRICE',
+    provenance: 'STATIC_SFA_PERIOD_UNIT_PRICE',
+    dateKey: '20260601',
+    fileName: 'SFA 2026-06-01..08-22',
+    runId: '',
+    sourceRunId: '',
+    sourceRunIds: [],
+    eventId: '',
+    eventAt: 0,
+    actualName: '',
+    actualUnit: '',
+    mappedName: canonicalItemName(item?.name || ''),
+    issues: [],
+    equation: {
+      actualUnitPrice: {
+        value: unitPrice,
+        formula: 'sfaAmount / sfaQty',
+        provenance: 'STATIC_SFA_PERIOD_UNIT_PRICE'
+      }
+    }
+  };
+}
 const CHICKEN_EACH_PRICE_MIN = 6000;
 const CHICKEN_EACH_PRICE_MAX = 12000;
 const WHOLE_CHICKEN_PRICE_ITEMS = new Set(['두마리치킨,파더스', '신선육(10호)-뼈한마리']);
@@ -1328,99 +1533,99 @@ document.getElementById('pinInput').addEventListener('input', e => {
 
 // 93 품목 마스터 (Excel 발주리스트 2026-05-08 스냅샷 + 2026-08-23 SFA 원문 5종, D 순 정렬)
 const MASTER = [
-  {sfaSeq:3,name:"(신)올리브오일",unit:"캔/캔",policy:"전부",buffer:3.7,daily:0.5},
-  {sfaSeq:3.3,name:"냉동-핫윙,비비윙스",unit:"개/박스",policy:"전부",buffer:3,daily:4},
+  {sfaSeq:3,name:"(신)올리브오일",unit:"캔/캔",policy:"전부",buffer:3.7,daily:1.1},
+  {sfaSeq:3.3,name:"냉동-핫윙,비비윙스",unit:"개/박스",policy:"전부",buffer:3,daily:3.01},
   {sfaSeq:5,name:"두마리치킨,파더스",unit:"개/박스",policy:"여유",buffer:2,daily:0},
   {sfaSeq:5.1,name:"BBQ충진식패티(100g)(마일드)",unit:"개/박스",policy:"",buffer:0,daily:0},
   {sfaSeq:5.2,name:"BBQ페퍼로니씬피자",unit:"개/박스",policy:"",buffer:0,daily:0},
-  {sfaSeq:5,name:"냉동-닭껍데기(국내산)",unit:"개/개",policy:"여유",buffer:2,daily:3},
+  {sfaSeq:5,name:"냉동-닭껍데기(국내산)",unit:"개/개",policy:"여유",buffer:2,daily:1.83},
   {sfaSeq:6,name:"냉동-크런치너겟,순살크래커",unit:"개/박스",policy:"여유",buffer:4,daily:0},
   {sfaSeq:6.1,name:"냉동-바사칸윙",unit:"개/박스",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:6.2,name:"냉동-롱김말이",unit:"봉/봉",policy:"여유",buffer:1,daily:0.2},
-  {sfaSeq:6.3,name:"냉동-가지튀김",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.2},
+  {sfaSeq:6.2,name:"냉동-롱김말이",unit:"봉/봉",policy:"여유",buffer:1,daily:0.28},
+  {sfaSeq:6.3,name:"냉동-가지튀김",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.12},
   {sfaSeq:8,name:"냉동-레귤러컷(감자튀김)",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.4},
-  {sfaSeq:9,name:"냉동-치즈볼-BBQ치즈볼(크림)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.3},
-  {sfaSeq:10,name:"냉동-치즈볼-BBQ황금알치즈볼",unit:"봉/봉",policy:"여유",buffer:0.5,daily:0.5},
-  {sfaSeq:11,name:"냉동-치즈볼-더블치즈볼",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.4},
-  {sfaSeq:11.2,name:"냉동-BBQ소떡소떡",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.2},
-  {sfaSeq:12,name:"냉동-모둠감자튀김,모듬",unit:"개/개",policy:"여유",buffer:0.8,daily:1.5},
+  {sfaSeq:9,name:"냉동-치즈볼-BBQ치즈볼(크림)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.34},
+  {sfaSeq:10,name:"냉동-치즈볼-BBQ황금알치즈볼",unit:"봉/봉",policy:"여유",buffer:0.5,daily:0.46},
+  {sfaSeq:11,name:"냉동-치즈볼-더블치즈볼",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.39},
+  {sfaSeq:11.2,name:"냉동-BBQ소떡소떡",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.27},
+  {sfaSeq:12,name:"냉동-모둠감자튀김,모듬",unit:"개/개",policy:"여유",buffer:0.8,daily:0.77},
   {sfaSeq:12.4,name:"냉동-멘보샤",unit:"개/박스",policy:"전부",buffer:0.3,daily:0.3},
-  {sfaSeq:14,name:"냉동-오징어튀김(오징어다리아님)",unit:"봉/봉",policy:"여유",buffer:0,daily:0.2},
-  {sfaSeq:15,name:"냉동-오감볼",unit:"개/개",policy:"여유",buffer:2,daily:1},
-  {sfaSeq:15.1,name:"냉동-치즈스틱",unit:"개/개",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:17,name:"냉동-타르타르새우",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.3},
-  {sfaSeq:17.1,name:"냉동-고추튀김",unit:"개/개",policy:"여유",buffer:0.2,daily:0.19},
+  {sfaSeq:14,name:"냉동-오징어튀김(오징어다리아님)",unit:"봉/봉",policy:"여유",buffer:0,daily:0.13},
+  {sfaSeq:15,name:"냉동-오감볼",unit:"개/개",policy:"여유",buffer:2,daily:1.13},
+  {sfaSeq:15.1,name:"냉동-치즈스틱",unit:"개/개",policy:"여유",buffer:1,daily:0.02},
+  {sfaSeq:17,name:"냉동-타르타르새우",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.22},
+  {sfaSeq:17.1,name:"냉동-고추튀김",unit:"개/개",policy:"여유",buffer:0.2,daily:0.16},
   {sfaSeq:18,name:"BBQ싱싱옥수수콘립",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.35},
-  {sfaSeq:18.1,name:"냉동-떡볶이(16개)",unit:"개/박스",policy:"전부",buffer:3,daily:3},
+  {sfaSeq:18.1,name:"냉동-떡볶이(16개)",unit:"개/박스",policy:"전부",buffer:3,daily:3.47},
   {sfaSeq:18.2,name:"BBQ필크런치플레이크",unit:"개/박스",policy:"",buffer:0,daily:0},
-  {sfaSeq:19,name:"신선육(10호)-뼈한마리",unit:"박/박스",policy:"전부",buffer:0.8,daily:2},
-  {sfaSeq:20,name:"통다리바베큐,자메이카",unit:"개/개",policy:"전부",buffer:4,daily:6},
-  {sfaSeq:21,name:"신선순살(720g)",unit:"박/박스",policy:"전부",buffer:1,daily:2},
-  {sfaSeq:22,name:"신선북채(신)-다리",unit:"팩/팩",policy:"전부",buffer:1,daily:2.4},
-  {sfaSeq:23,name:"벌크신선통날개",unit:"팩/팩",policy:"전부",buffer:0.3,daily:1.1},
-  {sfaSeq:24,name:"(신)스모크치킨",unit:"봉/봉",policy:"전부",buffer:0.7,daily:0.6},
-  {sfaSeq:24.1,name:"파인마요",unit:"박스/박스",policy:"여유",buffer:0.5,daily:0.1},
-  {sfaSeq:24.2,name:"극한갈비소스",unit:"",policy:"",buffer:1,daily:0},
-  {sfaSeq:25,name:"배달소스-순살크래커소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:26,name:"맵소디소스",unit:"팩/팩",policy:"여유",buffer:0.2,daily:0.2},
-  {sfaSeq:27,name:"배달소스-(신)비비소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:27.1,name:"레몬보이",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:28,name:"배달소스-(신)스모크소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0.1},
-  {sfaSeq:29,name:"볼케이노핫소스",unit:"박스/박스",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:29.1,name:"BBQ필크런치소스",unit:"봉/봉",policy:"",buffer:0,daily:0},
-  {sfaSeq:29.5,name:"산가측정페이퍼",unit:"",policy:"전부",buffer:1,daily:0},
-  {sfaSeq:30,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1,daily:1.5},
-  {sfaSeq:30.1,name:"치킨무(벌크)",unit:"팩/박스",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:32,name:"햇반",unit:"박스/박스",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:33,name:"먹태버터맛,매운맛",unit:"봉/봉",policy:"전부",buffer:1,daily:0},
-  {sfaSeq:34,name:"핫앤크리스피마리네이드",unit:"팩/팩",policy:"여유",buffer:0.3,daily:0.3},
-  {sfaSeq:35,name:"블랙페퍼시즈닝(15g)",unit:"봉/봉",policy:"",buffer:1,daily:0},
-  {sfaSeq:36,name:"골든크리스피배터믹스(맵소반죽)",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.5},
-  {sfaSeq:37,name:"BBQ양념치킨소스",unit:"팩/팩",policy:"여유",buffer:1.5,daily:2},
-  {sfaSeq:39,name:"땡쇼크소스",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.2},
-  {sfaSeq:41,name:"올리브치킨용배터믹스-파우다",unit:"팩/팩",policy:"여유",buffer:2,daily:2.5},
-  {sfaSeq:42,name:"올리브마리네이드(신)",unit:"팩/팩",policy:"여유",buffer:1.2,daily:0.6},
-  {sfaSeq:43,name:"빠리배터믹스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.1},
+  {sfaSeq:19,name:"신선육(10호)-뼈한마리",unit:"박/박스",policy:"전부",buffer:0.8,daily:2.27},
+  {sfaSeq:20,name:"통다리바베큐,자메이카",unit:"개/개",policy:"전부",buffer:4,daily:7.35},
+  {sfaSeq:21,name:"신선순살(720g)",unit:"박/박스",policy:"전부",buffer:1,daily:1.89},
+  {sfaSeq:22,name:"신선북채(신)-다리",unit:"팩/팩",policy:"전부",buffer:1,daily:2.53},
+  {sfaSeq:23,name:"벌크신선통날개",unit:"팩/팩",policy:"전부",buffer:0.3,daily:1.07},
+  {sfaSeq:24,name:"(신)스모크치킨",unit:"봉/봉",policy:"전부",buffer:0.7,daily:0.43},
+  {sfaSeq:24.1,name:"파인마요",unit:"박스/박스",policy:"여유",buffer:0.5,daily:0.13},
+  {sfaSeq:24.2,name:"극한갈비소스",unit:"",policy:"",buffer:1,daily:0.22},
+  {sfaSeq:25,name:"배달소스-순살크래커소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0.02},
+  {sfaSeq:26,name:"맵소디소스",unit:"팩/팩",policy:"여유",buffer:0.2,daily:0.1},
+  {sfaSeq:27,name:"배달소스-(신)비비소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0.1},
+  {sfaSeq:27.1,name:"레몬보이",unit:"봉/봉",policy:"여유",buffer:1,daily:0.05},
+  {sfaSeq:28,name:"배달소스-(신)스모크소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0.11},
+  {sfaSeq:29,name:"볼케이노핫소스",unit:"박스/박스",policy:"여유",buffer:1,daily:0.08},
+  {sfaSeq:29.1,name:"BBQ필크런치소스",unit:"봉/봉",policy:"",buffer:0,daily:0.18},
+  {sfaSeq:29.5,name:"산가측정페이퍼",unit:"",policy:"전부",buffer:1,daily:0.01},
+  {sfaSeq:30,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1,daily:1.49},
+  {sfaSeq:30.1,name:"치킨무(벌크)",unit:"팩/박스",policy:"여유",buffer:1,daily:0.11},
+  {sfaSeq:32,name:"햇반",unit:"박스/박스",policy:"여유",buffer:1,daily:0.08},
+  {sfaSeq:33,name:"먹태버터맛,매운맛",unit:"봉/봉",policy:"전부",buffer:1,daily:0.11},
+  {sfaSeq:34,name:"핫앤크리스피마리네이드",unit:"팩/팩",policy:"여유",buffer:0.3,daily:0.41},
+  {sfaSeq:35,name:"블랙페퍼시즈닝(15g)",unit:"봉/봉",policy:"",buffer:1,daily:0.04},
+  {sfaSeq:36,name:"골든크리스피배터믹스(맵소반죽)",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.42},
+  {sfaSeq:37,name:"BBQ양념치킨소스",unit:"팩/팩",policy:"여유",buffer:1.5,daily:1.65},
+  {sfaSeq:39,name:"땡쇼크소스",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.16},
+  {sfaSeq:41,name:"올리브치킨용배터믹스-파우다",unit:"팩/팩",policy:"여유",buffer:2,daily:3.04},
+  {sfaSeq:42,name:"올리브마리네이드(신)",unit:"팩/팩",policy:"여유",buffer:1.2,daily:0.8},
+  {sfaSeq:43,name:"빠리배터믹스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.06},
   {sfaSeq:44,name:"쉐킷쉐킷치즈맛시즈닝",unit:"",policy:"",buffer:1,daily:0},
-  {sfaSeq:45,name:"일회용 케찹",unit:"박스/박스",policy:"",buffer:1,daily:0},
-  {sfaSeq:46,name:"통다리바베큐소스(1kg)",unit:"팩/팩",policy:"여유",buffer:1,daily:0.8},
-  {sfaSeq:47,name:"BBQ박스패키지(대)",unit:"박/박스",policy:"여유",buffer:0.3,daily:0.2},
-  {sfaSeq:48,name:"BBQ박스패키지(중)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.5},
-  {sfaSeq:49,name:"BBQ박스패키지(소)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.2},
-  {sfaSeq:49.1,name:"BBQ버라이어티팩패키지",unit:"박/박스",policy:"",buffer:0,daily:0},
-  {sfaSeq:50,name:"트레이(중)",unit:"박/박스",policy:"여유",buffer:0.6,daily:0.55},
-  {sfaSeq:51,name:"트레이(소)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.6},
-  {sfaSeq:52,name:"비닐-BBQ비닐봉투(소)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.25},
-  {sfaSeq:52.1,name:"피자비닐봉투",unit:"봉/봉",policy:"",buffer:0,daily:0},
-  {sfaSeq:53,name:"비닐-(신규)BBQ비닐쇼핑백(대)",unit:"봉/봉",policy:"전부",buffer:1,daily:0},
-  {sfaSeq:54,name:"비닐-(신규)BBQ비닐쇼핑백(중)",unit:"봉/봉",policy:"여유",buffer:1,daily:0.6},
-  {sfaSeq:54.1,name:"JHP종이봉투(대)or(소)",unit:"묶/묶음",policy:"여유",buffer:0.3,daily:0.1},
-  {sfaSeq:54.2,name:"BBQ종이봉투(대)",unit:"봉/봉",policy:"",buffer:0,daily:0},
-  {sfaSeq:55,name:"종이쇼핑백",unit:"박/박스",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:45,name:"일회용 케찹",unit:"박스/박스",policy:"",buffer:1,daily:0.02},
+  {sfaSeq:46,name:"통다리바베큐소스(1kg)",unit:"팩/팩",policy:"여유",buffer:1,daily:0.7},
+  {sfaSeq:47,name:"BBQ박스패키지(대)",unit:"박/박스",policy:"여유",buffer:0.3,daily:0.22},
+  {sfaSeq:48,name:"BBQ박스패키지(중)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.49},
+  {sfaSeq:49,name:"BBQ박스패키지(소)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.19},
+  {sfaSeq:49.1,name:"BBQ버라이어티팩패키지",unit:"박/박스",policy:"",buffer:0,daily:0.02},
+  {sfaSeq:50,name:"트레이(중)",unit:"박/박스",policy:"여유",buffer:0.6,daily:0.52},
+  {sfaSeq:51,name:"트레이(소)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.63},
+  {sfaSeq:52,name:"비닐-BBQ비닐봉투(소)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.28},
+  {sfaSeq:52.1,name:"피자비닐봉투",unit:"봉/봉",policy:"",buffer:0,daily:0.01},
+  {sfaSeq:53,name:"비닐-(신규)BBQ비닐쇼핑백(대)",unit:"봉/봉",policy:"전부",buffer:1,daily:0.01},
+  {sfaSeq:54,name:"비닐-(신규)BBQ비닐쇼핑백(중)",unit:"봉/봉",policy:"여유",buffer:1,daily:0.65},
+  {sfaSeq:54.1,name:"JHP종이봉투(대)or(소)",unit:"묶/묶음",policy:"여유",buffer:0.3,daily:0.05},
+  {sfaSeq:54.2,name:"BBQ종이봉투(대)",unit:"봉/봉",policy:"",buffer:0,daily:0.01},
+  {sfaSeq:55,name:"종이쇼핑백",unit:"박/박스",policy:"여유",buffer:1,daily:0.02},
   {sfaSeq:56,name:"치킨간지",unit:"박스/박스",policy:"",buffer:0.2,daily:0.1},
-  {sfaSeq:56,name:"알루미늄캔(뚜껑포함)",unit:"",policy:"",buffer:0.5,daily:0.1},
-  {sfaSeq:58,name:"내프킨,냅킨",unit:"박스/박스",policy:"",buffer:1,daily:0},
-  {sfaSeq:58,name:"직사각용기1(190,감자)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.1},
-  {sfaSeq:58.1,name:"직사각용기2(230,치즈스틱)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.1},
-  {sfaSeq:59,name:"물티슈(500)",unit:"",policy:"전부",buffer:1,daily:0},
-  {sfaSeq:59,name:"소독저(젓가락)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.2},
-  {sfaSeq:60,name:"안신스티커,BBQ테이프(N)",unit:"",policy:"",buffer:1,daily:0},
-  {sfaSeq:61,name:"(신)롤백(500매)",unit:"개",policy:"",buffer:1,daily:0},
-  {sfaSeq:62,name:"(신)위생장갑(200매)",unit:"개/개",policy:"전부",buffer:0.4,daily:0.4},
-  {sfaSeq:62.2,name:"여과지필터(320*535)(14)",unit:"장",policy:"전부",buffer:1,daily:0},
-  {sfaSeq:63,name:"수제맥주 공케그(빈통)",unit:"",policy:"여유",buffer:0,daily:0},
-  {sfaSeq:63,name:"(컵소스)BBQ양념치킨소스(배달용)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.3},
+  {sfaSeq:56,name:"알루미늄캔(뚜껑포함)",unit:"",policy:"",buffer:0.5,daily:0.02},
+  {sfaSeq:58,name:"내프킨,냅킨",unit:"박스/박스",policy:"",buffer:1,daily:0.02},
+  {sfaSeq:58,name:"직사각용기1(190,감자)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.08},
+  {sfaSeq:58.1,name:"직사각용기2(230,치즈스틱)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.02},
+  {sfaSeq:59,name:"물티슈(500)",unit:"",policy:"전부",buffer:1,daily:0.02},
+  {sfaSeq:59,name:"소독저(젓가락)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.18},
+  {sfaSeq:60,name:"안신스티커,BBQ테이프(N)",unit:"",policy:"",buffer:1,daily:0.04},
+  {sfaSeq:61,name:"(신)롤백(500매)",unit:"개",policy:"",buffer:1,daily:0.01},
+  {sfaSeq:62,name:"(신)위생장갑(200매)",unit:"개/개",policy:"전부",buffer:0.4,daily:0.39},
+  {sfaSeq:62.2,name:"여과지필터(320*535)(14)",unit:"장",policy:"전부",buffer:1,daily:0.01},
+  {sfaSeq:63,name:"수제맥주 공케그(빈통)",unit:"",policy:"여유",buffer:0,daily:0.02},
+  {sfaSeq:63,name:"(컵소스)BBQ양념치킨소스(배달용)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.11},
   {sfaSeq:64,name:"스티커T_컷팅칼(떡볶이스티커)",unit:"개/봉",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:65,name:"BBQ뿜치킹시즈닝(58g)",unit:"",policy:"",buffer:0.3,daily:0.4},
-  {sfaSeq:66,name:"BBQ뿜치킹시즈닝(25g)",unit:"",policy:"전부",buffer:0.2,daily:0.1},
+  {sfaSeq:65,name:"BBQ뿜치킹시즈닝(58g)",unit:"",policy:"",buffer:0.3,daily:0.1},
+  {sfaSeq:66,name:"BBQ뿜치킹시즈닝(25g)",unit:"",policy:"전부",buffer:0.2,daily:0.08},
   {sfaSeq:99,name:"30분 주차권",unit:"",policy:"",buffer:1,daily:0},
   {sfaSeq:99,name:"종이,쿠킹호일(25cm*50m)",unit:"개/개",policy:"여유",buffer:1,daily:0},
   {sfaSeq:99,name:"삿포로, 스텔라",unit:"",policy:"여유",buffer:1,daily:0},
   {sfaSeq:99,name:"포스용지",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
   {sfaSeq:99,name:"휴지",unit:"",policy:"여유",buffer:1,daily:0},
   {sfaSeq:9999,name:"BBQ블랙페퍼시즈닝(벌크)",unit:"봉/봉",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:9999,name:"고추,가위,소금,종이호일,레몬보이,검정봉투",unit:"",policy:"",buffer:1,daily:0},
-  {sfaSeq:43.5,name:"치플레소스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.1},
+  {sfaSeq:9999,name:"고추,가위,소금,종이호일,레몬보이,검정봉투",unit:"",policy:"",buffer:1,daily:0.02},
+  {sfaSeq:43.5,name:"치플레소스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.02},
 ];
 
 const ITEM_NAME_ALIASES = {
@@ -2928,6 +3133,24 @@ function baseDailyUsage(item) {
   if (Object.prototype.hasOwnProperty.call(aiUsageAccepted, item.name)) return aiUsageAccepted[item.name].suggestedUsage;
   return item.daily || 0;
 }
+
+function applyDailyUsageCalibration(sourceOverrides = overrides, force = false) {
+  const storedVersion = localStorage.getItem(DAILY_USAGE_STORAGE_KEY);
+  if (!force && storedVersion === DAILY_USAGE_STORAGE_VERSION) return sourceOverrides || {};
+  const calibrated = new Set(CALIBRATED_DAILY_ITEM_NAMES);
+  const next = {};
+  Object.keys(sourceOverrides || {}).forEach(name => {
+    const row = sourceOverrides[name];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return;
+    const copy = { ...row };
+    if (calibrated.has(name) && Object.prototype.hasOwnProperty.call(copy, 'l')) delete copy.l;
+    if (Object.keys(copy).length) next[name] = copy;
+  });
+  localStorage.setItem(DAILY_USAGE_STORAGE_KEY, DAILY_USAGE_STORAGE_VERSION);
+  localStorage.setItem('bbq_overrides', JSON.stringify(next));
+  return next;
+}
+
 function getL(item) {
   return baseDailyUsage(item);
 }
@@ -4143,8 +4366,11 @@ function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null,
     const aliasConflict = !aliasUnlinked && aliasState.aliases.some(alias => conflictKeys.has(normalizedActualNameKey(alias)));
     const factor = explicitOrderUnitFactorForItem(item, aliasState);
     const factorSuggestion = aliasUnlinked ? null : movementFactorSuggestionForItem(item);
-    const priceEvidence = aliasUnlinked ? null : priceEvidenceForActualAliases(aliasState.aliases, ledger, now, data, item.name);
-    const mappedNamePriceCandidate = Boolean(priceEvidence?.nonStoredCandidate);
+    const livePriceEvidence = aliasUnlinked ? null : priceEvidenceForActualAliases(aliasState.aliases, ledger, now, data, item.name);
+    const mappedNamePriceCandidate = Boolean(livePriceEvidence?.nonStoredCandidate);
+    const priceEvidence = (livePriceEvidence?.valid && Number.isFinite(livePriceEvidence.unitPrice))
+      ? livePriceEvidence
+      : (aliasUnlinked ? null : staticDefaultPriceEvidenceForItem(item));
     let matchStatus = aliasUnlinked ? UNIFIED_ORDER_MATCH_STATUSES.ITEM_UNLINKED : UNIFIED_ORDER_MATCH_STATUSES.MATCHED;
     if (!aliasUnlinked) {
       if (aliasConflict) matchStatus = UNIFIED_ORDER_MATCH_STATUSES.ALIAS_CONFLICT;
@@ -4198,7 +4424,7 @@ function resolveUnifiedOrderRows(data = lastSfaCompareData, ledgerSource = null,
     }, factor === 1 && orderUnitParts(item).same ? 'roundUpDecimal(stockNeed)' : 'ceilDiscrete(stockNeed / factor)', ['stockNeed', 'factor']) : null;
     const canCalculateAmount = !aliasUnlinked && !aliasConflict && hasResolvedPrice && Number.isFinite(orderQty);
     const expectedAmountEvidence = canCalculateAmount ? numericEvidenceNode(orderQty * priceEvidence.unitPrice, 'expectedAmount', {
-      provenance: 'DETERMINISTIC_DERIVATION',
+      provenance: priceEvidence.provenance === 'STATIC_SFA_PERIOD_UNIT_PRICE' ? 'STATIC_SFA_PERIOD_UNIT_PRICE' : 'DETERMINISTIC_DERIVATION',
       sourceRunId: priceEvidence.sourceRunId,
       asOf: now
     }, 'orderQty * actualUnitPrice', ['orderQty', 'actualUnitPrice']) : null;
@@ -4246,28 +4472,32 @@ function unifiedOrderRowsByItemKey(data = lastSfaCompareData, ledgerSource = nul
 
 function expectedOrderAmountForItem(item, stockNeed, resolvedRow = undefined) {
   const row = resolvedRow === undefined ? unifiedOrderRowForItem(item.name) : resolvedRow;
-  if (!row?.priceEvidence || !Number.isFinite(row.unitPrice) || row.matchStatus === UNIFIED_ORDER_MATCH_STATUSES.ALIAS_CONFLICT) return null;
-  const recommendedQty = orderQtyForUnifiedRow(item, stockNeed, row.factor);
+  if (row?.matchStatus === UNIFIED_ORDER_MATCH_STATUSES.ALIAS_CONFLICT) return null;
+  const unitPrice = Number.isFinite(row?.unitPrice)
+    ? row.unitPrice
+    : (row?.priceEvidence?.valid && Number.isFinite(row.priceEvidence.unitPrice) ? row.priceEvidence.unitPrice : defaultOrderUnitPriceForItem(item));
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) return null;
+  const recommendedQty = orderQtyForUnifiedRow(item, stockNeed, row?.factor);
   if (!Number.isFinite(recommendedQty)) return null;
-  const factor = Number(row.factor);
-  const stockUnitPrice = Number.isFinite(row.perStockUnitPrice)
+  const factor = Number(row?.factor);
+  const stockUnitPrice = Number.isFinite(row?.perStockUnitPrice)
     ? row.perStockUnitPrice
-    : (Number.isFinite(factor) && factor > 0 ? row.unitPrice / factor : null);
+    : (Number.isFinite(factor) && factor > 0 ? unitPrice / factor : null);
   return {
-    expected_order_amount: recommendedQty * row.unitPrice,
+    expected_order_amount: recommendedQty * unitPrice,
     recommended_order_qty: recommendedQty,
-    order_unit_price: row.unitPrice,
+    order_unit_price: unitPrice,
     stock_unit_price: stockUnitPrice,
     order_unit_to_stock_factor: Number.isFinite(factor) && factor > 0 ? factor : null,
     // 기존 내부 계약 호환용이며 의미는 발주 1단위 가격이다.
-    unit_price: row.unitPrice,
-    basis: row.priceEvidence.basis,
-    source_date: row.priceEvidence.dateKey,
-    source_file: row.priceEvidence.fileName,
-    source_qty: row.priceEvidence.actualOrderQty,
-    source_amount: row.priceEvidence.amount,
-    source_run_id: row.priceEvidence.runId,
-    issues: row.issues
+    unit_price: unitPrice,
+    basis: row?.priceEvidence?.basis || 'STATIC_SFA_PERIOD_UNIT_PRICE',
+    source_date: row?.priceEvidence?.dateKey || '20260601',
+    source_file: row?.priceEvidence?.fileName || 'SFA 2026-06-01..08-22',
+    source_qty: row?.priceEvidence?.actualOrderQty ?? null,
+    source_amount: row?.priceEvidence?.amount ?? null,
+    source_run_id: row?.priceEvidence?.runId || '',
+    issues: row?.issues || []
   };
 }
 
@@ -4340,6 +4570,7 @@ function priceEvidenceSourceText(evidence) {
   if (evidence.provenance === 'EXACT_MAPPED_NAME_CURRENT_EXCEL') source = '최신 엑셀 정확매칭 후보(미저장)';
   else if (evidence.provenance === 'EXACT_CURRENT_EXCEL') source = '최신 엑셀 확정별명';
   else if (evidence.provenance === 'SFA_PRICE_HISTORY') source = '3개월 실발주 가격이력(미저장 후보)';
+  else if (evidence.provenance === 'STATIC_SFA_PERIOD_UNIT_PRICE') source = '3개월 실발주 기간평균 단가';
   else if (evidence.provenance === 'EXACT_MAPPED_NAME_LEDGER') source = '누적 엑셀 정확매칭 후보(미저장)';
   else if (evidence.provenance === 'LOSSLESS_LEDGER') source = '누적 실발주 엑셀';
   const basis = priceEvidenceBasisText(evidence);
@@ -4349,6 +4580,7 @@ function priceEvidenceSourceText(evidence) {
 function priceEvidenceShortSourceText(evidence) {
   if (!evidence) return '가격 자료 기준';
   if (evidence.provenance === 'SFA_PRICE_HISTORY') return '최근 3개월 발주 기준';
+  if (evidence.provenance === 'STATIC_SFA_PERIOD_UNIT_PRICE') return '3개월 발주 단가';
   if (evidence.provenance === 'EXACT_MAPPED_NAME_CURRENT_EXCEL' || evidence.provenance === 'EXACT_CURRENT_EXCEL') return '최신 엑셀 기준';
   if (evidence.provenance === 'EXACT_MAPPED_NAME_LEDGER' || evidence.provenance === 'LOSSLESS_LEDGER') return '이전 발주이력 기준';
   return '발주 엑셀 기준';
@@ -8933,7 +9165,7 @@ function buildConfirmedSaveCommit(reason = 'enter') {
   const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(lastSfaCompareData, aliasMatches);
   const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(lastSfaCompareData, aliasMatches);
   const ledger = sfaOrderLedgerForPayload();
-  const payload = { savedAt: now, stateRevision: revision, inventoryRevision: inventoryRevisionValue, salesRevision: Number(salesRevision || 0), dateKey, orderDays: days, zoneOrder: sanitizeZoneOrder(zoneOrder, entries), entries: sanitizeEntries(entries), inventoryByItemKey: inventoryByItemKeyForPayload(), overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), sfaAnalysisHistory: sfaLedgerPointer(ledger), sfaOrderLedger: ledger, sfaActualHistory: sfaActualHistoryPointer(ledger), aiUsageEvidence: buildAiUsageEvidenceSummary(now, ledger), aiUsageAdvisory: sanitizeAiUsageAdvisory(), aiUsageAccepted: sanitizeAiUsageAccepted(), sfaAnalysisReadModel: buildSfaAnalysisReadModel(lastSfaCompareData), dailySales, baseSales: getBaseSales(), salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
+  const payload = { savedAt: now, stateRevision: revision, inventoryRevision: inventoryRevisionValue, salesRevision: Number(salesRevision || 0), dateKey, orderDays: days, zoneOrder: sanitizeZoneOrder(zoneOrder, entries), entries: sanitizeEntries(entries), inventoryByItemKey: inventoryByItemKeyForPayload(), overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), sfaAnalysisHistory: sfaLedgerPointer(ledger), sfaOrderLedger: ledger, sfaActualHistory: sfaActualHistoryPointer(ledger), aiUsageEvidence: buildAiUsageEvidenceSummary(now, ledger), aiUsageAdvisory: sanitizeAiUsageAdvisory(), aiUsageAccepted: sanitizeAiUsageAccepted(), sfaAnalysisReadModel: buildSfaAnalysisReadModel(lastSfaCompareData), dailySales, baseSales: getBaseSales(), dailyUsageVersion: DAILY_USAGE_STORAGE_VERSION, salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   if (activeSyncResetMarker.id) payload.syncReset = { ...activeSyncResetMarker, scope: 'current_inventory' };
   const commitId = `${now}-${revision}-${++confirmedSaveSequence}`;
   return { commitId, revision, inventoryRevision: inventoryRevisionValue, dateKey, reason, createdAt: now, body: JSON.stringify(payload), entryZonePatches: entryZonePatchesForCommit() };
@@ -9380,7 +9612,11 @@ function applyFBData(data) {
   else if (Object.prototype.hasOwnProperty.call(data, 'inventoryByItemKey')) entries = entriesFromInventoryByItemKey(data.inventoryByItemKey);
   if (Object.prototype.hasOwnProperty.call(data, 'zoneOrder')) zoneOrder = sanitizeZoneOrder(data.zoneOrder, entries);
   else zoneOrder = sanitizeZoneOrder(zoneOrder, entries);
-  if (Object.prototype.hasOwnProperty.call(data, 'overrides')) overrides = migrateNamedObject(data.overrides);
+  if (Object.prototype.hasOwnProperty.call(data, 'overrides')) {
+    overrides = migrateNamedObject(data.overrides);
+    if (data.dailyUsageVersion !== DAILY_USAGE_STORAGE_VERSION) overrides = applyDailyUsageCalibration(overrides, true);
+    else localStorage.setItem(DAILY_USAGE_STORAGE_KEY, DAILY_USAGE_STORAGE_VERSION);
+  }
   if (Object.prototype.hasOwnProperty.call(data, 'outputOrder')) outputOrder = [];
   if (Object.prototype.hasOwnProperty.call(data, 'actualOrders') && normalizeHistoryDateKey(data.dateKey) === kstDateKey(Date.now())) {
     actualOrders = cleanActualOrders(data.actualOrders);
@@ -9594,6 +9830,7 @@ function startOrderHelperApp() {
   orderHelperStarted = true;
   // 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 + 구 품목명 갱신
   migrateRuntimeItemNames();
+  overrides = applyDailyUsageCalibration(overrides);
   actualOrders = cleanActualOrders();
 
   // 기본/사용자 항목 목록에는 있는데 entries에 없는 품목 보충

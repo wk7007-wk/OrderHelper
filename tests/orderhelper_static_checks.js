@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0823.0245';/, 'APP_VERSION must match the KST SFA master/alias/factor correction release time');
+mustMatch(/const APP_VERSION = '0823.0345';/, 'APP_VERSION must match the KST SFA period-average daily/price release');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -156,7 +156,7 @@ mustMatch(/function parseMoney\(value\)/, 'money parser missing');
 mustMatch(/function formatWon\(value\)/, 'won formatter missing');
 mustMatch(/function sfaUnitPriceFromRow\(row\)/, 'SFA unit price resolver missing');
 mustMatch(/function expectedOrderAmountForItem\(item, stockNeed, resolvedRow = undefined\)/, 'expected order amount helper missing');
-mustMatch(/row\.matchStatus === UNIFIED_ORDER_MATCH_STATUSES\.ALIAS_CONFLICT/, 'amount display helper must also fail closed on alias conflicts');
+mustMatch(/row\?\.matchStatus === UNIFIED_ORDER_MATCH_STATUSES\.ALIAS_CONFLICT/, 'amount display helper must also fail closed on alias conflicts');
 mustMatch(/function resolveUnifiedOrderRows\(data = lastSfaCompareData, ledgerSource = null, days = currentOrderDaysValue\(\), now = Date\.now\(\)\)/, 'single canonical order-row resolver missing');
 mustMatch(/function unifiedOrderRowsByItemKey\(data = lastSfaCompareData, ledgerSource = null, days = currentOrderDaysValue\(\), now = Date\.now\(\)\)/, 'resolved rows need one reusable itemKey map');
 mustMatch(/const resolvedOrderRows = resolveUnifiedOrderRows\(lastSfaCompareData, null, days\);\s*const resolvedOrderRowsByItemKey = new Map\(resolvedOrderRows\.map\(row => \[row\.itemKey, row\]\)\);/, 'one full render must resolve deterministic rows once before reusing the itemKey map');
@@ -426,7 +426,7 @@ mustMatch(/const priority = \['ALIAS_CONFLICT', 'DATA_CONFLICT'/, 'alias-conflic
 mustMatch(/function priceEvidenceShortSourceText\(evidence\)/, 'employee amount card needs a short price-source helper');
 mustMatch(/return '최신 엑셀 기준';/, 'current Excel provenance must be shortened for employees');
 mustMatch(/function orderPricePresentation\(item, estimate\)/, 'employee amount card needs separate stock-unit and order-unit price labels');
-mustMatch(/order_unit_price: row\.unitPrice,[\s\S]*stock_unit_price: stockUnitPrice,[\s\S]*order_unit_to_stock_factor:/, 'expected amount contract must expose both price meanings and their factor');
+mustMatch(/order_unit_price: unitPrice,[\s\S]*stock_unit_price: stockUnitPrice,[\s\S]*order_unit_to_stock_factor:/, 'expected amount contract must expose both price meanings and their factor');
 mustMatch(/visible: `\$\{stockLabel\} \$\{formatWon\(stockPrice\)\} · \$\{orderLabel\} \$\{formatWon\(orderPrice\)\}`/, 'converted items must show stock-unit and one-order-unit prices separately');
 mustMatch(/function orderPriceMissingActionText\(row\)/, 'missing amount cards need a short actionable reason');
 mustMatch(/order-amount-primary">예상금액 확인 필요<\/span><span class="order-amount-secondary">\$\{escapeHtml\(action\)\}/, 'missing rows must show a short two-line employee card');
@@ -525,11 +525,11 @@ mustNotMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(
 mustMatch(/function pushDebugLog\(message, tone = 'debug', ts = Date\.now\(\)\)/, 'internal debug logger missing');
 mustMatch(/debugLogs: debugLogs\.slice\(0, DEBUG_LOG_LIMIT\)/, 'debug logs must be included in Firebase payload');
 mustMatch(/pushDebugLog\('키 ' \+ msg, 'warn'\)/, 'stock key logs must be analysis-only');
-mustMatch(/name:"배달소스-\(신\)비비소스",unit:"봉\/봉",policy:"여유",buffer:1,daily:0/, 'BB sauce baseline missing');
-mustMatch(/name:"레몬보이",unit:"봉\/봉",policy:"여유",buffer:1,daily:0/, 'Lemonboy must match BB sauce baseline');
+mustMatch(/name:"배달소스-\(신\)비비소스",unit:"봉\/봉",policy:"여유",buffer:1,daily:0\.1/, 'BB sauce baseline missing');
+mustMatch(/name:"레몬보이",unit:"봉\/봉",policy:"여유",buffer:1,daily:0\.05/, 'Lemonboy baseline daily must use period average');
 mustMatch(/name:"고추,가위,소금,종이호일,레몬보이,검정봉투"/, 'existing combined Lemonboy misc item must remain');
-mustMatch(/name:"BBQ양념치킨소스",unit:"팩\/팩",policy:"여유",buffer:1\.5,daily:2/, 'kitchen sauce name must match current SFA order name');
-mustMatch(/name:"\(컵소스\)BBQ양념치킨소스\(배달용\)",unit:"봉\/봉",policy:"여유",buffer:0\.3,daily:0\.3/, 'delivery sauce name must match current SFA order name');
+mustMatch(/name:"BBQ양념치킨소스",unit:"팩\/팩",policy:"여유",buffer:1\.5,daily:1\.65/, 'kitchen sauce name must match current SFA order name');
+mustMatch(/name:"\(컵소스\)BBQ양념치킨소스\(배달용\)",unit:"봉\/봉",policy:"여유",buffer:0\.3,daily:0\.11/, 'delivery sauce name must match current SFA order name');
 mustMatch(/name:"직사각용기1\(190,감자\)",unit:"묶\/묶음"[\s\S]*name:"직사각용기2\(230,치즈스틱\)",unit:"묶\/묶음"/, 'rectangular container 1 and 2 must be separate inventory items');
 mustMatch(/const ITEM_NAME_ALIASES = \{[\s\S]*"BBQ시크릿양념소스\(주방용\)": "BBQ양념치킨소스"[\s\S]*"BBQ시크릿양념소스\(배달용\)": "\(컵소스\)BBQ양념치킨소스\(배달용\)"/, 'old BBQ secret sauce names must migrate to current SFA names');
 mustMatch(/"직사각용기1\(190,감자\),2\(230,치즈스틱\)": "직사각용기1\(190,감자\)"/, 'legacy combined rectangular-container inventory must migrate once to item 1');
@@ -537,6 +537,17 @@ mustMatch(/const SFA_ACTUAL_ITEM_ALIASES = Object\.freeze\(\{[\s\S]*"BBQ직사�
 mustNotMatch(/"BBQ종이봉투\(대\)": "JHP종이봉투\(대\)or\(소\)"/, 'BBQ종이봉투(대) must not merge onto the JHP 대/소 combined MASTER');
 mustMatch(/const DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS = Object\.freeze\(\{[\s\S]*'냉동-핫윙,비비윙스': 10,[\s\S]*'냉동-떡볶이\(16개\)': 16,/ , 'static defaults must set 비비윙스 N=10 and 떡볶이 N=16');
 mustMatch(/function defaultOrderUnitToStockFactorForItem\(item\)/, 'static orderUnitToStockFactor helper missing');
+mustMatch(/const DEFAULT_ORDER_UNIT_PRICES = Object\.freeze\(\{/, 'static SFA period order-unit prices missing');
+mustMatch(/"냉동-핫윙,비비윙스": 123200,/, '비비윙스 BOX default must be 123200');
+mustMatch(/"냉동-떡볶이\(16개\)": 63360,/, '떡볶이 BOX default must be 63360');
+mustMatch(/const DAILY_USAGE_STORAGE_VERSION = 'sfa-avg-20260601-0822';/, 'daily usage calibration version missing');
+mustMatch(/function applyDailyUsageCalibration\(sourceOverrides = overrides, force = false\)/, 'one-shot daily usage calibration helper missing');
+mustMatch(/if \(calibrated\.has\(name\) && Object\.prototype\.hasOwnProperty\.call\(copy, 'l'\)\) delete copy\.l;/, 'daily calibration must strip overrides.l and keep k');
+mustMatch(/dailyUsageVersion: DAILY_USAGE_STORAGE_VERSION/, 'confirmed payload must carry the daily usage calibration version');
+mustMatch(/function staticDefaultPriceEvidenceForItem\(item\)/, 'missing-price fallback must expose static SFA period unit prices');
+mustMatch(/const livePriceEvidence = aliasUnlinked \? null : priceEvidenceForActualAliases[\s\S]*staticDefaultPriceEvidenceForItem\(item\)/, 'resolver must prefer live excel/Firebase prices then static defaults');
+mustMatch(/defaultOrderUnitPriceForItem\(item\)/, 'expected amount must fall back to static order-unit prices');
+
 mustMatch(/if \(staticDefault\) return staticDefault;/, 'conversionFactorForItem must apply static N before inferred analysis');
 mustMatch(/const LEGACY_ORDER_ACTUAL_ALIAS_MIGRATIONS = Object\.freeze\(\{[\s\S]*"BBQ뿜치킹시즈닝\(25g\)"[\s\S]*"BBQ뿜치킹시즈닝\(58G,조리용\)": "BBQ뿜치킹시즈닝\(20G,소포장별도판매용\)"/, 'legacy small-seasoning alias must migrate away from the 58G cooking product');
 mustMatch(/migrateActualAliasName\(aliasName, value\.actualName \|\| value\.targetName \|\| ''\)/, 'stored alias hydration must apply the bounded legacy actual-name migration');
@@ -566,13 +577,13 @@ mustMatch(/const BASE_SALES_STORAGE_VERSION = 'formula-264\.83';/, 'stored old 2
 mustMatch(/placeholder="264\.83"/, 'baseline input placeholder must show the new default');
 mustMatch(/weight_d = sales_d \/ baseSales/, 'expected sales must remain a ratio markup against baseline');
 mustMatch(/return Math\.max\(0, n\) \/ base;/, 'daily sales weights must divide by baseline instead of adding');
-mustMatch(/name:"냉동-핫윙,비비윙스",unit:"개\/박스",policy:"전부",buffer:3,daily:4/, 'hot-wings manual daily 4.0 must stay unconfirmed-factor untouched');
-mustMatch(/name:"냉동-떡볶이\(16개\)",unit:"개\/박스",policy:"전부",buffer:3,daily:3/, 'tteokbokki manual daily 3.0 must stay unconfirmed-factor untouched');
-mustMatch(/name:"BBQ필크런치플레이크",unit:"개\/박스",policy:"",buffer:0,daily:0/, '필크런치플레이크 must be a new unconfirmed MASTER');
-mustMatch(/name:"BBQ필크런치소스",unit:"봉\/봉",policy:"",buffer:0,daily:0/, '필크런치소스 must be a new unconfirmed MASTER');
-mustMatch(/name:"BBQ버라이어티팩패키지",unit:"박\/박스",policy:"",buffer:0,daily:0/, '버라이어티팩패키지 must be a new unconfirmed packaging MASTER');
-mustMatch(/name:"피자비닐봉투",unit:"봉\/봉",policy:"",buffer:0,daily:0/, '피자비닐봉투 must be its own MASTER');
-mustMatch(/name:"BBQ종이봉투\(대\)",unit:"봉\/봉",policy:"",buffer:0,daily:0/, 'BBQ종이봉투(대) must be its own unconfirmed MASTER with 봉 unit');
+mustMatch(/name:"냉동-핫윙,비비윙스",unit:"개\/박스",policy:"전부",buffer:3,daily:3\.01/, 'hot-wings MASTER.daily must be SFA period average 3.01 with buffer 3 unchanged');
+mustMatch(/name:"냉동-떡볶이\(16개\)",unit:"개\/박스",policy:"전부",buffer:3,daily:3\.47/, 'tteokbokki MASTER.daily must be SFA period average 3.47 with buffer 3 unchanged');
+mustMatch(/name:"BBQ필크런치플레이크",unit:"개\/박스",policy:"",buffer:0,daily:0/, '필크런치플레이크 daily stays 0 because N is unknown');
+mustMatch(/name:"BBQ필크런치소스",unit:"봉\/봉",policy:"",buffer:0,daily:0\.18/, '필크런치소스 MASTER.daily must use period average');
+mustMatch(/name:"BBQ버라이어티팩패키지",unit:"박\/박스",policy:"",buffer:0,daily:0\.02/, '버라이어티팩패키지 MASTER.daily must use period average');
+mustMatch(/name:"피자비닐봉투",unit:"봉\/봉",policy:"",buffer:0,daily:0\.01/, '피자비닐봉투 MASTER.daily must use period average');
+mustMatch(/name:"BBQ종이봉투\(대\)",unit:"봉\/봉",policy:"",buffer:0,daily:0\.01/, 'BBQ종이봉투(대) MASTER.daily must use period average with 봉 unit');
 mustNotMatch(/name:"햄야채볶음밥"/, 'one-off 햄야채볶음밥 must not remain in MASTER');
 mustNotMatch(/name:"등심돈까스\(통살\)"/, 'one-off 등심돈까스 must not remain in MASTER');
 mustNotMatch(/name:"황금죽"/, 'one-off 황금죽 must not remain in MASTER');
@@ -604,7 +615,7 @@ mustMatch(/function setOrderDaysValue\(value\)/, 'orderDays setter must exist fo
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderDays'\)\) setOrderDaysValue\(data\.orderDays\);/, 'Firebase sync must apply orderDays to the selector');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'entries'\)\) entries = migrateEntriesByName\(data\.entries\);/, 'Firebase sync must apply empty entries payloads by ownership check');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'zoneOrder'\)\) zoneOrder = sanitizeZoneOrder\(data\.zoneOrder, entries\);/, 'Firebase sync must hydrate the shared zone route order');
-mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'overrides'\)\) overrides = migrateNamedObject\(data\.overrides\);/, 'Firebase sync must apply cleared overrides payloads');
+mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'overrides'\)\) \{[\s\S]*overrides = migrateNamedObject\(data\.overrides\);[\s\S]*applyDailyUsageCalibration\(overrides, true\)/, 'Firebase sync must apply cleared overrides payloads then one-shot daily calibration');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderSiteMappings'\)\) orderSiteMappings = sanitizeOrderSiteMappings\(data\.orderSiteMappings\);/, 'Firebase sync must apply order-site mapping corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderAliasMappings'\)\) orderAliasMappings = sanitizeOrderAliasMappings\(data\.orderAliasMappings\);/, 'Firebase sync must apply order alias mapping corrections');
 mustMatch(/if \(Object\.prototype\.hasOwnProperty\.call\(data, 'orderUnitCorrections'\)\) orderUnitCorrections = sanitizeOrderUnitCorrections\(data\.orderUnitCorrections\);/, 'Firebase sync must apply order-unit corrections');
@@ -781,6 +792,15 @@ this.__OrderHelperApi = {
   conversionFactorForItem,
   defaultOrderUnitToStockFactorForItem,
   DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS,
+  DEFAULT_ORDER_UNIT_PRICES,
+  DAILY_USAGE_STORAGE_VERSION,
+  DAILY_USAGE_STORAGE_KEY,
+  CALIBRATED_DAILY_ITEM_NAMES,
+  defaultOrderUnitPriceForItem,
+  staticDefaultPriceEvidenceForItem,
+  applyDailyUsageCalibration,
+  getL,
+  getK,
   orderUnitParts,
   unitCorrectionForItem,
   orderManualItemsForPayload,
@@ -1064,22 +1084,68 @@ assert.strictEqual(api.canonicalItemNameForActual('BBQ직사각용기1호'), '�
 assert.strictEqual(api.canonicalItemNameForActual('BBQ직사각용기2호'), '직사각용기2(230,치즈스틱)', 'container 2 actual name must map only to item 2');
 assert.strictEqual(api.canonicalItemNameForActual('JHP종이봉투(대)'), 'JHP종이봉투(대)or(소)', 'JHP large-bag SFA row must connect to the combined check item');
 assert.strictEqual(api.canonicalItemNameForActual('BBQ종이봉투(대)'), '', 'BBQ large paper bag must not alias onto the JHP 대/소 combined item');
-assert(api.MASTER.some(item => item.name === 'BBQ종이봉투(대)' && item.unit === '봉/봉' && item.daily === 0), 'BBQ종이봉투(대) must exist as its own unconfirmed MASTER');
+assert(api.MASTER.some(item => item.name === 'BBQ종이봉투(대)' && item.unit === '봉/봉' && item.daily === 0.01), 'BBQ종이봉투(대) must exist as its own MASTER with period-average daily');
 assert.strictEqual(api.canonicalItemNameForActual('BBQ두마리치킨(파더스치킨)(국내산)'), '두마리치킨,파더스', '파더스 SFA two-piece chicken must map to the existing 파더스 MASTER');
 assert.strictEqual(api.canonicalItemNameForActual('BBQ두마리치킨(마늘)(국내산)'), '', 'garlic two-piece chicken must not share the 파더스 actual alias');
 assert.strictEqual(api.canonicalItemNameForActual('(신규)BBQ비닐쇼핑백(대)'), '비닐-(신규)BBQ비닐쇼핑백(대)', 'large vinyl shopping bag SFA row must map to the existing large MASTER');
 assert.notStrictEqual(api.canonicalItemNameForActual('(신규)BBQ비닐쇼핑백(대)'), '비닐-(신규)BBQ비닐쇼핑백(중)', 'large vinyl shopping bag must not merge onto 중');
 assert.strictEqual(api.canonicalItemNameForActual('피자비닐봉투'), '', '피자비닐봉투 must not be an alias onto another vinyl MASTER');
-assert(api.MASTER.some(item => item.name === '피자비닐봉투' && item.daily === 0), '피자비닐봉투 must exist as its own unconfirmed MASTER');
+assert(api.MASTER.some(item => item.name === '피자비닐봉투' && item.daily === 0.01), '피자비닐봉투 must exist as its own MASTER with period-average daily');
 assert(!api.MASTER.some(item => item.name === '햄야채볶음밥'), 'one-off 햄야채볶음밥 must be removed from MASTER');
 assert(!api.MASTER.some(item => item.name === '등심돈까스(통살)'), 'one-off 등심돈까스 must be removed from MASTER');
 assert(!api.MASTER.some(item => item.name === '황금죽'), 'one-off 황금죽 must be removed from MASTER');
-assert.strictEqual(api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스').daily, 4, 'hot-wings daily must remain 4');
-assert.strictEqual(api.MASTER.find(item => item.name === '냉동-떡볶이(16개)').daily, 3, 'tteokbokki daily must remain 3');
+assert.strictEqual(api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스').daily, 3.01, 'hot-wings daily must be SFA period average 3.01');
+assert.strictEqual(api.MASTER.find(item => item.name === '냉동-떡볶이(16개)').daily, 3.47, 'tteokbokki daily must be SFA period average 3.47');
+assert.strictEqual(api.MASTER.find(item => item.name === '(신)올리브오일').daily, 1.1, 'olive oil daily must be SFA period average 1.1');
+assert.strictEqual(api.MASTER.find(item => item.name === '통다리바베큐,자메이카').daily, 7.35, '통다리 daily must be SFA period average 7.35');
+assert.strictEqual(api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스').buffer, 3, 'hot-wings buffer must stay 3');
+assert.strictEqual(api.MASTER.find(item => item.name === '냉동-떡볶이(16개)').buffer, 3, 'tteokbokki buffer must stay 3');
+assert.strictEqual(api.MASTER.find(item => item.name === '냉동-멘보샤').daily, 0.3, '멘보샤 daily stays old because N is unknown');
+assert.strictEqual(api.MASTER.find(item => item.name === '두마리치킨,파더스').daily, 0, '파더스 daily stays 0 because N is unknown');
+assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ필크런치플레이크').daily, 0, '필크런치플레이크 daily stays 0 because N is unknown');
 assert.strictEqual(api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스').unit, '개/박스', 'hot-wings check unit must stay 개 and order unit 박스');
 assert.strictEqual(api.MASTER.find(item => item.name === '냉동-떡볶이(16개)').unit, '개/박스', 'tteokbokki check unit must stay 개 and order unit 박스');
 assert.strictEqual(api.DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS['냉동-핫윙,비비윙스'], 10, 'static default N for 비비윙스 must be 10');
 assert.strictEqual(api.DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS['냉동-떡볶이(16개)'], 16, 'static default N for 떡볶이 must be 16');
+assert.strictEqual(api.DEFAULT_ORDER_UNIT_PRICES['냉동-핫윙,비비윙스'], 123200, '비비윙스 static BOX price must be 123200');
+assert.strictEqual(api.DEFAULT_ORDER_UNIT_PRICES['냉동-떡볶이(16개)'], 63360, '떡볶이 static BOX price must be 63360');
+assert.strictEqual(api.defaultOrderUnitPriceForItem(api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스')), 123200, 'default price helper must return 비비윙스 BOX price');
+assert.strictEqual(api.CALIBRATED_DAILY_ITEM_NAMES.includes('두마리치킨,파더스'), false, 'unknown-N 파더스 must not be in daily calibration');
+assert.strictEqual(api.CALIBRATED_DAILY_ITEM_NAMES.includes('냉동-핫윙,비비윙스'), true, '비비윙스 must be daily-calibrated');
+{
+  const wingItem = api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스');
+  const fathersItem = api.MASTER.find(item => item.name === '두마리치킨,파더스');
+  storage.delete(api.DAILY_USAGE_STORAGE_KEY);
+  const calibrated = api.applyDailyUsageCalibration({
+    '냉동-핫윙,비비윙스': { k: 9, l: 4 },
+    '냉동-떡볶이(16개)': { l: 99 },
+    '두마리치킨,파더스': { l: 5 },
+  }, true);
+  assert.strictEqual(calibrated['냉동-핫윙,비비윙스'].k, 9, 'daily calibration must keep overrides.k buffer');
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(calibrated['냉동-핫윙,비비윙스'], 'l'), false, 'daily calibration must refresh old/default overrides.l');
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(calibrated['냉동-떡볶이(16개)'] || {}, 'l'), false, 'custom overrides.l is replaced by period averages on this one-shot');
+  assert.strictEqual(calibrated['두마리치킨,파더스'].l, 5, 'skipped unknown-N items must keep overrides.l');
+  api.setOverridesForCheck({});
+  assert.strictEqual(api.getK(wingItem), 3, 'getK still reads MASTER.buffer when override k is absent');
+  api.setOverridesForCheck({ '냉동-핫윙,비비윙스': { k: 9 } });
+  assert.strictEqual(api.getK(wingItem), 9, 'explicit buffer override must survive calibration');
+  assert.strictEqual(api.getL(wingItem), 3.01, 'after stripping l, live daily must be new MASTER.daily');
+  api.setOverridesForCheck({ '두마리치킨,파더스': { l: 5 } });
+  assert.strictEqual(api.getL(fathersItem), 5, 'skipped-item custom daily remains');
+  api.setOverridesForCheck({});
+  const amount = api.expectedOrderAmountForItem(wingItem, 11, { factor: 10, matchStatus: 'MATCHED' });
+  assert.strictEqual(amount.recommended_order_qty, 2, 'qty must be ceil(need/N) = ceil(11/10)=2');
+  assert.strictEqual(amount.expected_order_amount, 2 * 123200, 'expected amount must be qty * orderUnitPrice, never inverted N');
+  assert.strictEqual(amount.order_unit_price, 123200, 'missing excel/Firebase evidence must use static BOX price');
+  assert.strictEqual(amount.stock_unit_price, 12320, 'per-stock price is orderUnitPrice / N');
+  const liveAmount = api.expectedOrderAmountForItem(wingItem, 11, {
+    factor: 10,
+    matchStatus: 'MATCHED',
+    unitPrice: 111000,
+    priceEvidence: { valid: true, unitPrice: 111000, basis: 'SFA_ORDER_UNIT_AMOUNT_DIV_QTY' }
+  });
+  assert.strictEqual(liveAmount.expected_order_amount, 2 * 111000, 'live excel/Firebase unitPrice must win over the static default');
+}
 assert.strictEqual(api.canonicalItemNameForActual('BBQ직사각용기2호'), '직사각용기2(230,치즈스틱)', 'OrderHelper 2호 must stay on container 2');
 assert.strictEqual(api.canonicalItemNameForActual('BBQ뿜치킹시즈닝(20G,소포장별도판매용)'), 'BBQ뿜치킹시즈닝(25g)', 'renamed 20G small-pack SFA source must connect to the existing small-seasoning item');
 assert.strictEqual(api.canonicalItemNameForActual('BBQ뿜치킹시즈닝(58G,조리용)'), 'BBQ뿜치킹시즈닝(58g)', '58G cooking seasoning must remain connected to the distinct 58g item');

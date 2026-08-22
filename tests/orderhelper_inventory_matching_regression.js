@@ -162,10 +162,11 @@ async function verifyConfirmedSaveRevisionFence() {
   assert.strictEqual(api.saveStatusForCheck().localDirty, false, 'only the latest revision response may clear localDirty');
 }
 
-const remainingNewMasters = ['BBQ필크런치플레이크', 'BBQ필크런치소스', 'BBQ버라이어티팩패키지', '피자비닐봉투', 'BBQ종이봉투(대)'];
-remainingNewMasters.forEach(name => {
-  assert(api.MASTER.some(item => item.name === name && item.daily === 0), `${name} must remain a new unconfirmed MASTER`);
-});
+assert(api.MASTER.some(item => item.name === 'BBQ필크런치플레이크' && item.daily === 0), '필크런치플레이크 daily stays 0 (unknown N)');
+assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ필크런치소스').daily, 0.18);
+assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ버라이어티팩패키지').daily, 0.02);
+assert.strictEqual(api.MASTER.find(item => item.name === '피자비닐봉투').daily, 0.01);
+assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ종이봉투(대)').daily, 0.01);
 ['햄야채볶음밥', '등심돈까스(통살)', '황금죽'].forEach(name => {
   assert(!api.MASTER.some(item => item.name === name), `${name} one-off MASTER must be removed`);
 });
@@ -176,8 +177,14 @@ assert.strictEqual(api.canonicalItemNameForActual('피자비닐봉투'), '');
 assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ종이봉투(대)').unit, '봉/봉');
 const wing = api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스');
 const tteok = api.MASTER.find(item => item.name === '냉동-떡볶이(16개)');
-assert.strictEqual(wing.daily, 4);
-assert.strictEqual(tteok.daily, 3);
+const oil = api.MASTER.find(item => item.name === '(신)올리브오일');
+const drum = api.MASTER.find(item => item.name === '통다리바베큐,자메이카');
+assert.strictEqual(wing.daily, 3.01);
+assert.strictEqual(tteok.daily, 3.47);
+assert.strictEqual(oil.daily, 1.1);
+assert.strictEqual(drum.daily, 7.35);
+assert.strictEqual(wing.buffer, 3);
+assert.strictEqual(tteok.buffer, 3);
 assert.strictEqual(wing.unit, '개/박스');
 assert.strictEqual(tteok.unit, '개/박스');
 api.setUnitCorrectionsForCheck({});
@@ -185,6 +192,16 @@ assert.strictEqual(api.conversionFactorForItem(wing), 10, '비비윙스 static N
 assert.strictEqual(api.conversionFactorForItem(tteok), 16, '떡볶이 static N=16');
 assert.strictEqual(api.recommendedOrderQty(wing, 5), 1, 'short 5개 -> 1 BOX');
 assert.strictEqual(api.recommendedOrderQty(tteok, 17), 2, 'short 17개 -> 2 BOX');
+assert.strictEqual(api.DEFAULT_ORDER_UNIT_PRICES[wing.name], 123200);
+assert.strictEqual(api.DEFAULT_ORDER_UNIT_PRICES[tteok.name], 63360);
+const noEvidence = api.expectedOrderAmountForItem(wing, 25, { factor: 10, matchStatus: 'MATCHED' });
+assert.strictEqual(noEvidence.recommended_order_qty, 3);
+assert.strictEqual(noEvidence.expected_order_amount, 3 * 123200);
+storage.delete(api.DAILY_USAGE_STORAGE_KEY);
+const calibrated = api.applyDailyUsageCalibration({ [wing.name]: { k: 3, l: 4 }, [tteok.name]: { l: 3 } }, true);
+assert.strictEqual(calibrated[wing.name].k, 3);
+assert.strictEqual(Object.prototype.hasOwnProperty.call(calibrated[wing.name], 'l'), false);
+assert.strictEqual(Object.prototype.hasOwnProperty.call(calibrated[tteok.name] || {}, 'l'), false);
 
 verifyConfirmedSaveRevisionFence()
   .then(() => console.log('OrderHelper inventory/matching regression OK'))
