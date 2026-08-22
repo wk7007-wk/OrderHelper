@@ -18,7 +18,7 @@
 - 후보/default는 완료값과 구분해 `확인 필요`로 표시한다. 직원 행에는 `1발주=N개` 대신 실제 단위를 써서 `1박스 = 재고 16개`처럼 방향을 보여주고, 단위명이 없을 때만 `발주 1개 = 재고 N개`로 표시한다. 상세 분석면에는 자동 후보 상태를 보존한다. 단일 최신비교의 `필요량 ÷ 실발주량`이 1.5처럼 소수로 나온 경우는 환산 후보에는 남기되 자동 적용 기본값으로 쓰지 않는다. 사용자 확정, 동일단위, 정수 묶음 후보 또는 충분히 반복된 실사용 근거만 자동 기본값이 될 수 있다.
 - 사용자가 `연결 안 함`을 선택하면 `orderAliasMappings`에 `unlinked` 상태로 저장한다. 이 상태는 자동 후보, exact mapped-name 가격 fallback, SFA/AI 분석 매핑, 사이트 자동 연결보다 우선하며 `effectiveOrderAliasMappings`에서는 제외한다. 후보는 나중에 다시 연결할 수 있도록 선택 목록에만 남긴다. 기존 사용자 확정 환산값은 raw 상태에 보존하되 연결 안 함 동안 계산에는 적용하지 않는다.
 - 체크단위와 발주단위가 다르면 과거 재고 변동값, 날짜별 `필요기준-체크재고` 실사용량 추정값, SFA 실발주량으로 품목별 `orderUnitToStockFactor`를 추정해 발주량에 반영한다.
-- 하루사용량 입력/계산은 수동값을 기준으로 한다. `이전 남은재고 + 실발주 입고량 - 다음 남은재고 = 실사용량` 분석값은 엑셀분석 참고/리포트이며, 수동값과 발주 계산을 자동 덮어쓰지 않는다. 예외: `DAILY_USAGE_STORAGE_VERSION` 원샷 보정은 SFA 2026-06-01..08-22 기간평균을 `MASTER.daily`에 넣고, 같은 버전이 아닐 때만 해당 품목 `overrides.l`을 지워 새 평균이 쓰이게 한다. `overrides.k`(여유)는 바꾸지 않는다.
+- 하루사용량 입력/계산은 수동값을 기준으로 한다. `이전 남은재고 + 실발주 입고량 - 다음 남은재고 = 실사용량` 분석값은 엑셀분석 참고/리포트이며, 수동값과 발주 계산을 자동 덮어쓰지 않는다. 예외: `DAILY_USAGE_STORAGE_VERSION` 원샷 보정은 SFA 출고 입고창(화/목/토→다음 트럭 전 월/수/금)과 MATE 일자별 POS(2026-06-01..08-21, 82일)로 `MASTER.daily`를 넣고, 같은 버전이 아닐 때만 해당 품목 `overrides.l`을 지워 새 값이 쓰이게 한다. `overrides.k`(여유)는 바꾸지 않는다.
 - 엑셀분석으로 기록된 실발주 이력은 실사용 참고 배지/툴팁에 즉시 반영한다. 오늘 발주 예상 총액의 단가는 최신 엑셀/Firebase `sfaPriceHistory`를 쓰고, 없을 때만 `DEFAULT_ORDER_UNIT_PRICES`(기간 파일 amount/qty, 발주 1단위 KRW)를 쓴다. 예상액은 추천 발주수량 × 발주 1단위 가격이며 N을 가격에 다시 곱하거나 나누어 뒤집지 않는다.
 - 엑셀/SFA 분석은 최신 결과 확인으로 끝내지 않는다. 분석 결과 적용 시 `bbq_sfa_analysis_history` localStorage에 run 단위로 append/merge하고, 원본명·매핑명·수량 0·단위·금액·분석 source·분석일을 보존해 이후 별명 후보와 실사용/환산 후보 계산에서 참조한다.
 - 엑셀/SFA 분석 결과가 새로 도착하면 화면 적용 시점에 최신 `entries`/`overrides`/`orderDays`/`orderAliasMappings`와 `sfaActualHistory`로 별명 draft/effective mapping, 환산 후보, inline 보정을 다시 계산한다. 저장된 `confirmed`/`manual` 값은 유지하고 `default`/draft만 최신화한다.
@@ -105,4 +105,8 @@
 - Matching: SFA original names for 필크런치플레이크/소스, 버라이어티팩패키지, 피자비닐봉투, BBQ종이봉투(대) are new MASTER targets with daily 0. One-off 햄야채볶음밥, 등심돈까스(통살), 황금죽 are not MASTER. Do not alias 피자비닐봉투 onto 비닐-BBQ비닐봉투(소), merge 대/소 vinyl bags, merge BBQ종이봉투(대) onto JHP종이봉투(대)or(소), merge 1호/2호 containers, or merge 마늘/파더스 two-piece chicken.
 - `BBQ두마리치킨(파더스치킨)(국내산)` and `(신규)BBQ비닐쇼핑백(대)` are aliases only onto existing MASTER `두마리치킨,파더스` and `비닐-(신규)BBQ비닐쇼핑백(대)`.
 - Static `DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS`: 냉동-핫윙,비비윙스 N=10 and 냉동-떡볶이(16개) N=16. Check in 개, order in 박스, qty=ceil(need/N). User-saved corrections still override; do not write these N values to live Firebase.
-- Baseline sales default is 264.83만원. Need scales by expected/baseline ratio, not by adding expected onto baseline.
+- Baseline sales default is 268.06만원 (MATE daily POS 2026-06-01..08-21 / 82 days). Need scales by expected/baseline ratio, not by adding expected onto baseline.
+
+## 2026-08-23 inbound-window daily
+- APP_VERSION 0823.0405 replaces 83-day even period averages with inbound-to-cutoff windows × real MATE daily POS. `daily = qty_stock * baseline_won / sales_in_windows`. Baseline 268.06만원. Last incomplete inbound dropped. Unknown-N 개/박스 (멘보샤, 바사칸윙, 크런치너겟, 두마리치킨·파더스, 필크런치플레이크, 스티커T) keep previous MASTER.daily. Single-inbound items keep 83-day values. `overrides.k` unchanged. Unit prices unchanged.
+

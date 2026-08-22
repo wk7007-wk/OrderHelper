@@ -163,8 +163,8 @@ async function verifyConfirmedSaveRevisionFence() {
 }
 
 assert(api.MASTER.some(item => item.name === 'BBQ필크런치플레이크' && item.daily === 0), '필크런치플레이크 daily stays 0 (unknown N)');
-assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ필크런치소스').daily, 0.18);
-assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ버라이어티팩패키지').daily, 0.02);
+assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ필크런치소스').daily, 0.26);
+assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ버라이어티팩패키지').daily, 0.03);
 assert.strictEqual(api.MASTER.find(item => item.name === '피자비닐봉투').daily, 0.01);
 assert.strictEqual(api.MASTER.find(item => item.name === 'BBQ종이봉투(대)').daily, 0.01);
 ['햄야채볶음밥', '등심돈까스(통살)', '황금죽'].forEach(name => {
@@ -179,10 +179,10 @@ const wing = api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스')
 const tteok = api.MASTER.find(item => item.name === '냉동-떡볶이(16개)');
 const oil = api.MASTER.find(item => item.name === '(신)올리브오일');
 const drum = api.MASTER.find(item => item.name === '통다리바베큐,자메이카');
-assert.strictEqual(wing.daily, 3.01);
-assert.strictEqual(tteok.daily, 3.47);
+assert.strictEqual(wing.daily, 3.18);
+assert.strictEqual(tteok.daily, 3.75);
 assert.strictEqual(oil.daily, 1.1);
-assert.strictEqual(drum.daily, 7.35);
+assert.strictEqual(drum.daily, 7.45);
 assert.strictEqual(wing.buffer, 3);
 assert.strictEqual(tteok.buffer, 3);
 assert.strictEqual(wing.unit, '개/박스');
