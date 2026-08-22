@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0817.0504';/, 'APP_VERSION must match the KST idle derived-calc release time');
+mustMatch(/const APP_VERSION = '0823.0235';/, 'APP_VERSION must match the KST SFA master/alias/baseline release time');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -533,7 +533,7 @@ mustMatch(/name:"\(컵소스\)BBQ양념치킨소스\(배달용\)",unit:"봉\/봉
 mustMatch(/name:"직사각용기1\(190,감자\)",unit:"묶\/묶음"[\s\S]*name:"직사각용기2\(230,치즈스틱\)",unit:"묶\/묶음"/, 'rectangular container 1 and 2 must be separate inventory items');
 mustMatch(/const ITEM_NAME_ALIASES = \{[\s\S]*"BBQ시크릿양념소스\(주방용\)": "BBQ양념치킨소스"[\s\S]*"BBQ시크릿양념소스\(배달용\)": "\(컵소스\)BBQ양념치킨소스\(배달용\)"/, 'old BBQ secret sauce names must migrate to current SFA names');
 mustMatch(/"직사각용기1\(190,감자\),2\(230,치즈스틱\)": "직사각용기1\(190,감자\)"/, 'legacy combined rectangular-container inventory must migrate once to item 1');
-mustMatch(/const SFA_ACTUAL_ITEM_ALIASES = Object\.freeze\(\{[\s\S]*"BBQ직사각용기1호": "직사각용기1\(190,감자\)"[\s\S]*"BBQ직사각용기2호": "직사각용기2\(230,치즈스틱\)"[\s\S]*"JHP종이봉투\(대\)": "JHP종이봉투\(대\)or\(소\)"[\s\S]*"BBQ뿜치킹시즈닝\(58G,조리용\)": "BBQ뿜치킹시즈닝\(58g\)"[\s\S]*"BBQ뿜치킹시즈닝\(20G,소포장별도판매용\)": "BBQ뿜치킹시즈닝\(25g\)"/, 'fixed actual-order names must split containers, connect JHP large bags, and keep both seasoning sizes distinct');
+mustMatch(/const SFA_ACTUAL_ITEM_ALIASES = Object\.freeze\(\{[\s\S]*"BBQ직사각용기1호": "직사각용기1\(190,감자\)"[\s\S]*"BBQ직사각용기2호": "직사각용기2\(230,치즈스틱\)"[\s\S]*"JHP종이봉투\(대\)": "JHP종이봉투\(대\)or\(소\)"[\s\S]*"BBQ뿜치킹시즈닝\(58G,조리용\)": "BBQ뿜치킹시즈닝\(58g\)"[\s\S]*"BBQ뿜치킹시즈닝\(20G,소포장별도판매용\)": "BBQ뿜치킹시즈닝\(25g\)"[\s\S]*"BBQ두마리치킨\(파더스치킨\)\(국내산\)": "두마리치킨,파더스"[\s\S]*"\(신규\)BBQ비닐쇼핑백\(대\)": "비닐-\(신규\)BBQ비닐쇼핑백\(대\)"[\s\S]*"BBQ종이봉투\(대\)": "JHP종이봉투\(대\)or\(소\)"/, 'fixed actual-order names must split containers, connect JHP/BBQ large paper bags, keep seasoning sizes distinct, and add 파더스/대 vinyl aliases');
 mustMatch(/const LEGACY_ORDER_ACTUAL_ALIAS_MIGRATIONS = Object\.freeze\(\{[\s\S]*"BBQ뿜치킹시즈닝\(25g\)"[\s\S]*"BBQ뿜치킹시즈닝\(58G,조리용\)": "BBQ뿜치킹시즈닝\(20G,소포장별도판매용\)"/, 'legacy small-seasoning alias must migrate away from the 58G cooking product');
 mustMatch(/migrateActualAliasName\(aliasName, value\.actualName \|\| value\.targetName \|\| ''\)/, 'stored alias hydration must apply the bounded legacy actual-name migration');
 mustMatch(/const fixedTargetName = canonicalItemNameForActual\(value\.siteName \|\| ''\);\s*if \(fixedTargetName\) targetName = fixedTargetName;/, 'stored source mappings must follow fixed actual-name splits instead of preserving old combined targets');
@@ -557,6 +557,23 @@ mustMatch(/actualOrders = migrateNamedObject\(actualOrders\);/, 'actual orders m
 mustMatch(/function calcRowFromRecord\(record, name\)/, 'history calc lookup must support old item names');
 mustMatch(/const name = canonicalItemName\(entry\.name\);/, 'history stock map must support old item names');
 mustNotMatch(/name:"BBQ시크릿양념소스/, 'old BBQ secret sauce names must not remain in MASTER');
+mustMatch(/const DEFAULT_BASE_SALES = 264\.83;/, 'default baseline sales must use POS 6/1-8/22 average 264.83만원');
+mustMatch(/const BASE_SALES_STORAGE_VERSION = 'formula-264\.83';/, 'stored old 280 baseline must not keep the previous formula version');
+mustMatch(/placeholder="264\.83"/, 'baseline input placeholder must show the new default');
+mustMatch(/weight_d = sales_d \/ baseSales/, 'expected sales must remain a ratio markup against baseline');
+mustMatch(/return Math\.max\(0, n\) \/ base;/, 'daily sales weights must divide by baseline instead of adding');
+mustMatch(/name:"냉동-핫윙,비비윙스",unit:"개\/박스",policy:"전부",buffer:3,daily:4/, 'hot-wings manual daily 4.0 must stay unconfirmed-factor untouched');
+mustMatch(/name:"냉동-떡볶이\(16개\)",unit:"개\/박스",policy:"전부",buffer:3,daily:3/, 'tteokbokki manual daily 3.0 must stay unconfirmed-factor untouched');
+mustMatch(/name:"BBQ필크런치플레이크",unit:"개\/박스",policy:"",buffer:0,daily:0/, '필크런치플레이크 must be a new unconfirmed MASTER');
+mustMatch(/name:"BBQ필크런치소스",unit:"봉\/봉",policy:"",buffer:0,daily:0/, '필크런치소스 must be a new unconfirmed MASTER');
+mustMatch(/name:"BBQ버라이어티팩패키지",unit:"박\/박스",policy:"",buffer:0,daily:0/, '버라이어티팩패키지 must be a new unconfirmed packaging MASTER');
+mustMatch(/name:"햄야채볶음밥",unit:"개\/박스",policy:"",buffer:0,daily:0/, '햄야채볶음밥 must be a new unconfirmed MASTER');
+mustMatch(/name:"등심돈까스\(통살\)",unit:"봉\/봉",policy:"",buffer:0,daily:0/, '등심돈까스 must be a new unconfirmed MASTER');
+mustMatch(/name:"피자비닐봉투",unit:"봉\/봉",policy:"",buffer:0,daily:0/, '피자비닐봉투 must be its own MASTER');
+mustMatch(/name:"황금죽",unit:"봉\/봉",policy:"",buffer:0,daily:0/, '황금죽 must be a new unconfirmed MASTER');
+mustNotMatch(/햄야채북음밥/, 'SFA fried-rice MASTER must use 볶음밥 not 북음밥');
+mustNotMatch(/"피자비닐봉투": "비닐-BBQ비닐봉투\(소\)"/, '피자비닐봉투 must not alias onto 비닐-BBQ비닐봉투(소)');
+mustNotMatch(/"BBQ두마리치킨\(마늘\).*파더스|"BBQ두마리치킨\(파더스치킨\).*마늘/, 'garlic two-piece chicken must stay apart from 파더스');
 mustMatch(/const DEFAULT_SNOOZE_DAYS = 5;/, 'snooze default days must be 5');
 mustMatch(/const MAX_SNOOZE_DAYS = 365;/, 'snooze max guard missing');
 mustMatch(/id="snoozeDaysInput" type="text" inputmode="numeric" enterkeyhint="done" pattern="\[0-9\]\*" maxlength="3" autocomplete="off" value="5" oninput="sanitizeSnoozeDaysInput\(this\)"/, 'snooze dialog must use a mobile done-key digits-only input with default value');
@@ -1040,6 +1057,17 @@ assert.deepStrictEqual(
 assert.strictEqual(api.canonicalItemNameForActual('BBQ직사각용기1호'), '직사각용기1(190,감자)', 'container 1 actual name must map only to item 1');
 assert.strictEqual(api.canonicalItemNameForActual('BBQ직사각용기2호'), '직사각용기2(230,치즈스틱)', 'container 2 actual name must map only to item 2');
 assert.strictEqual(api.canonicalItemNameForActual('JHP종이봉투(대)'), 'JHP종이봉투(대)or(소)', 'JHP large-bag SFA row must connect to the combined check item');
+assert.strictEqual(api.canonicalItemNameForActual('BBQ종이봉투(대)'), 'JHP종이봉투(대)or(소)', 'BBQ large paper bag must use the existing combined check item');
+assert.strictEqual(api.canonicalItemNameForActual('BBQ두마리치킨(파더스치킨)(국내산)'), '두마리치킨,파더스', '파더스 SFA two-piece chicken must map to the existing 파더스 MASTER');
+assert.strictEqual(api.canonicalItemNameForActual('BBQ두마리치킨(마늘)(국내산)'), '', 'garlic two-piece chicken must not share the 파더스 actual alias');
+assert.strictEqual(api.canonicalItemNameForActual('(신규)BBQ비닐쇼핑백(대)'), '비닐-(신규)BBQ비닐쇼핑백(대)', 'large vinyl shopping bag SFA row must map to the existing large MASTER');
+assert.notStrictEqual(api.canonicalItemNameForActual('(신규)BBQ비닐쇼핑백(대)'), '비닐-(신규)BBQ비닐쇼핑백(중)', 'large vinyl shopping bag must not merge onto 중');
+assert.strictEqual(api.canonicalItemNameForActual('피자비닐봉투'), '', '피자비닐봉투 must not be an alias onto another vinyl MASTER');
+assert(api.MASTER.some(item => item.name === '피자비닐봉투' && item.daily === 0), '피자비닐봉투 must exist as its own unconfirmed MASTER');
+assert(api.MASTER.some(item => item.name === '햄야채볶음밥' && item.daily === 0), '햄야채볶음밥 must exist as its own unconfirmed MASTER');
+assert.strictEqual(api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스').daily, 4, 'hot-wings daily must remain 4');
+assert.strictEqual(api.MASTER.find(item => item.name === '냉동-떡볶이(16개)').daily, 3, 'tteokbokki daily must remain 3');
+assert.strictEqual(api.canonicalItemNameForActual('BBQ직사각용기2호'), '직사각용기2(230,치즈스틱)', 'OrderHelper 2호 must stay on container 2');
 assert.strictEqual(api.canonicalItemNameForActual('BBQ뿜치킹시즈닝(20G,소포장별도판매용)'), 'BBQ뿜치킹시즈닝(25g)', 'renamed 20G small-pack SFA source must connect to the existing small-seasoning item');
 assert.strictEqual(api.canonicalItemNameForActual('BBQ뿜치킹시즈닝(58G,조리용)'), 'BBQ뿜치킹시즈닝(58g)', '58G cooking seasoning must remain connected to the distinct 58g item');
 assert.strictEqual(api.migrateActualAliasName('BBQ뿜치킹시즈닝(25g)', 'BBQ뿜치킹시즈닝(58G,조리용)'), 'BBQ뿜치킹시즈닝(20G,소포장별도판매용)', 'legacy small-seasoning alias must move to the distinct small-pack actual name');
@@ -1057,7 +1085,12 @@ api.setSiteMappingsForCheck({});
 const fixedAliasRows = api.buildOrderAliasMatches({ comparison: { matched: [], missing: [], extra: [] } });
 assert.strictEqual(fixedAliasRows.find(row => row.aliasName === 'BBQ뿜치킹시즈닝(25g)').effectiveActualName, 'BBQ뿜치킹시즈닝(20G,소포장별도판매용)', 'small seasoning must use its fixed 20G SFA name even before a new analysis run');
 assert.strictEqual(fixedAliasRows.find(row => row.aliasName === 'BBQ뿜치킹시즈닝(58g)').effectiveActualName, 'BBQ뿜치킹시즈닝(58G,조리용)', '58g seasoning must use its distinct fixed SFA name');
-assert.strictEqual(fixedAliasRows.find(row => row.aliasName === 'JHP종이봉투(대)or(소)').effectiveActualName, 'JHP종이봉투(대)', 'JHP check item must prefer its fixed large-bag SFA row over unrelated bag candidates');
+const jhpEffective = fixedAliasRows.find(row => row.aliasName === 'JHP종이봉투(대)or(소)').effectiveActualName;
+assert(['JHP종이봉투(대)', 'BBQ종이봉투(대)'].includes(jhpEffective), 'JHP check item must prefer a paper-bag SFA row over vinyl bags');
+assert(!String(jhpEffective).includes('비닐'), 'JHP check item must not default to a vinyl bag');
+assert.strictEqual(fixedAliasRows.find(row => row.aliasName === '두마리치킨,파더스').effectiveActualName, 'BBQ두마리치킨(파더스치킨)(국내산)', '파더스 MASTER must default to the 파더스 SFA actual name');
+assert.strictEqual(fixedAliasRows.find(row => row.aliasName === '비닐-(신규)BBQ비닐쇼핑백(대)').effectiveActualName, '(신규)BBQ비닐쇼핑백(대)', 'large vinyl MASTER must default to its large SFA actual name');
+assert.strictEqual(fixedAliasRows.find(row => row.aliasName === '직사각용기2(230,치즈스틱)').effectiveActualName, 'BBQ직사각용기2호', 'container 2 must keep the number-2 actual name');
 assert.strictEqual(api.collectActualOrderCandidates(null).filter(row => row.actualName.includes('뿜치킹시즈닝')).length, 2, 'different seasoning sizes must remain distinct actual-order candidates');
 assert(api.scoreSiteToMaster('BBQ치즈볼', '냉동-치즈볼-BBQ치즈볼(크림)') >= 0.84, 'site/master score should find obvious candidate');
 const siteData = {

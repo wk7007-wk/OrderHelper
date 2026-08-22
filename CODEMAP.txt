@@ -48,3 +48,7 @@
 - index.html/tests: APP_VERSION 0816.2151 keeps SFA view on the original `sfaSeq` order. Match/quantity bands may color rows but must not regroup them. Unmatched source rows stay after the original list.
 - index.html/tests: APP_VERSION 0722.0204 keeps the compact 390px mobile grid and adds fluid PC widths through shared sticky-column variables. From 1000px upward, zone/name/stock and order evidence grow with `vw`, route groups auto-fit horizontally, and the same DOM/data flow gains wide-screen capacity without a separate PC implementation. The persisted `zoneOrder` and pair-CAS conflict behavior remain unchanged.
 - Remaining pointer: verify live GitHub Pages reflection plus actual Codex in-app-browser 390x844 list screenshot; no live order/payment/Firebase writes in this commit path.
+
+## 2026-08-23 handoff
+- index.html/tests: APP_VERSION 0823.0235 adds 7 unconfirmed SFA-original MASTER rows (daily 0) and 3 SFA_ACTUAL_ITEM_ALIASES: `BBQ두마리치킨(파더스치킨)(국내산)`→`두마리치킨,파더스` (마늘 별명과 합치지 않음), `(신규)BBQ비닐쇼핑백(대)`→`비닐-(신규)BBQ비닐쇼핑백(대)` (중과 분리), `BBQ종이봉투(대)`→`JHP종이봉투(대)or(소)` (기존 JHP 대 별명 유지). `피자비닐봉투`는 자체 MASTER이며 `비닐-BBQ비닐봉투(소)`에 붙이지 않는다. `BBQ직사각용기2호`는 `직사각용기2(230,치즈스틱)`만 가리킨다.
+- DEFAULT_BASE_SALES is 264.83만원 (POS 2026-06-01~08-22 실매출 219,812,790원 / 83일). BASE_SALES_STORAGE_VERSION `formula-264.83` so local 280 defaults refresh. Expected-sales weight remains ratio `sales_d / baseSales` (예: 300/200=1.5), not addition. Hot-wings daily 4.0 and tteokbokki daily 3.0 are unchanged; orderUnitToStockFactor N≈13.28/13.83 stays notes only.
