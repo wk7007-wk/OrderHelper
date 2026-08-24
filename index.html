@@ -728,6 +728,14 @@
 <script>
 const APP_VERSION = '0824.1818';
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
+const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
+async function fetchOrderDeskRead() {
+  try {
+    const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
+    if (res.ok) return res;
+  } catch (_) {}
+  return fetch(`${GIST_ORDER_URL}?_=` + Date.now());
+}
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 let factoryOrderEnvelope = {};
 const SFA_ORDER_REQUEST_PATH = '/monitor/main_pc/sfa_order_request';
@@ -7497,7 +7505,7 @@ function renderSfaComparePanel(data) {
 async function loadSfaCompareLatest(silent = true, forceShow = false) {
   if (forceShow) showSfaComparePanel();
   try {
-    const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
+    const res = await fetchOrderDeskRead();
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const factory = await res.json();
     const data = factory?.current?.[SFA_COMPARE_PATH] || null;
@@ -7577,7 +7585,7 @@ function renderSfaStatus(data) {
 
 async function loadSfaOrderStatus(silent = true) {
   try {
-    const res = await fetch('http://218.147.118.71:2421/monitor_main_pc.json?_=' + Date.now());
+    const res = await fetch('https://218.147.118.71/monitor_main_pc.json?_=' + Date.now());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     renderSfaStatus(data || { state: 'idle' });
@@ -7635,7 +7643,7 @@ async function requestSfaOrderAnalysis() {
     requestedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19)
   };
   try {
-    const res = await fetch('http://218.147.118.71:2421/monitor_main_pc.json', {
+    const res = await fetch('https://218.147.118.71/monitor_main_pc.json', {
       method: 'PUT',
       body: JSON.stringify(payload)
     });
@@ -9595,7 +9603,7 @@ function applyFBData(data) {
 async function autoLoadFromFB(silent) {
   if (phoneOverwriteInFlight) return;
   try {
-    const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
+    const res = await fetchOrderDeskRead();
     if (!res.ok) { console.warn('[autoLoad] HTTP', res.status); return; }
     const envelope = await res.json();
     factoryOrderEnvelope = envelope && typeof envelope === 'object' ? envelope : {};
