@@ -727,7 +727,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0825.0728';
+const APP_VERSION = '0825.0736';
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
 async function fetchOrderDeskRead() {
@@ -764,6 +764,21 @@ const DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS = Object.freeze({
   '냉동-핫윙,비비윙스': 10,
   '냉동-떡볶이(16개)': 16,
 });
+
+// 배달옵션 메뉴 → 발주 SKU (메뉴믹스/cycleHint 후속). 윙봉 주문은 벌크신선통날개.
+const MENU_OPTION_ALIASES = Object.freeze({
+  '윙봉': '벌크신선통날개',
+});
+// 부패가 빠른 신선 부위. 화 입고 3.5일(금 선입고)은 적용하지 않고 3일로 자른다. 목 4일(주말 윙봉)은 유지.
+const PERISHABLE_ITEMS = Object.freeze(['벌크신선통날개']);
+// 장사필수: 떨어지면 영업 불가. 10호 냉장고 매출스케일 면제, 화 3.5일 선입고 유지. K는 아래로 자동조정하지 않음.
+const MUST_HAVE_ITEMS = Object.freeze([
+  '통다리바베큐소스(1kg)',
+  '올리브치킨용배터믹스-파우다',
+  '(신)올리브오일',
+  '올리브마리네이드(신)',
+  'BBQ양념치킨소스',
+]);
 
 // Static 1-order-unit KRW defaults from SFA 2026-06-01..08-22 amount/qty.
 // Live excel / sfaPriceHistory win; these fill 오늘 발주 예상 총액 when evidence is missing.
@@ -1518,7 +1533,7 @@ document.getElementById('pinInput').addEventListener('input', e => {
 
 // 93 품목 마스터 (Excel 발주리스트 2026-05-08 스냅샷 + 2026-08-23 SFA 원문 5종, D 순 정렬)
 const MASTER = [
-  {sfaSeq:3,name:"(신)올리브오일",unit:"캔/캔",policy:"전부",buffer:3.7,daily:1.09},
+  {sfaSeq:3,name:"(신)올리브오일",unit:"캔/캔",policy:"전부",buffer:4,daily:1.09},
   {sfaSeq:3.3,name:"냉동-핫윙,비비윙스",unit:"개/박스",policy:"전부",buffer:3,daily:2.98},
   {sfaSeq:5,name:"두마리치킨,파더스",unit:"개/박스",policy:"여유",buffer:2,daily:0},
   {sfaSeq:5.1,name:"BBQ충진식패티(100g)(마일드)",unit:"개/박스",policy:"",buffer:0,daily:0},
@@ -1566,14 +1581,14 @@ const MASTER = [
   {sfaSeq:34,name:"핫앤크리스피마리네이드",unit:"팩/팩",policy:"여유",buffer:0.3,daily:0.37},
   {sfaSeq:35,name:"블랙페퍼시즈닝(15g)",unit:"봉/봉",policy:"",buffer:1,daily:0.04},
   {sfaSeq:36,name:"골든크리스피배터믹스(맵소반죽)",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.51},
-  {sfaSeq:37,name:"BBQ양념치킨소스",unit:"팩/팩",policy:"여유",buffer:1.6,daily:1.75},
+  {sfaSeq:37,name:"BBQ양념치킨소스",unit:"팩/팩",policy:"여유",buffer:3,daily:1.75},
   {sfaSeq:39,name:"땡쇼크소스",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.16},
-  {sfaSeq:41,name:"올리브치킨용배터믹스-파우다",unit:"팩/팩",policy:"여유",buffer:2,daily:3.02},
-  {sfaSeq:42,name:"올리브마리네이드(신)",unit:"팩/팩",policy:"여유",buffer:1.2,daily:0.77},
+  {sfaSeq:41,name:"올리브치킨용배터믹스-파우다",unit:"팩/팩",policy:"여유",buffer:4,daily:3.02},
+  {sfaSeq:42,name:"올리브마리네이드(신)",unit:"팩/팩",policy:"여유",buffer:2,daily:0.77},
   {sfaSeq:43,name:"빠리배터믹스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.09},
   {sfaSeq:44,name:"쉐킷쉐킷치즈맛시즈닝",unit:"",policy:"",buffer:1,daily:0},
   {sfaSeq:45,name:"일회용 케찹",unit:"박스/박스",policy:"",buffer:1.1,daily:0.03},
-  {sfaSeq:46,name:"통다리바베큐소스(1kg)",unit:"팩/팩",policy:"여유",buffer:1.1,daily:0.83},
+  {sfaSeq:46,name:"통다리바베큐소스(1kg)",unit:"팩/팩",policy:"여유",buffer:2,daily:0.83},
   {sfaSeq:47,name:"BBQ박스패키지(대)",unit:"박/박스",policy:"여유",buffer:0.3,daily:0.26},
   {sfaSeq:48,name:"BBQ박스패키지(중)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.48},
   {sfaSeq:49,name:"BBQ박스패키지(소)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.2},
@@ -4948,12 +4963,35 @@ function salesWeightForInterval(record, gapDays) {
   return { sum: gapDays, basis: 'gapDays_fallback', missing: days, fallback: true };
 }
 
+function isPerishableItem(item) {
+  const name = typeof item === 'string' ? item : (item && item.name);
+  return Boolean(name) && PERISHABLE_ITEMS.includes(name);
+}
+function isMustHaveItem(item) {
+  const name = typeof item === 'string' ? item : (item && item.name);
+  return Boolean(name) && MUST_HAVE_ITEMS.includes(name);
+}
+// 전역 days가 3.5(일·월 → 화 입고 선입고)일 때만 통날개를 3일로. 장사필수·목 4일·그 외 품목은 그대로.
+function orderDaysForItem(item, days) {
+  const n = Number(days);
+  if (!Number.isFinite(n)) return days;
+  if (isMustHaveItem(item)) return n;
+  if (isPerishableItem(item) && Math.abs(n - 3.5) < 1e-9) return 3;
+  return n;
+}
+
 function calcG(item, days, options = {}) {
   if (isItemHidden(item.name)) return 0;
   const L = options.baseDaily ? baseDailyUsage(item) : getL(item);
   const K = getK(item);
   const E = totalStock(item.name);
-  const weights = dailyWeights(days, options.salesScale);
+  const itemDays = orderDaysForItem(item, days);
+  // 냉장고 스케일은 전역 사이클 days 기준. 통날개만 가중 일수를 3으로.
+  // 장사필수는 10호 냉장고 예상매출 스케일을 무시한다(영업 필수 재고).
+  const scale = options.salesScale != null
+    ? options.salesScale
+    : (isMustHaveItem(item) ? 1 : getEffectiveSalesScale(days));
+  const weights = dailyWeights(itemDays, scale);
   const M = L * (weights[0] || 0);
   const totalUsage = L * weights.reduce((a, b) => a + b, 0);
   if (E < M) return totalUsage - M + K;
