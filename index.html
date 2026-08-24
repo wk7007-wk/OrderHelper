@@ -665,7 +665,7 @@
   <span class="meta">예상매출 (만)</span>
   <label class="base-sales-control">
     <span class="day-label">기준</span>
-    <input id="baseSalesInput" class="sales" type="number" placeholder="268.47">
+    <input id="baseSalesInput" class="sales" type="number" placeholder="268.06">
     <span class="day-label">만</span>
   </label>
   <span id="salesInputs"></span>
@@ -726,16 +726,16 @@
 </div>
 
 <script>
-const APP_VERSION = '0824.0836';
-const FB_URL = 'https://poskds-4ba60-default-rtdb.asia-southeast1.firebasedatabase.app';
+const APP_VERSION = '0824.0256';
+const FACTORY_ORDER_URL = 'http://218.147.118.71:2421/order_desk.json';
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
-const FB_PATH = '/order/desk_q7m9r3a8';
+let factoryOrderEnvelope = {};
 const SFA_ORDER_REQUEST_PATH = '/monitor/main_pc/sfa_order_request';
 const SFA_ORDER_STATUS_PATH = '/monitor/main_pc/sfa_order';
-const SFA_COMPARE_PATH = `${FB_PATH}/sfaCompare/latest`;
-const SFA_ACTUAL_HISTORY_PATH = `${FB_PATH}/sfaActualHistory`;
-const SFA_PRICE_HISTORY_PATH = `${FB_PATH}/sfaPriceHistory/latest`;
-const AI_USAGE_ADVISORY_LATEST_PATH = `${FB_PATH}/aiUsageAdvisory/latest`;
+const SFA_COMPARE_PATH = 'order_desk.sfaCompare';
+const SFA_ACTUAL_HISTORY_PATH = 'sfaActualHistory';
+const SFA_PRICE_HISTORY_PATH = 'sfaPriceHistory';
+const AI_USAGE_ADVISORY_LATEST_PATH = 'aiUsageAdvisory';
 const AI_USAGE_EVIDENCE_MAX_DAYS = 90;
 const AI_USAGE_EVIDENCE_MAX_EVENTS = 2000;
 const AI_USAGE_EVIDENCE_SAMPLE_EVENTS = 100;
@@ -843,7 +843,7 @@ const DEFAULT_ORDER_UNIT_PRICES = Object.freeze({
   "(신)롤백(500매)": 4257,
   "수제맥주 공케그(빈통)": 0,
 });
-const DAILY_USAGE_STORAGE_VERSION = 'mate-daily-inbound-20260601-0822';
+const DAILY_USAGE_STORAGE_VERSION = 'mate-daily-inbound-20260601-0821';
 const DAILY_USAGE_STORAGE_KEY = 'bbq_dailyUsageVersion';
 const CALIBRATED_DAILY_ITEM_NAMES = Object.freeze([
   "(신)스모크치킨",
@@ -957,10 +957,10 @@ function staticDefaultPriceEvidenceForItem(item) {
 const CHICKEN_EACH_PRICE_MIN = 6000;
 const CHICKEN_EACH_PRICE_MAX = 12000;
 const WHOLE_CHICKEN_PRICE_ITEMS = new Set(['두마리치킨,파더스', '신선육(10호)-뼈한마리']);
-const DESKTOP_ACCESS_PATH = `${FB_PATH}/desktopAccess`;
+const DESKTOP_ACCESS_PATH = 'desktopAccess';
 const USAGE_ANALYSIS_MAX_DAYS = 90;
-const DEFAULT_BASE_SALES = 268.47;
-const BASE_SALES_STORAGE_VERSION = 'formula-268.47';
+const DEFAULT_BASE_SALES = 268.06;
+const BASE_SALES_STORAGE_VERSION = 'formula-268.06';
 const DEFAULT_SNOOZE_DAYS = 5;
 const MAX_SNOOZE_DAYS = 365;
 const SAVE_REQUEST_TIMEOUT_MS = 20000;
@@ -1075,9 +1075,7 @@ async function registrationFetch(url, options = {}) {
   }
 }
 async function loadActiveRegistrationWindow(now = Date.now()) {
-  const response = await registrationFetch(`${FB_URL}${DESKTOP_ACCESS_PATH}/registrationWindow.json?_=${now}`);
-  if (!response.ok) throw new Error(`registration window HTTP ${response.status}`);
-  return activeRegistrationWindow(await response.json(), now);
+  return activeRegistrationWindow(factoryOrderEnvelope?.registrationWindow, now);
 }
 function registrationCandidatePath(windowId, hash) {
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(String(windowId || ''))) return '';
@@ -1090,7 +1088,7 @@ async function recordRegistrationCandidate(windowState, device, hash) {
   const now = Date.now();
   const validatedWindow = activeRegistrationWindow({ enabled: true, ...windowState }, now);
   if (!validatedWindow) throw new Error('registration window expired');
-  const url = `${FB_URL}${path}.json`;
+  throw new Error('factory order envelope is read-only');
   const existingResponse = await registrationFetch(`${url}?_=${now}`);
   if (!existingResponse.ok) throw new Error(`registration candidate read HTTP ${existingResponse.status}`);
   const existing = await existingResponse.json() || {};
@@ -1190,9 +1188,7 @@ function desktopDevicePayload(device, hash, extra = {}) {
 }
 async function loadDesktopAccessState(silent = true) {
   try {
-    const res = await fetch(`${FB_URL}${DESKTOP_ACCESS_PATH}.json?_=` + Date.now());
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    desktopAccessState = await res.json() || { devices: {}, grace: {} };
+    desktopAccessState = factoryOrderEnvelope?.desktopAccess || { devices: {}, grace: {} };
     renderDesktopAccessPanel();
     return desktopAccessState;
   } catch (e) {
@@ -1202,11 +1198,7 @@ async function loadDesktopAccessState(silent = true) {
   }
 }
 async function patchDesktopDevice(hash, payload) {
-  const res = await fetch(`${FB_URL}${DESKTOP_ACCESS_PATH}/devices/${hash}.json`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  throw new Error('factory order envelope is read-only');
 }
 async function recordDesktopAuthCandidate(device, hash, reason = 'gps_unavailable', state = desktopAccessState) {
   const existing = state?.devices?.[hash] || {};
@@ -1412,9 +1404,7 @@ async function startDesktopGraceWindow() {
       updatedAt: now,
       updatedBy: 'orderhelper_ui'
     };
-    const res = await fetch(`${FB_URL}${DESKTOP_ACCESS_PATH}/grace.json`, { method: 'PUT', body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    await loadDesktopAccessState(true);
+    throw new Error('factory order envelope is read-only');
     toast('24시간 데스크탑 임시 개방 시작');
   } catch (e) {
     console.warn('[desktopAccess] grace start failed', e);
@@ -1425,9 +1415,7 @@ async function stopDesktopGraceWindow() {
   try {
     const now = Date.now();
     const payload = { enabled: false, updatedAt: now, updatedBy: 'orderhelper_ui' };
-    const res = await fetch(`${FB_URL}${DESKTOP_ACCESS_PATH}/grace.json`, { method: 'PATCH', body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    await loadDesktopAccessState(true);
+    throw new Error('factory order envelope is read-only');
     toast('데스크탑 임시 개방 종료');
   } catch (e) {
     console.warn('[desktopAccess] grace stop failed', e);
@@ -1526,10 +1514,10 @@ const MASTER = [
   {sfaSeq:5,name:"두마리치킨,파더스",unit:"개/박스",policy:"여유",buffer:2,daily:0},
   {sfaSeq:5.1,name:"BBQ충진식패티(100g)(마일드)",unit:"개/박스",policy:"",buffer:0,daily:0},
   {sfaSeq:5.2,name:"BBQ페퍼로니씬피자",unit:"개/박스",policy:"",buffer:0,daily:0},
-  {sfaSeq:5,name:"냉동-닭껍데기(국내산)",unit:"개/개",policy:"여유",buffer:2,daily:1.8},
+  {sfaSeq:5,name:"냉동-닭껍데기(국내산)",unit:"개/개",policy:"여유",buffer:2,daily:1.79},
   {sfaSeq:6,name:"냉동-크런치너겟,순살크래커",unit:"개/박스",policy:"여유",buffer:4,daily:0},
   {sfaSeq:6.1,name:"냉동-바사칸윙",unit:"개/박스",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:6.2,name:"냉동-롱김말이",unit:"봉/봉",policy:"여유",buffer:1,daily:0.29},
+  {sfaSeq:6.2,name:"냉동-롱김말이",unit:"봉/봉",policy:"여유",buffer:1,daily:0.28},
   {sfaSeq:6.3,name:"냉동-가지튀김",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.13},
   {sfaSeq:8,name:"냉동-레귤러컷(감자튀김)",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.4},
   {sfaSeq:9,name:"냉동-치즈볼-BBQ치즈볼(크림)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.35},
@@ -1544,12 +1532,12 @@ const MASTER = [
   {sfaSeq:17,name:"냉동-타르타르새우",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.23},
   {sfaSeq:17.1,name:"냉동-고추튀김",unit:"개/개",policy:"여유",buffer:0.2,daily:0.17},
   {sfaSeq:18,name:"BBQ싱싱옥수수콘립",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.35},
-  {sfaSeq:18.1,name:"냉동-떡볶이(16개)",unit:"개/박스",policy:"전부",buffer:3,daily:3.76},
+  {sfaSeq:18.1,name:"냉동-떡볶이(16개)",unit:"개/박스",policy:"전부",buffer:3,daily:3.75},
   {sfaSeq:18.2,name:"BBQ필크런치플레이크",unit:"개/박스",policy:"",buffer:0,daily:0},
   {sfaSeq:19,name:"신선육(10호)-뼈한마리",unit:"박/박스",policy:"전부",buffer:0.8,daily:2.3},
-  {sfaSeq:20,name:"통다리바베큐,자메이카",unit:"개/개",policy:"전부",buffer:4,daily:7.46},
+  {sfaSeq:20,name:"통다리바베큐,자메이카",unit:"개/개",policy:"전부",buffer:4,daily:7.45},
   {sfaSeq:21,name:"신선순살(720g)",unit:"박/박스",policy:"전부",buffer:1,daily:1.92},
-  {sfaSeq:22,name:"신선북채(신)-다리",unit:"팩/팩",policy:"전부",buffer:1,daily:2.57},
+  {sfaSeq:22,name:"신선북채(신)-다리",unit:"팩/팩",policy:"전부",buffer:1,daily:2.56},
   {sfaSeq:23,name:"벌크신선통날개",unit:"팩/팩",policy:"전부",buffer:0.3,daily:1.09},
   {sfaSeq:24,name:"(신)스모크치킨",unit:"봉/봉",policy:"전부",buffer:0.7,daily:0.44},
   {sfaSeq:24.1,name:"파인마요",unit:"박스/박스",policy:"여유",buffer:0.5,daily:0.13},
@@ -1562,7 +1550,7 @@ const MASTER = [
   {sfaSeq:29,name:"볼케이노핫소스",unit:"박스/박스",policy:"여유",buffer:1,daily:0.09},
   {sfaSeq:29.1,name:"BBQ필크런치소스",unit:"봉/봉",policy:"",buffer:0,daily:0.26},
   {sfaSeq:29.5,name:"산가측정페이퍼",unit:"",policy:"전부",buffer:1,daily:0.01},
-  {sfaSeq:30,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1,daily:1.52},
+  {sfaSeq:30,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1,daily:1.51},
   {sfaSeq:30.1,name:"치킨무(벌크)",unit:"팩/박스",policy:"여유",buffer:1,daily:0.1},
   {sfaSeq:32,name:"햇반",unit:"박스/박스",policy:"여유",buffer:1,daily:0.08},
   {sfaSeq:33,name:"먹태버터맛,매운맛",unit:"봉/봉",policy:"전부",buffer:1,daily:0.12},
@@ -1576,9 +1564,9 @@ const MASTER = [
   {sfaSeq:43,name:"빠리배터믹스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.08},
   {sfaSeq:44,name:"쉐킷쉐킷치즈맛시즈닝",unit:"",policy:"",buffer:1,daily:0},
   {sfaSeq:45,name:"일회용 케찹",unit:"박스/박스",policy:"",buffer:1,daily:0.03},
-  {sfaSeq:46,name:"통다리바베큐소스(1kg)",unit:"팩/팩",policy:"여유",buffer:1,daily:0.7},
+  {sfaSeq:46,name:"통다리바베큐소스(1kg)",unit:"팩/팩",policy:"여유",buffer:1,daily:0.69},
   {sfaSeq:47,name:"BBQ박스패키지(대)",unit:"박/박스",policy:"여유",buffer:0.3,daily:0.21},
-  {sfaSeq:48,name:"BBQ박스패키지(중)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.51},
+  {sfaSeq:48,name:"BBQ박스패키지(중)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.5},
   {sfaSeq:49,name:"BBQ박스패키지(소)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.19},
   {sfaSeq:49.1,name:"BBQ버라이어티팩패키지",unit:"박/박스",policy:"",buffer:0,daily:0.03},
   {sfaSeq:50,name:"트레이(중)",unit:"박/박스",policy:"여유",buffer:0.6,daily:0.53},
@@ -2353,12 +2341,31 @@ function buildPhoneWinsPayload(currentRemote, historyRemote, localPayload, now =
   return merged;
 }
 
+function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, now = Date.now()) {
+  const local = localPayload && typeof localPayload === 'object' ? localPayload : {};
+  const revision = Math.max(
+    maxFirebasePayloadRevision(currentRemote, historyRemote, local),
+    Number(now) || Date.now()
+  ) + 1;
+  const localWins = {
+    ...local,
+    savedAt: Number(now) || Date.now(),
+    stateRevision: revision,
+    inventoryRevision: revision,
+    salesRevision: Math.max(Number(local.salesRevision || 0), revision)
+  };
+  return mergeFirebasePayloadLedger(
+    historyRemote,
+    mergeFirebasePayloadLedger(currentRemote, localWins)
+  );
+}
+
 async function putPhoneWinsTargets(localPayload, resolutionId, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 5) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const currentUrl = `${FB_URL}${FB_PATH}/current.json`;
+  const currentUrl = FACTORY_ORDER_URL;
   const historyDateKey = normalizeHistoryDateKey(localPayload?.dateKey) || kstDateKey(Date.now());
-  const historyUrl = `${FB_URL}${FB_PATH}/history/${historyDateKey}.json`;
+  const historyUrl = FACTORY_ORDER_URL;
   let currentResponse = null;
   let historyResponse = null;
   let payload = null;
@@ -2681,9 +2688,8 @@ function applyEmbeddedAiUsageAdvisory(source) {
 
 async function loadAiUsageAdvisoryLatest(silent = true) {
   try {
-    const response = await fetch(`${FB_URL}${AI_USAGE_ADVISORY_LATEST_PATH}.json?_=` + Date.now());
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const latest = await response.json();
+    const latest = factoryOrderEnvelope?.current?.aiUsageAdvisory || factoryOrderEnvelope?.aiUsageAdvisory;
+    if (!latest) throw new Error('missing advisory');
     if (!applyAiUsageAdvisoryLatest(latest)) throw new Error('invalid advisory latest contract');
     return true;
   } catch (error) {
@@ -2695,9 +2701,7 @@ async function loadAiUsageAdvisoryLatest(silent = true) {
 
 async function loadSfaPriceHistory(silent = true) {
   try {
-    const response = await fetch(`${FB_URL}${SFA_PRICE_HISTORY_PATH}.json?_=` + Date.now());
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const raw = await response.json();
+    const raw = factoryOrderEnvelope?.current?.sfaPriceHistory || factoryOrderEnvelope?.sfaPriceHistory;
     const next = raw ? sanitizeSfaPriceHistory(raw) : emptySfaPriceHistory();
     const previousUpdatedAt = Number(sfaPriceHistory?.updatedAt || 0);
     sfaPriceHistory = next;
@@ -3804,7 +3808,7 @@ function sanitizeSfaPriceHistory(source = sfaPriceHistory) {
       : (actualOrderQty > 0 && hasAmount ? amount / actualOrderQty : null);
     const sourcePath = String(value.sourcePath || '').slice(0, 520);
     if (!known.has(mappedName) || unitPrice === null || unitPrice <= 0 ||
-        Number(value.priceEvidenceVersion || 0) < 1 || !sourcePath.startsWith(`${FB_PATH}/sfaAnalysisRuns/`)) return;
+        Number(value.priceEvidenceVersion || 0) < 1 || !sourcePath.startsWith('sfaAnalysisRuns/')) return;
     const factorCandidate = Number(value.orderUnitToStockFactorCandidate);
     const perStockUnitPrice = Number(value.perStockUnitPrice);
     const estimatedPieces = value.amountInference?.estimatedPiecesPerOrder;
@@ -5200,17 +5204,9 @@ function updateDailyAnalysisForName(name) {
 async function loadUsageHistory(silent = true) {
   try {
     const cacheBust = Date.now();
-    const [historyRes, sfaRes] = await Promise.all([
-      fetch(`${FB_URL}${FB_PATH}/history.json?_=` + cacheBust),
-      fetch(`${FB_URL}${SFA_ACTUAL_HISTORY_PATH}.json?_=` + cacheBust)
-    ]);
-    if (!historyRes.ok) {
-      if (!silent) toast('일사용 분석 기록을 불러오지 못했습니다');
-      console.warn('[usageAnalysis] HTTP', historyRes.status);
-      return;
-    }
-    usageHistory = await historyRes.json() || {};
-    sfaActualHistory = sfaRes.ok ? (await sfaRes.json() || {}) : {};
+    const source = factoryOrderEnvelope?.current || {};
+    usageHistory = source.history && typeof source.history === 'object' ? source.history : {};
+    sfaActualHistory = source.sfaActualHistory && typeof source.sfaActualHistory === 'object' ? source.sfaActualHistory : {};
     markSfaLedgerChanged();
     recomputeUsageAnalysis();
     updateAllDailyAnalysisCells();
@@ -7202,14 +7198,12 @@ function sfaSourceTableCsv(source) {
 
 async function downloadLatestSfaSourceCsv() {
   const runPath = String(lastSfaCompareData?.runPath || '').trim();
-  if (!runPath.startsWith(`${FB_PATH}/sfaAnalysisRuns/`)) {
+  if (!runPath) {
     toast('원문 run 경로 없음');
     return false;
   }
   try {
-    const response = await fetch(`${FB_URL}${runPath}/sourceTable.json?_=` + Date.now());
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const sourceTable = sanitizeSfaSourceTable(await response.json());
+    const sourceTable = sanitizeSfaSourceTable(factoryOrderEnvelope?.current?.sourceTable);
     const csv = sfaSourceTableCsv(sourceTable);
     if (!sourceTable || !csv) throw new Error('invalid source table');
     const originalName = normalizedSfaFileName(lastSfaCompareData?.file?.name) || 'SFA_원문';
@@ -7503,9 +7497,10 @@ function renderSfaComparePanel(data) {
 async function loadSfaCompareLatest(silent = true, forceShow = false) {
   if (forceShow) showSfaComparePanel();
   try {
-    const res = await fetch(`${FB_URL}${SFA_COMPARE_PATH}.json?_=` + Date.now());
+    const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    const factory = await res.json();
+    const data = factory?.current?.[SFA_COMPARE_PATH] || null;
     if (data) {
       lastSfaCompareData = data;
       await autoLoadFromFB(true);
@@ -7582,7 +7577,7 @@ function renderSfaStatus(data) {
 
 async function loadSfaOrderStatus(silent = true) {
   try {
-    const res = await fetch(`${FB_URL}${SFA_ORDER_STATUS_PATH}.json?_=` + Date.now());
+    const res = await fetch('http://218.147.118.71:2421/monitor_main_pc.json?_=' + Date.now());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     renderSfaStatus(data || { state: 'idle' });
@@ -7640,7 +7635,7 @@ async function requestSfaOrderAnalysis() {
     requestedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19)
   };
   try {
-    const res = await fetch(`${FB_URL}${SFA_ORDER_REQUEST_PATH}.json`, {
+    const res = await fetch('http://218.147.118.71:2421/monitor_main_pc.json', {
       method: 'PUT',
       body: JSON.stringify(payload)
     });
@@ -9162,73 +9157,22 @@ function buildConfirmedSaveCommit(reason = 'enter') {
 async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = FIREBASE_LEDGER_CAS_ATTEMPTS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const currentUrl = `${FB_URL}${FB_PATH}/current.json`;
-  const historyUrl = `${FB_URL}${FB_PATH}/history/${commit.dateKey}.json`;
   const localPayload = JSON.parse(commit.body);
-  const entryZonePatches = sanitizeEntryZonePatches(commit.entryZonePatches || []);
-  const attempts = entryZonePatches.length
-    ? Math.max(1, Math.min(2, Number(maxAttempts) || FIREBASE_LEDGER_CAS_ATTEMPTS))
-    : Math.max(1, Math.min(8, Number(maxAttempts) || FIREBASE_LEDGER_CAS_ATTEMPTS));
-  let currentResponse = null;
-  let historyResponse = null;
-  let payload = localPayload;
-  let body = commit.body;
-  let entryZonePatchMerged = false;
   try {
-    for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      const [currentRead, historyRead] = await Promise.all([
-        fetch(currentUrl, { headers: { 'X-Firebase-ETag': 'true' }, signal: controller.signal }),
-        fetch(historyUrl, { headers: { 'X-Firebase-ETag': 'true' }, signal: controller.signal })
-      ]);
-      if (!currentRead.ok || !historyRead.ok) {
-        throw new Error(`Firebase CAS read HTTP ${currentRead.status}/${historyRead.status}`);
-      }
-      const currentEtag = currentRead.headers?.get?.('ETag') || currentRead.headers?.get?.('etag');
-      const historyEtag = historyRead.headers?.get?.('ETag') || historyRead.headers?.get?.('etag');
-      if (!currentEtag || !historyEtag) throw new Error('Firebase CAS read missing ETag');
-      const [currentRemote, historyRemote] = await Promise.all([currentRead.json(), historyRead.json()]);
-      payload = mergeFirebasePayloadLedger(currentRemote, localPayload);
-      payload = mergeFirebasePayloadLedger(historyRemote, payload);
-      body = JSON.stringify(payload);
-      if (firebasePayloadIsNewer(currentRemote, localPayload) || firebasePayloadIsNewer(historyRemote, localPayload)) {
-        const patchedPayload = mergeConfirmedEntryZonePatchPayload(currentRemote, historyRemote, localPayload, entryZonePatches);
-        if (!patchedPayload) {
-          return {
-            currentResponse: null,
-            historyResponse: null,
-            payload,
-            body,
-            attempts: attempt,
-            conflict: true,
-            conflictReason: 'remote_newer_revision'
-          };
-        }
-        payload = patchedPayload;
-        body = JSON.stringify(payload);
-        entryZonePatchMerged = true;
-      }
-      [currentResponse, historyResponse] = await Promise.all([
-        fetch(currentUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': currentEtag }, body, signal: controller.signal }),
-        fetch(historyUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': historyEtag }, body, signal: controller.signal })
-      ]);
-      if (currentResponse.status !== 412 && historyResponse.status !== 412) {
-        return { currentResponse, historyResponse, payload, body, attempts: attempt, entryZonePatchMerged };
-      }
-    }
-    if (entryZonePatches.length && (currentResponse?.status === 412 || historyResponse?.status === 412)) {
-      return {
-        currentResponse,
-        historyResponse,
-        payload,
-        body,
-        attempts,
-        conflict: true,
-        conflictReason: entryZonePatchMerged ? 'entry_zone_patch_retry_exhausted' : 'entry_zone_patch_cas_conflict',
-        localPatchPreserved: true,
-        entryZonePatchMerged
-      };
-    }
-    return { currentResponse, historyResponse, payload, body, attempts, entryZonePatchMerged };
+    const read = await fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`, { signal: controller.signal });
+    if (!read.ok) throw new Error(`Factory read HTTP ${read.status}`);
+    const remote = await read.json();
+    const currentRemote = remote?.current && typeof remote.current === 'object' ? remote.current : {};
+    const historyRemote = remote?.history && typeof remote.history === 'object' ? remote.history : {};
+    const payload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now());
+    const cutoff = Date.now() - 14 * 86400000;
+    const history = Object.fromEntries(Object.entries({ ...historyRemote, [commit.dateKey]: payload }).filter(([key, value]) => {
+      const stamp = Number(value?.savedAt || Date.parse(key));
+      return Number.isFinite(stamp) && stamp >= cutoff;
+    }));
+    const body = JSON.stringify({ current: payload, history });
+    const response = await fetch(FACTORY_ORDER_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' }, body, signal: controller.signal });
+    return { currentResponse: response, historyResponse: response, payload, body, attempts: 1 };
   } finally {
     clearTimeout(timer);
     controller.abort();
@@ -9294,11 +9238,7 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
     if (result.conflict) {
       pendingSave = true;
       pendingSaveReason = commit.reason;
-      pushSaveLog(saveReasonLabel(commit.reason) + ' 충돌', 'error');
-      renderSaveState(result.localPatchPreserved ? '저장충돌 · 내 변경 보존됨 · 다시 저장' : '다른 기기 최신 저장 충돌 · 확인 필요', 'error');
-      const phoneOverwriteBtn = document.getElementById('phoneOverwriteBtn');
-      if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = false;
-      console.error('[confirmed-save] remote newer conflict', commit.commitId, result.conflictReason);
+      scheduleConfirmedSaveRetry(commit, result.conflictReason || 'CAS conflict');
       return false;
     }
     const { currentResponse, historyResponse, payload } = result;
@@ -9382,7 +9322,7 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
   const phoneOverwriteBtn = document.getElementById('phoneOverwriteBtn');
   if (!phoneLocalSnapshotPresentAtBoot) {
     renderSaveState('중단 · 이 브라우저에 폰 저장본 없음', 'error');
-    if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = false;
+    if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = true;
     toast('이 브라우저에 기존 폰 저장본이 없어 덮어쓰지 않았습니다');
     return false;
   }
@@ -9399,7 +9339,7 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
   phoneOverwriteInFlight = true;
   localDirty = true;
   if (phoneOverwriteBtn) {
-    phoneOverwriteBtn.hidden = false;
+    phoneOverwriteBtn.hidden = true;
     phoneOverwriteBtn.disabled = true;
   }
   renderSaveState('폰 기준으로 PC 덮어쓰는 중', 'saving');
@@ -9414,8 +9354,8 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
       throw new Error(`Firebase phone-wins HTTP ${currentResponse?.status || 0}/${historyResponse?.status || 0}`);
     }
     const [currentVerify, historyVerify] = await Promise.all([
-      fetch(`${FB_URL}${FB_PATH}/current.json?_=${Date.now()}`),
-      fetch(`${FB_URL}${FB_PATH}/history/${payload.dateKey}.json?_=${Date.now()}`)
+      fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`),
+      fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`)
     ]);
     if (!currentVerify.ok || !historyVerify.ok) throw new Error('Firebase phone-wins verify read failed');
     const [verifiedCurrent, verifiedHistory] = await Promise.all([currentVerify.json(), historyVerify.json()]);
@@ -9458,7 +9398,7 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
     localDirty = true;
     renderSaveState('실패 · 폰 내용은 보존됨', 'error');
     toast('덮어쓰기 실패 — 폰 내용은 그대로 보존했습니다');
-    if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = false;
+    if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = true;
     return false;
   } finally {
     phoneOverwriteInFlight = false;
@@ -9655,9 +9595,12 @@ function applyFBData(data) {
 async function autoLoadFromFB(silent) {
   if (phoneOverwriteInFlight) return;
   try {
-    const res = await fetch(`${FB_URL}${FB_PATH}/current.json?_=` + Date.now());
+    const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
     if (!res.ok) { console.warn('[autoLoad] HTTP', res.status); return; }
-    const data = await res.json();
+    const envelope = await res.json();
+    factoryOrderEnvelope = envelope && typeof envelope === 'object' ? envelope : {};
+    const data = envelope?.current && typeof envelope.current === 'object' ? envelope.current : null;
+    if (!data || Object.keys(data).length === 0) return;
     const resetApplied = applyRemoteSyncResetIfNeeded(data);
     if (!shouldApplyIncomingCurrent(data)) return;
     if (!resetApplied && (localDirty || hasConfirmedSaveQueue())) return; // reset 표식 없이는 로컬 draft/확정 queue를 보호한다.
