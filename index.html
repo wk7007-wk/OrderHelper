@@ -727,7 +727,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0825.0736';
+const APP_VERSION = '0825.0746';
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
 async function fetchOrderDeskRead() {
@@ -779,6 +779,9 @@ const MUST_HAVE_ITEMS = Object.freeze([
   '올리브마리네이드(신)',
   'BBQ양념치킨소스',
 ]);
+// (신)올리브오일 일사용 L은 소비량이 아니라 최대 교체량. 그 이상 쓰지 않음.
+// 최근/3개월 혼합·예상매출 가중·화 3.5 선입고·냉장고 매출스케일을 적용하지 않는다.
+const OIL_REPLACEMENT_ITEMS = Object.freeze(['(신)올리브오일']);
 
 // Static 1-order-unit KRW defaults from SFA 2026-06-01..08-22 amount/qty.
 // Live excel / sfaPriceHistory win; these fill 오늘 발주 예상 총액 when evidence is missing.
@@ -1533,6 +1536,7 @@ document.getElementById('pinInput').addEventListener('input', e => {
 
 // 93 품목 마스터 (Excel 발주리스트 2026-05-08 스냅샷 + 2026-08-23 SFA 원문 5종, D 순 정렬)
 const MASTER = [
+  // (신)올리브오일 daily는 최대 교체량 동결값. 소비 평균으로 재계산하지 않음.
   {sfaSeq:3,name:"(신)올리브오일",unit:"캔/캔",policy:"전부",buffer:4,daily:1.09},
   {sfaSeq:3.3,name:"냉동-핫윙,비비윙스",unit:"개/박스",policy:"전부",buffer:3,daily:2.98},
   {sfaSeq:5,name:"두마리치킨,파더스",unit:"개/박스",policy:"여유",buffer:2,daily:0},
@@ -3154,13 +3158,25 @@ function applyDailyUsageCalibration(sourceOverrides = overrides, force = false) 
   const storedVersion = localStorage.getItem(DAILY_USAGE_STORAGE_KEY);
   if (!force && storedVersion === DAILY_USAGE_STORAGE_VERSION) return sourceOverrides || {};
   const calibrated = new Set(CALIBRATED_DAILY_ITEM_NAMES);
+  const masterDailyByName = {};
+  MASTER.forEach(item => { masterDailyByName[item.name] = item.daily; });
   const next = {};
   Object.keys(sourceOverrides || {}).forEach(name => {
     const row = sourceOverrides[name];
     if (!row || typeof row !== 'object' || Array.isArray(row)) return;
-    const copy = { ...row };
-    if (calibrated.has(name) && Object.prototype.hasOwnProperty.call(copy, 'l')) delete copy.l;
-    if (Object.keys(copy).length) next[name] = copy;
+    // 현장 일사용(.l)은 소스 오브 트루스. 보정으로 지우지 않는다.
+    next[name] = { ...row };
+  });
+  // 봇이 일사용을 채우고 원규가 사이트에서 수정한다. 없는 .l만 MASTER.daily로 채움.
+  // 다음 SFA 엑셀/입고 작업: 실발주나 현장 일사용/여유가 봇 추천과 다르면 사용자 조정으로 유지.
+  calibrated.forEach(name => {
+    if (!Object.prototype.hasOwnProperty.call(masterDailyByName, name)) return;
+    const row = next[name];
+    if (row && Object.prototype.hasOwnProperty.call(row, 'l')) return;
+    next[name] = { ...(row || {}), l: masterDailyByName[name] };
+  });
+  Object.keys(next).forEach(name => {
+    if (!next[name] || !Object.keys(next[name]).length) delete next[name];
   });
   localStorage.setItem(DAILY_USAGE_STORAGE_KEY, DAILY_USAGE_STORAGE_VERSION);
   localStorage.setItem('bbq_overrides', JSON.stringify(next));
@@ -4971,10 +4987,16 @@ function isMustHaveItem(item) {
   const name = typeof item === 'string' ? item : (item && item.name);
   return Boolean(name) && MUST_HAVE_ITEMS.includes(name);
 }
+function isOilReplacementItem(item) {
+  const name = typeof item === 'string' ? item : (item && item.name);
+  return Boolean(name) && OIL_REPLACEMENT_ITEMS.includes(name);
+}
 // 전역 days가 3.5(일·월 → 화 입고 선입고)일 때만 통날개를 3일로. 장사필수·목 4일·그 외 품목은 그대로.
+// 올리브오일은 최대교체량 공식이라 발주일수를 쓰지 않는다(3.5 선입고를 강제하지 않음).
 function orderDaysForItem(item, days) {
   const n = Number(days);
   if (!Number.isFinite(n)) return days;
+  if (isOilReplacementItem(item)) return n;
   if (isMustHaveItem(item)) return n;
   if (isPerishableItem(item) && Math.abs(n - 3.5) < 1e-9) return 3;
   return n;
@@ -4985,6 +5007,8 @@ function calcG(item, days, options = {}) {
   const L = options.baseDaily ? baseDailyUsage(item) : getL(item);
   const K = getK(item);
   const E = totalStock(item.name);
+  // 오일: G = max(0, L + K - E). L*Σweight·발주일수 배수 없음. 여유 K·ceil 발주량은 기존 경로.
+  if (isOilReplacementItem(item)) return Math.max(0, L + K - E);
   const itemDays = orderDaysForItem(item, days);
   // 냉장고 스케일은 전역 사이클 days 기준. 통날개만 가중 일수를 3으로.
   // 장사필수는 10호 냉장고 예상매출 스케일을 무시한다(영업 필수 재고).

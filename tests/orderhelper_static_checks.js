@@ -31,7 +31,7 @@ function mustMatchPy(pattern, message) {
   assert(pattern.test(inferencePy), message);
 }
 
-mustMatch(/const APP_VERSION = '0824.0836';/, 'APP_VERSION must match the KST MATE-daily inbound-window daily usage release');
+mustMatch(/const APP_VERSION = '0825.0746';/, 'APP_VERSION must match the oil-freeze + keep-overrides.l release');
 mustMatch(/--solid-accent-bg: #c93653;[\s\S]*--solid-accent-fg: #fff;/, 'solid accent tokens must retain the accessible white-on-rose pairing');
 mustMatch(/\.pin-overlay button \{[^}]*background: var\(--solid-accent-bg\);[^}]*color: var\(--solid-accent-fg\);/, 'PIN confirmation must use the shared accessible solid accent tokens');
 mustMatch(/id="phoneOverwriteBtn"[^>]*onclick="forcePhoneCurrentOverRemote\('button'\)"[^>]*hidden/, 'conflict UI must expose an explicit phone-wins recovery action');
@@ -514,7 +514,7 @@ mustMatch(/let debugLogs = \[\];/, 'debug logs state missing');
 mustMatch(/const DEBUG_LOG_STORAGE_KEY = 'bbq_debug_logs';/, 'debug logs local storage key missing');
 mustMatch(/let outputOrder = \[\];/, 'output order state missing');
 mustMatch(/const OUTPUT_ORDER_STORAGE_KEY = 'bbq_output_order';/, 'output order storage key missing');
-mustMatch(/const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';/, 'order day recommendation rule version missing');
+mustMatch(/const ORDER_DAYS_RULE_VERSION = '20260825-tue-3.5-thu-4';/, 'order day recommendation rule must stay Tue 3.5 / Thu 4 / Sat 3');
 mustNotMatch(/function cleanOutputOrder\(order = outputOrder\)/, 'legacy output-order cleaner must be removed');
 mustNotMatch(/function outputRankMap\(\)/, 'legacy output-order rank helper must be removed');
 mustNotMatch(/function getOutputItems\(days\)/, 'legacy output item helper must be removed');
@@ -527,11 +527,11 @@ mustNotMatch(/localStorage\.setItem\(OUTPUT_ORDER_STORAGE_KEY, JSON\.stringify\(
 mustMatch(/function pushDebugLog\(message, tone = 'debug', ts = Date\.now\(\)\)/, 'internal debug logger missing');
 mustMatch(/debugLogs: debugLogs\.slice\(0, DEBUG_LOG_LIMIT\)/, 'debug logs must be included in Firebase payload');
 mustMatch(/pushDebugLog\('키 ' \+ msg, 'warn'\)/, 'stock key logs must be analysis-only');
-mustMatch(/name:"배달소스-\(신\)비비소스",unit:"봉\/봉",policy:"여유",buffer:1,daily:0\.1/, 'BB sauce baseline missing');
-mustMatch(/name:"레몬보이",unit:"봉\/봉",policy:"여유",buffer:1,daily:0\.04/, 'Lemonboy baseline daily must use inbound-window MATE daily');
+mustMatch(/name:"배달소스-\(신\)비비소스",unit:"봉\/봉",policy:"여유",buffer:1\.1,daily:0\.12/, 'BB sauce baseline missing');
+mustMatch(/name:"레몬보이",unit:"봉\/봉",policy:"여유",buffer:0\.9,daily:0\.04/, 'Lemonboy baseline daily must use inbound-window MATE daily');
 mustMatch(/name:"고추,가위,소금,종이호일,레몬보이,검정봉투"/, 'existing combined Lemonboy misc item must remain');
-mustMatch(/name:"BBQ양념치킨소스",unit:"팩\/팩",policy:"여유",buffer:1\.5,daily:1\.67/, 'kitchen sauce name must match current SFA order name');
-mustMatch(/name:"\(컵소스\)BBQ양념치킨소스\(배달용\)",unit:"봉\/봉",policy:"여유",buffer:0\.3,daily:0\.11/, 'delivery sauce name must match current SFA order name');
+mustMatch(/name:"BBQ양념치킨소스",unit:"팩\/팩",policy:"여유",buffer:3,daily:1\.75/, 'kitchen sauce name must match current SFA order name');
+mustMatch(/name:"\(컵소스\)BBQ양념치킨소스\(배달용\)",unit:"봉\/봉",policy:"여유",buffer:0\.3,daily:0\.12/, 'delivery sauce name must match current SFA order name');
 mustMatch(/name:"직사각용기1\(190,감자\)",unit:"묶\/묶음"[\s\S]*name:"직사각용기2\(230,치즈스틱\)",unit:"묶\/묶음"/, 'rectangular container 1 and 2 must be separate inventory items');
 mustMatch(/const ITEM_NAME_ALIASES = \{[\s\S]*"BBQ시크릿양념소스\(주방용\)": "BBQ양념치킨소스"[\s\S]*"BBQ시크릿양념소스\(배달용\)": "\(컵소스\)BBQ양념치킨소스\(배달용\)"/, 'old BBQ secret sauce names must migrate to current SFA names');
 mustMatch(/"직사각용기1\(190,감자\),2\(230,치즈스틱\)": "직사각용기1\(190,감자\)"/, 'legacy combined rectangular-container inventory must migrate once to item 1');
@@ -542,9 +542,13 @@ mustMatch(/function defaultOrderUnitToStockFactorForItem\(item\)/, 'static order
 mustMatch(/const DEFAULT_ORDER_UNIT_PRICES = Object\.freeze\(\{/, 'static SFA period order-unit prices missing');
 mustMatch(/"냉동-핫윙,비비윙스": 123200,/, '비비윙스 BOX default must be 123200');
 mustMatch(/"냉동-떡볶이\(16개\)": 63360,/, '떡볶이 BOX default must be 63360');
-mustMatch(/const DAILY_USAGE_STORAGE_VERSION = 'mate-daily-inbound-20260601-0822';/, 'daily usage calibration version missing');
+mustMatch(/const DAILY_USAGE_STORAGE_VERSION = 'mate-daily-inbound-recent70-0825';/, 'daily usage calibration version must be kept without a wipe bump');
 mustMatch(/function applyDailyUsageCalibration\(sourceOverrides = overrides, force = false\)/, 'one-shot daily usage calibration helper missing');
-mustMatch(/if \(calibrated\.has\(name\) && Object\.prototype\.hasOwnProperty\.call\(copy, 'l'\)\) delete copy\.l;/, 'daily calibration must strip overrides.l and keep k');
+mustNotMatch(/calibrated\.has\(name\) && Object\.prototype\.hasOwnProperty\.call\(copy, 'l'\)\) delete copy\.l/, 'daily calibration must not wipe existing overrides.l');
+mustMatch(/if \(row && Object\.prototype\.hasOwnProperty\.call\(row, 'l'\)\) return;/, 'daily calibration must keep existing overrides.l and only fill missing from MASTER');
+mustMatch(/const OIL_REPLACEMENT_ITEMS = Object\.freeze\(\['\(신\)올리브오일'\]\);/, 'oil replacement SKU list missing');
+mustMatch(/if \(isOilReplacementItem\(item\)\) return Math\.max\(0, L \+ K - E\);/, 'oil calcG must be max(0, L+K-E) without days or sales weights');
+mustNotMatch(/발주금액 250~320만 맞춤/, 'do not clamp tonight total into a 250-320만 cash-flow box');
 mustMatch(/dailyUsageVersion: DAILY_USAGE_STORAGE_VERSION/, 'confirmed payload must carry the daily usage calibration version');
 mustMatch(/function staticDefaultPriceEvidenceForItem\(item\)/, 'missing-price fallback must expose static SFA period unit prices');
 mustMatch(/const livePriceEvidence = aliasUnlinked \? null : priceEvidenceForActualAliases[\s\S]*staticDefaultPriceEvidenceForItem\(item\)/, 'resolver must prefer live excel/Firebase prices then static defaults');
@@ -574,15 +578,15 @@ mustMatch(/actualOrders = migrateNamedObject\(actualOrders\);/, 'actual orders m
 mustMatch(/function calcRowFromRecord\(record, name\)/, 'history calc lookup must support old item names');
 mustMatch(/const name = canonicalItemName\(entry\.name\);/, 'history stock map must support old item names');
 mustNotMatch(/name:"BBQ시크릿양념소스/, 'old BBQ secret sauce names must not remain in MASTER');
-mustMatch(/const DEFAULT_BASE_SALES = 268\.47;/, 'default baseline sales must use POS 6/1-8/22 83-day average 268.47만원');
-mustMatch(/const BASE_SALES_STORAGE_VERSION = 'formula-268\.47';/, 'stored old 264.83 baseline must not keep the previous formula version');
-mustMatch(/placeholder="268\.47"/, 'baseline input placeholder must show the new default');
+mustMatch(/const DEFAULT_BASE_SALES = 268\.06;/, 'default baseline sales must stay 268.06만원');
+mustMatch(/const BASE_SALES_STORAGE_VERSION = 'formula-268\.06';/, 'stored baseline version must stay formula-268.06');
+mustMatch(/placeholder="268\.06"/, 'baseline input placeholder must show the live default');
 mustMatch(/weight_d = sales_d \/ baseSales/, 'expected sales must remain a ratio markup against baseline');
 mustMatch(/return Math\.max\(0, n\) \/ base;/, 'daily sales weights must divide by baseline instead of adding');
-mustMatch(/name:"냉동-핫윙,비비윙스",unit:"개\/박스",policy:"전부",buffer:3,daily:3\.18/, 'hot-wings MASTER.daily must be inbound-window MATE daily 3.18 with buffer 3 unchanged');
-mustMatch(/name:"냉동-떡볶이\(16개\)",unit:"개\/박스",policy:"전부",buffer:3,daily:3\.76/, 'tteokbokki MASTER.daily must be inbound-window MATE daily 3.76 with buffer 3 unchanged');
+mustMatch(/name:"냉동-핫윙,비비윙스",unit:"개\/박스",policy:"전부",buffer:3,daily:2\.98/, 'hot-wings MASTER.daily must stay live inbound-window value with buffer 3 unchanged');
+mustMatch(/name:"냉동-떡볶이\(16개\)",unit:"개\/박스",policy:"전부",buffer:3,daily:3\.44/, 'tteokbokki MASTER.daily must stay live inbound-window value with buffer 3 unchanged');
 mustMatch(/name:"BBQ필크런치플레이크",unit:"개\/박스",policy:"",buffer:0,daily:0/, '필크런치플레이크 daily stays 0 because N is unknown');
-mustMatch(/name:"BBQ필크런치소스",unit:"봉\/봉",policy:"",buffer:0,daily:0\.26/, '필크런치소스 MASTER.daily must use inbound-window MATE daily');
+mustMatch(/name:"BBQ필크런치소스",unit:"봉\/봉",policy:"",buffer:0,daily:0\.28/, '필크런치소스 MASTER.daily must use inbound-window MATE daily');
 mustMatch(/name:"BBQ버라이어티팩패키지",unit:"박\/박스",policy:"",buffer:0,daily:0\.03/, '버라이어티팩패키지 MASTER.daily must use inbound-window MATE daily');
 mustMatch(/name:"피자비닐봉투",unit:"봉\/봉",policy:"",buffer:0,daily:0\.01/, '피자비닐봉투 MASTER.daily must use period average');
 mustMatch(/name:"BBQ종이봉투\(대\)",unit:"봉\/봉",policy:"",buffer:0,daily:0\.01/, 'BBQ종이봉투(대) MASTER.daily must use period average with 봉 unit');
@@ -660,7 +664,7 @@ mustMatch(/data-field="zone" value="\$\{escapeHtml\(ent\.zone \|\| ''\)\}" aria-
 mustMatch(/data-field="stock" value="\$\{escapeHtml\(ent\.stock == null \? '' : ent\.stock\)\}" aria-label="\$\{escapeHtml\(`\$\{item\.name\} 재고`\)\}"/, 'stock input accessible name must include the escaped item and field names');
 mustMatch(/data-field="k" value="\$\{escapeHtml\(displayDecimal\(getK\(item\)\)\)\}" aria-label="\$\{escapeHtml\(`\$\{item\.name\} 여유`\)\}"/, 'buffer input accessible name must include the escaped item and field names');
 mustMatch(/data-field="l" value="\$\{escapeHtml\(displayDecimal\(getL\(item\)\)\)\}" aria-label="\$\{escapeHtml\(`\$\{item\.name\} 일사용`\)\}"/, 'daily-usage input accessible name must include the escaped item and field names');
-mustMatch(/function recommendedDays\(\) \{\s*const d = new Date\(\)\.getDay\(\);\s*if \(d === 4 \|\| d === 5\) return 4;\s*return 3;\s*\}/, 'recommended order days must be 4 only on Thu/Fri and 3 otherwise');
+mustMatch(/function recommendedDays\(\) \{\s*const d = kstGetDay\(\);\s*if \(d === 0 \|\| d === 1\) return 3\.5;[\s\S]*if \(d === 2 \|\| d === 3\) return 4;[\s\S]*return 3;/, 'recommended order days must stay Tue 3.5 / Thu 4 / Sat 3 inbound even-split');
 mustMatch(/setOrderDaysValue\(savedDaysRule === ORDER_DAYS_RULE_VERSION \? \(savedDays \|\| rec\) : rec\);/, 'old site-local recommendation values must be refreshed after rule changes');
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{safeEntryId\}" data-entry-key="\$\{safeEntryKey\}" data-item-key="\$\{escapeHtml\(itemKeyForName\(item\.name\)\)\}" data-field="k"/, 'k field must keep escaped stable row identity and be skipped by next navigation');
 mustMatch(/step="0\.1" tabindex="-1" data-id="\$\{safeEntryId\}" data-entry-key="\$\{safeEntryKey\}" data-item-key="\$\{escapeHtml\(itemKeyForName\(item\.name\)\)\}" data-field="l"/, 'l field must keep escaped stable row identity and be skipped by next navigation');
@@ -801,8 +805,17 @@ this.__OrderHelperApi = {
   defaultOrderUnitPriceForItem,
   staticDefaultPriceEvidenceForItem,
   applyDailyUsageCalibration,
+  OIL_REPLACEMENT_ITEMS,
+  MUST_HAVE_ITEMS,
+  PERISHABLE_ITEMS,
+  isOilReplacementItem,
+  isMustHaveItem,
+  isPerishableItem,
+  orderDaysForItem,
+  calcG,
   getL,
   getK,
+  FRIDGE_CAP_HEADROOM,
   orderUnitParts,
   unitCorrectionForItem,
   orderManualItemsForPayload,
@@ -1096,10 +1109,11 @@ assert(api.MASTER.some(item => item.name === '피자비닐봉투' && item.daily 
 assert(!api.MASTER.some(item => item.name === '햄야채볶음밥'), 'one-off 햄야채볶음밥 must be removed from MASTER');
 assert(!api.MASTER.some(item => item.name === '등심돈까스(통살)'), 'one-off 등심돈까스 must be removed from MASTER');
 assert(!api.MASTER.some(item => item.name === '황금죽'), 'one-off 황금죽 must be removed from MASTER');
-assert.strictEqual(api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스').daily, 3.18, 'hot-wings daily must be inbound-window MATE daily 3.18');
-assert.strictEqual(api.MASTER.find(item => item.name === '냉동-떡볶이(16개)').daily, 3.76, 'tteokbokki daily must be inbound-window MATE daily 3.76');
-assert.strictEqual(api.MASTER.find(item => item.name === '(신)올리브오일').daily, 1.1, 'olive oil daily must be SFA period average 1.1');
-assert.strictEqual(api.MASTER.find(item => item.name === '통다리바베큐,자메이카').daily, 7.46, '통다리 daily must be inbound-window MATE daily 7.46');
+assert.strictEqual(api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스').daily, 2.98, 'hot-wings daily must stay live inbound-window value');
+assert.strictEqual(api.MASTER.find(item => item.name === '냉동-떡볶이(16개)').daily, 3.44, 'tteokbokki daily must stay live inbound-window value');
+assert.strictEqual(api.MASTER.find(item => item.name === '(신)올리브오일').daily, 1.09, 'olive oil daily must stay frozen live max-replacement 1.09');
+assert.strictEqual(api.MASTER.find(item => item.name === '(신)올리브오일').buffer, 4, 'olive oil MUST_HAVE buffer must stay 4');
+assert.strictEqual(api.MASTER.find(item => item.name === '통다리바베큐,자메이카').daily, 8.65, '통다리 daily must stay live inbound-window value');
 assert.strictEqual(api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스').buffer, 3, 'hot-wings buffer must stay 3');
 assert.strictEqual(api.MASTER.find(item => item.name === '냉동-떡볶이(16개)').buffer, 3, 'tteokbokki buffer must stay 3');
 assert.strictEqual(api.MASTER.find(item => item.name === '냉동-멘보샤').daily, 0.3, '멘보샤 daily stays old because N is unknown');
@@ -1117,6 +1131,7 @@ assert.strictEqual(api.CALIBRATED_DAILY_ITEM_NAMES.includes('냉동-핫윙,비�
 {
   const wingItem = api.MASTER.find(item => item.name === '냉동-핫윙,비비윙스');
   const fathersItem = api.MASTER.find(item => item.name === '두마리치킨,파더스');
+  const oilItem = api.MASTER.find(item => item.name === '(신)올리브오일');
   storage.delete(api.DAILY_USAGE_STORAGE_KEY);
   const calibrated = api.applyDailyUsageCalibration({
     '냉동-핫윙,비비윙스': { k: 9, l: 4 },
@@ -1124,16 +1139,42 @@ assert.strictEqual(api.CALIBRATED_DAILY_ITEM_NAMES.includes('냉동-핫윙,비�
     '두마리치킨,파더스': { l: 5 },
   }, true);
   assert.strictEqual(calibrated['냉동-핫윙,비비윙스'].k, 9, 'daily calibration must keep overrides.k buffer');
-  assert.strictEqual(Object.prototype.hasOwnProperty.call(calibrated['냉동-핫윙,비비윙스'], 'l'), false, 'daily calibration must refresh old/default overrides.l');
-  assert.strictEqual(Object.prototype.hasOwnProperty.call(calibrated['냉동-떡볶이(16개)'] || {}, 'l'), false, 'custom overrides.l is replaced by period averages on this one-shot');
+  assert.strictEqual(calibrated['냉동-핫윙,비비윙스'].l, 4, 'existing overrides.l is source of truth and must not be wiped');
+  assert.strictEqual(calibrated['냉동-떡볶이(16개)'].l, 99, 'on-site daily usage edits must be kept');
   assert.strictEqual(calibrated['두마리치킨,파더스'].l, 5, 'skipped unknown-N items must keep overrides.l');
+  assert.strictEqual(calibrated['(신)올리브오일'].l, 1.09, 'missing calibrated .l is filled from frozen MASTER.daily');
   api.setOverridesForCheck({});
   assert.strictEqual(api.getK(wingItem), 3, 'getK still reads MASTER.buffer when override k is absent');
   api.setOverridesForCheck({ '냉동-핫윙,비비윙스': { k: 9 } });
   assert.strictEqual(api.getK(wingItem), 9, 'explicit buffer override must survive calibration');
-  assert.strictEqual(api.getL(wingItem), 3.18, 'after stripping l, live daily must be new MASTER.daily');
+  assert.strictEqual(api.getL(wingItem), 2.98, 'without overrides.l, live daily uses MASTER.daily');
   api.setOverridesForCheck({ '두마리치킨,파더스': { l: 5 } });
   assert.strictEqual(api.getL(fathersItem), 5, 'skipped-item custom daily remains');
+  const missingFilled = api.applyDailyUsageCalibration({ '냉동-핫윙,비비윙스': { k: 9 } }, true);
+  assert.strictEqual(missingFilled['냉동-핫윙,비비윙스'].k, 9, 'fill-missing must keep existing k');
+  assert.strictEqual(missingFilled['냉동-핫윙,비비윙스'].l, wingItem.daily, 'fill-missing writes MASTER.daily only when .l is absent');
+  assert.strictEqual(api.OIL_REPLACEMENT_ITEMS.length, 1);
+  assert.strictEqual(api.OIL_REPLACEMENT_ITEMS[0], '(신)올리브오일');
+  assert.strictEqual(api.isOilReplacementItem(oilItem), true);
+  assert.strictEqual(api.isMustHaveItem(oilItem), true);
+  assert.strictEqual(api.getK(oilItem), 4, 'oil buffer stays MUST_HAVE 4 via getK');
+  api.setOverridesForCheck({ '(신)올리브오일': { l: 1.09, k: 4 } });
+  api.setEntriesForCheck([{ id: 'e-oil', entryKey: 'e-oil', name: '(신)올리브오일', zone: '', stock: 2 }]);
+  const oilG35 = api.calcG(oilItem, 3.5);
+  const oilG3 = api.calcG(oilItem, 3);
+  const oilG4 = api.calcG(oilItem, 4);
+  assert.strictEqual(oilG35, 3.09, 'oil G = max(0, L+K-E) = 1.09+4-2');
+  assert.strictEqual(oilG3, 3.09, 'oil G ignores 3-day cycle');
+  assert.strictEqual(oilG4, 3.09, 'oil G ignores Thursday 4-day cycle');
+  assert.strictEqual(api.orderDaysForItem(oilItem, 3.5), 3.5, 'oil must not force 3.5 extra days');
+  assert.strictEqual(api.orderDaysForItem('벌크신선통날개', 3.5), 3, 'perishable 통날개 still cuts Tuesday 3.5 to 3');
+  assert.strictEqual(api.orderDaysForItem('벌크신선통날개', 4), 4, '통날개 Thursday 4 stays');
+  assert.strictEqual(api.recommendedOrderQty(oilItem, oilG35), 3.1, 'oil order still ceils via recommendedOrderQty');
+  api.setEntriesForCheck([{ id: 'e-oil', entryKey: 'e-oil', name: '(신)올리브오일', zone: '', stock: 10 }]);
+  assert.strictEqual(api.calcG(oilItem, 3.5), 0, 'oil G is zero when stock already covers L+K');
+  assert.strictEqual(api.FRIDGE_CAP_HEADROOM, 9, 'fridge 10호 leftover cap stays 9');
+  assert.ok(api.MUST_HAVE_ITEMS.includes('(신)올리브오일'), 'oil stays MUST_HAVE (fridge-scale exempt)');
+  assert.ok(api.PERISHABLE_ITEMS.includes('벌크신선통날개'), '통날개 perishable rule remains');
   api.setOverridesForCheck({});
   const amount = api.expectedOrderAmountForItem(wingItem, 11, { factor: 10, matchStatus: 'MATCHED' });
   assert.strictEqual(amount.recommended_order_qty, 2, 'qty must be ceil(need/N) = ceil(11/10)=2');
