@@ -727,7 +727,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0826.0418';
+const APP_VERSION = '0826.0423';
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
 async function fetchOrderDeskRead() {
@@ -9219,7 +9219,8 @@ let saveAttempt = 0;
 let saveAttemptCommitId = '';
 let confirmedSaveSequence = 0;
 let confirmedSaveQueueBlocked = false;
-const SAVE_BACKOFF = [5000, 10000, 20000];
+let lastMemoryCommit = null;
+const SAVE_BACKOFF = [400, 1500, 4000];
 
 function emptyConfirmedSaveQueue() {
   return { v: 1, active: null, queued: null };
@@ -9361,25 +9362,53 @@ function buildConfirmedSaveCommit(reason = 'enter') {
   return { commitId, revision, inventoryRevision: inventoryRevisionValue, dateKey, reason, createdAt: now, body: JSON.stringify(payload), entryZonePatches: entryZonePatchesForCommit() };
 }
 
-async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = FIREBASE_LEDGER_CAS_ATTEMPTS) {
+function factoryEnvelopeFromRemote(remote) {
+  if (!remote || typeof remote !== 'object' || remote.schema === 'factory_log_harvest/v1') {
+    return { current: {}, history: {} };
+  }
+  const currentRemote = remote.current && typeof remote.current === 'object'
+    ? remote.current
+    : (Array.isArray(remote.entries) ? remote : {});
+  const historyRemote = remote.history && typeof remote.history === 'object' ? remote.history : {};
+  return { current: currentRemote, history: historyRemote };
+}
+
+async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 2) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const localPayload = JSON.parse(commit.body);
+  let currentRemote = {};
+  let historyRemote = {};
   try {
     const read = await fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`, { signal: controller.signal });
-    if (!read.ok) throw new Error(`Factory read HTTP ${read.status}`);
-    const remote = await read.json();
-    const currentRemote = remote?.current && typeof remote.current === 'object' ? remote.current : {};
-    const historyRemote = remote?.history && typeof remote.history === 'object' ? remote.history : {};
-    const payload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now());
-    const cutoff = Date.now() - 14 * 86400000;
-    const history = Object.fromEntries(Object.entries({ ...historyRemote, [commit.dateKey]: payload }).filter(([key, value]) => {
-      const stamp = Number(value?.savedAt || Date.parse(key));
-      return Number.isFinite(stamp) && stamp >= cutoff;
-    }));
-    const body = JSON.stringify({ current: payload, history });
-    const response = await fetch(FACTORY_ORDER_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' }, body, signal: controller.signal });
-    return { currentResponse: response, historyResponse: response, payload, body, attempts: 1 };
+    if (read.ok) {
+      const env = factoryEnvelopeFromRemote(await read.json());
+      currentRemote = env.current;
+      historyRemote = env.history;
+    }
+  } catch (_) {}
+  const payload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now());
+  const cutoff = Date.now() - 14 * 86400000;
+  const shots = Math.max(1, Math.min(3, Number(maxAttempts) || 2));
+  let response = null;
+  let body = '';
+  try {
+    for (let attempt = 1; attempt <= shots; attempt += 1) {
+      const sendPayload = attempt === 1 ? payload : JSON.parse(compactConfirmedCommit({ body: JSON.stringify(payload) }).body);
+      const history = Object.fromEntries(Object.entries({ ...historyRemote, [commit.dateKey]: sendPayload }).filter(([key, value]) => {
+        const stamp = Number(value?.savedAt || Date.parse(key));
+        return Number.isFinite(stamp) && stamp >= cutoff;
+      }));
+      body = JSON.stringify({ current: sendPayload, history });
+      response = await fetch(FACTORY_ORDER_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' },
+        body,
+        signal: controller.signal
+      });
+      if (response && response.ok) return { currentResponse: response, historyResponse: response, payload: sendPayload, body, attempts: attempt };
+    }
+    return { currentResponse: response, historyResponse: response, payload, body, attempts: shots };
   } finally {
     clearTimeout(timer);
     controller.abort();
@@ -9387,7 +9416,8 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
 }
 
 function scheduleConfirmedSaveRetry(commit, label) {
-  if (!commit || confirmedSaveQueueBlocked) return;
+  if (!commit) return;
+  lastMemoryCommit = commit;
   if (saveAttemptCommitId !== commit.commitId) {
     saveAttemptCommitId = commit.commitId;
     saveAttempt = 0;
@@ -9404,32 +9434,30 @@ function scheduleConfirmedSaveRetry(commit, label) {
   const guardedCommitId = commit.commitId;
   saveRetryTimer = setTimeout(() => {
     saveRetryTimer = null;
-    const queue = readConfirmedSaveQueue();
-    if (queue?.active?.commitId !== guardedCommitId) return;
     sendActiveConfirmedSave('retry');
   }, delay);
-  renderSaveState(`확정 저장 재시도 ${delay / 1000}초`, 'dirty');
+  renderSaveState(delay < 1000 ? '저장 재시도' : `확정 저장 재시도 ${delay / 1000}초`, 'dirty');
 }
 
 function confirmCurrentSave(reason = 'enter') {
   if (confirmedSaveQueueBlocked) confirmedSaveQueueBlocked = false;
   const commit = buildConfirmedSaveCommit(reason);
-  const queue = readConfirmedSaveQueue();
-  if (!queue) return false;
+  lastMemoryCommit = commit;
+  const queue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
   if (queue.active) queue.queued = commit;
   else queue.active = commit;
-  if (!writeConfirmedSaveQueue(queue)) return false;
+  writeConfirmedSaveQueue(queue);
   pendingSave = Boolean(queue.queued);
   pendingSaveReason = reason;
-  renderSaveState(queue.queued ? '다음 Enter 저장 대기' : '확정 저장 대기', 'dirty');
-  if (!saveInFlight && !saveRetryTimer) sendActiveConfirmedSave('confirmed');
+  renderSaveState('저장 중', 'saving');
+  if (!saveInFlight) sendActiveConfirmedSave('confirmed');
   return true;
 }
 
 async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_REQUEST_TIMEOUT_MS) {
-  if (saveInFlight || confirmedSaveQueueBlocked) return false;
+  if (saveInFlight) return false;
   const queue = readConfirmedSaveQueue();
-  const commit = queue?.active;
+  const commit = queue?.active || lastMemoryCommit;
   if (!commit) return false;
   saveInFlight = true;
   activeSaveCommitId = commit.commitId;
@@ -9439,26 +9467,20 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
   try {
     const result = await putConfirmedSaveTargets(commit, timeoutMs);
     if (resetGenerationAtStart !== syncResetGeneration) return false;
-    if (result.conflict) {
-      pendingSave = true;
-      pendingSaveReason = commit.reason;
-      scheduleConfirmedSaveRetry(commit, result.conflictReason || 'CAS conflict');
-      return false;
-    }
     const { currentResponse, historyResponse, payload } = result;
-    if (!currentResponse.ok || !historyResponse.ok) {
+    if (!currentResponse || !currentResponse.ok || !historyResponse || !historyResponse.ok) {
       const currentText = await currentResponse.text().catch(() => '');
       const historyText = await historyResponse.text().catch(() => '');
       console.error('[confirmed-save] HTTP FAIL', currentResponse.status, historyResponse.status, currentText, historyText);
       scheduleConfirmedSaveRetry(commit, `HTTP ${currentResponse.status}/${historyResponse.status}`);
       return false;
     }
-    const freshQueue = readConfirmedSaveQueue();
-    if (!freshQueue || freshQueue.active?.commitId !== commit.commitId) return false;
-    const nextQueue = freshQueue.queued
+    const freshQueue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
+    const nextQueue = (freshQueue && freshQueue.queued)
       ? { v: 1, active: freshQueue.queued, queued: null }
       : emptyConfirmedSaveQueue();
-    if (!writeConfirmedSaveQueue(nextQueue)) return false;
+    writeConfirmedSaveQueue(nextQueue);
+    if (!nextQueue.active) lastMemoryCommit = null;
     applyMergedSalesPayloadIfNewer(payload);
     localStorage.setItem('bbq_savedAt', String(payload.savedAt));
     const saveMatchesLatestState = commit.revision === stateRevision &&
@@ -9530,11 +9552,7 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
     toast('이 브라우저에 기존 폰 저장본이 없어 덮어쓰지 않았습니다');
     return false;
   }
-  const queue = readConfirmedSaveQueue();
-  if (!queue || confirmedSaveQueueBlocked) {
-    renderSaveState('중단 · 폰 저장기록 확인 필요', 'error');
-    return false;
-  }
+  const queue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
 
   flushDeferredInputWork();
   if (saveRetryTimer) clearTimeout(saveRetryTimer);
