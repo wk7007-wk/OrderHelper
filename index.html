@@ -38,6 +38,10 @@
   tr.calc-pending .order-amount { visibility: hidden; }
   .top button { background: #0f3460; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
   .top button.primary { background: var(--solid-accent-bg); color: var(--solid-accent-fg); }
+  .browser-diag { display: block; width: 100%; margin: 0; padding: 6px 14px; border: 0; border-bottom: 1px solid #0f3460; background: #0f1b33; color: #93c5fd; font-size: 11px; font-weight: 700; text-align: left; cursor: pointer; }
+  .browser-diag.warn { color: #fdba74; }
+  .browser-diag.err { color: #fca5a5; }
+  .browser-diag-detail { margin: 0; padding: 8px 14px 10px; background: #0b1224; color: #cbd5e1; font-size: 11px; line-height: 1.45; white-space: pre-wrap; word-break: break-all; }
   .top button.green { background: #27ae60; }
   .meta { font-size: 11px; color: #888; }
   .work-progress { display: inline-flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 8px 4px 10px; border: 1px solid rgba(249, 115, 22, 0.4); border-radius: 12px; background: rgba(249, 115, 22, 0.12); }
@@ -621,6 +625,8 @@
   <span class="meta" id="lastSaved"></span>
   <span class="meta" id="appVer"></span>
 </div>
+<button type="button" id="browserDiag" class="browser-diag" onclick="toggleBrowserDiag()" aria-expanded="false">브라우저 상태 확인 중</button>
+<pre id="browserDiagDetail" class="browser-diag-detail hidden"></pre>
 
 <div class="sfa-panel hidden" id="sfaComparePanel">
   <div class="sfa-panel-head">
@@ -727,8 +733,9 @@
 </div>
 
 <script>
-const APP_VERSION = '0826.0423';
+const APP_VERSION = '0826.0430';
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
+const FACTORY_BROWSER_URL = 'https://218.147.118.71/orderhelper_browser.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
 async function fetchOrderDeskRead() {
   const empty = { ok: true, json: async () => ({ current: {}, history: {} }) };
@@ -7827,6 +7834,98 @@ function renderSaveState(label, tone = 'idle') {
   el.textContent = label;
   el.className = nextClass;
   updateStickyOffsets();
+  renderBrowserDiag();
+}
+
+let browserDiagOpen = new URLSearchParams(location.search || '').get('diag') === '1';
+let lastBrowserFactory = { ok: null, savedAt: 0, entries: 0, stocked: 0, error: '', at: 0 };
+let lastBrowserPut = { ok: null, at: 0, error: '', trigger: '' };
+
+function lsBytes(key) {
+  try { return (localStorage.getItem(key) || '').length; } catch { return -1; }
+}
+
+function collectBrowserDiag() {
+  const queue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
+  const stocked = (entries || []).filter(e => e && e.stock != null && e.stock !== '').length;
+  const host = String(location.host || '');
+  const addr = host.indexOf('218.147.118.71') >= 0 ? '공장주소' : (host.indexOf('github.io') >= 0 ? '깃허브주소' : host);
+  const queueLabel = confirmedSaveQueueBlocked ? '보관잠금' : (queue.active ? '확정대기' : (queue.queued ? '다음대기' : '큐없음'));
+  const factoryLabel = lastBrowserFactory.ok === true
+    ? (lastBrowserFactory.entries ? `공장 ${lastBrowserFactory.stocked}칸` : '공장 빈값')
+    : (lastBrowserFactory.ok === false ? '공장읽기실패' : '공장미확인');
+  const putLabel = lastBrowserPut.ok === true ? '송신OK' : (lastBrowserPut.ok === false ? '송신실패' : '송신없음');
+  const line = `${APP_VERSION} · ${addr} · 로컬재고 ${stocked} · ${queueLabel} · ${factoryLabel} · ${putLabel}`;
+  const detail = [
+    `버전 ${APP_VERSION}`,
+    `주소 ${location.href.split('#')[0]}`,
+    `로컬 품목 ${entries.length} / 재고입력 ${stocked} / dirty ${localDirty ? '예' : '아니오'}`,
+    `확정큐 ${queueLabel} / 메모리커밋 ${lastMemoryCommit ? '있음' : '없음'}`,
+    `공장 current 저장 ${lastBrowserFactory.savedAt ? new Date(lastBrowserFactory.savedAt).toLocaleString('ko-KR') : '-'} / 칸 ${lastBrowserFactory.entries} / 재고 ${lastBrowserFactory.stocked}`,
+    `마지막송신 ${lastBrowserPut.ok == null ? '-' : (lastBrowserPut.ok ? '성공' : '실패')} ${lastBrowserPut.error || ''} ${lastBrowserPut.trigger || ''}`,
+    `큐용량 ${lsBytes(CONFIRMED_SAVE_QUEUE_STORAGE_KEY)}자 / 엔트리 ${lsBytes('bbq_entries')}자`
+  ].join('\n');
+  const tone = confirmedSaveQueueBlocked || lastBrowserPut.ok === false || (stocked && lastBrowserFactory.ok === true && lastBrowserFactory.stocked === 0)
+    ? 'err'
+    : (queue.active || localDirty ? 'warn' : '');
+  return { line, detail, tone, stocked, queueLabel, addr };
+}
+
+function renderBrowserDiag() {
+  const btn = document.getElementById('browserDiag');
+  const pre = document.getElementById('browserDiagDetail');
+  if (!btn || !pre) return;
+  const diag = collectBrowserDiag();
+  btn.textContent = diag.line;
+  btn.className = 'browser-diag' + (diag.tone ? ' ' + diag.tone : '');
+  btn.setAttribute('aria-expanded', browserDiagOpen ? 'true' : 'false');
+  pre.textContent = diag.detail;
+  pre.classList.toggle('hidden', !browserDiagOpen);
+}
+
+function toggleBrowserDiag() {
+  browserDiagOpen = !browserDiagOpen;
+  renderBrowserDiag();
+}
+
+function noteFactoryEnvelope(remote) {
+  const env = factoryEnvelopeFromRemote(remote);
+  const cur = env.current || {};
+  const ents = Array.isArray(cur.entries) ? cur.entries : [];
+  lastBrowserFactory = {
+    ok: true,
+    savedAt: Number(cur.savedAt || 0),
+    entries: ents.length,
+    stocked: ents.filter(e => e && e.stock != null && e.stock !== '').length,
+    error: '',
+    at: Date.now()
+  };
+  renderBrowserDiag();
+}
+
+async function publishBrowserDiag(trigger = 'tick') {
+  const diag = collectBrowserDiag();
+  const packet = {
+    schema: 'orderhelper_browser/v1',
+    at: new Date().toISOString(),
+    version: APP_VERSION,
+    host: String(location.host || ''),
+    trigger,
+    line: diag.line,
+    stocked: diag.stocked,
+    queue: diag.queueLabel,
+    dirty: Boolean(localDirty),
+    blocked: Boolean(confirmedSaveQueueBlocked),
+    factory: lastBrowserFactory,
+    put: lastBrowserPut
+  };
+  try {
+    await fetch(FACTORY_BROWSER_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' },
+      body: JSON.stringify(packet)
+    });
+  } catch (_) {}
 }
 
 function saveReasonLabel(reason) {
@@ -9406,8 +9505,13 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
         body,
         signal: controller.signal
       });
-      if (response && response.ok) return { currentResponse: response, historyResponse: response, payload: sendPayload, body, attempts: attempt };
+      if (response && response.ok) {
+        lastBrowserPut = { ok: true, at: Date.now(), error: '', trigger: 'put' };
+        noteFactoryEnvelope({ current: sendPayload, history });
+        return { currentResponse: response, historyResponse: response, payload: sendPayload, body, attempts: attempt };
+      }
     }
+    lastBrowserPut = { ok: false, at: Date.now(), error: String(response && response.status || 'no_response'), trigger: 'put' };
     return { currentResponse: response, historyResponse: response, payload, body, attempts: shots };
   } finally {
     clearTimeout(timer);
@@ -9516,9 +9620,12 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
     else renderSaveState('저장됨', 'saved');
     document.getElementById('lastSaved').textContent = lastSavedLabel(commit.reason) + ' ' + new Date(payload.savedAt).toLocaleTimeString('ko-KR');
     loadUsageHistory(true);
+    publishBrowserDiag('saved');
     return true;
   } catch (error) {
     if (resetGenerationAtStart !== syncResetGeneration) return false;
+    lastBrowserPut = { ok: false, at: Date.now(), error: String(error && error.name || error), trigger: trigger };
+    renderBrowserDiag();
     console.error('[confirmed-save] EXCEPTION', error);
     scheduleConfirmedSaveRetry(commit, error.name || 'EXCEPTION');
     return false;
@@ -9824,6 +9931,7 @@ async function autoLoadFromFB(silent) {
     if (!res.ok) { console.warn('[autoLoad] HTTP', res.status); return; }
     const envelope = await res.json();
     factoryOrderEnvelope = envelope && typeof envelope === 'object' ? envelope : {};
+    noteFactoryEnvelope(envelope);
     const data = envelope?.current && typeof envelope.current === 'object' ? envelope.current : null;
     if (!data || Object.keys(data).length === 0) return;
     const resetApplied = applyRemoteSyncResetIfNeeded(data);
@@ -10022,7 +10130,10 @@ function startOrderHelperApp() {
   } else {
     autoLoadFromFB(true).then(() => retryConfirmedRemotePending('startup'));
   }
+  renderBrowserDiag();
+  publishBrowserDiag('startup');
   setInterval(() => autoLoadFromFB(true), 5000);
+  setInterval(() => { renderBrowserDiag(); publishBrowserDiag('tick'); }, 20000);
   setInterval(() => loadUsageHistory(true), 300000);
   setInterval(() => loadSfaPriceHistory(true), 300000);
   setInterval(() => loadAiUsageAdvisoryLatest(true), 300000);
