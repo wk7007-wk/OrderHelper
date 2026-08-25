@@ -727,15 +727,33 @@
 </div>
 
 <script>
-const APP_VERSION = '0825.0752';
+const APP_VERSION = '0826.0418';
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
 async function fetchOrderDeskRead() {
+  const empty = { ok: true, json: async () => ({ current: {}, history: {} }) };
+  const asRes = async (res) => {
+    if (!res || !res.ok) return null;
+    const text = await res.clone().text();
+    try {
+      const obj = JSON.parse(text || '{}');
+      if (obj && obj.schema === 'factory_log_harvest/v1') return empty;
+      return res;
+    } catch (_) {
+      return res;
+    }
+  };
   try {
     const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
-    if (res.ok) return res;
+    const ok = await asRes(res);
+    if (ok) return ok;
   } catch (_) {}
-  return fetch(`${GIST_ORDER_URL}?_=` + Date.now());
+  try {
+    const res = await fetch(`${GIST_ORDER_URL}?_=` + Date.now());
+    const ok = await asRes(res);
+    if (ok) return ok;
+  } catch (_) {}
+  return empty;
 }
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 let factoryOrderEnvelope = {};
@@ -2389,41 +2407,17 @@ function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, n
 }
 
 async function putPhoneWinsTargets(localPayload, resolutionId, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 5) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const currentUrl = FACTORY_ORDER_URL;
-  const historyDateKey = normalizeHistoryDateKey(localPayload?.dateKey) || kstDateKey(Date.now());
-  const historyUrl = FACTORY_ORDER_URL;
-  let currentResponse = null;
-  let historyResponse = null;
-  let payload = null;
-  try {
-    for (let attempt = 1; attempt <= Math.max(1, Math.min(8, Number(maxAttempts) || 5)); attempt += 1) {
-      const [currentRead, historyRead] = await Promise.all([
-        fetch(currentUrl, { headers: { 'X-Firebase-ETag': 'true' }, signal: controller.signal }),
-        fetch(historyUrl, { headers: { 'X-Firebase-ETag': 'true' }, signal: controller.signal })
-      ]);
-      if (!currentRead.ok || !historyRead.ok) throw new Error(`Firebase phone-wins read HTTP ${currentRead.status}/${historyRead.status}`);
-      const currentEtag = currentRead.headers?.get?.('ETag') || currentRead.headers?.get?.('etag');
-      const historyEtag = historyRead.headers?.get?.('ETag') || historyRead.headers?.get?.('etag');
-      if (!currentEtag || !historyEtag) throw new Error('Firebase phone-wins read missing ETag');
-      const [currentRemote, historyRemote] = await Promise.all([currentRead.json(), historyRead.json()]);
-      payload = buildPhoneWinsPayload(currentRemote, historyRemote, localPayload, Date.now(), resolutionId);
-      const body = JSON.stringify(payload);
-      [currentResponse, historyResponse] = await Promise.all([
-        fetch(currentUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': currentEtag }, body, signal: controller.signal }),
-        fetch(historyUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': historyEtag }, body, signal: controller.signal })
-      ]);
-      if (currentResponse.status === 412 || historyResponse.status === 412) continue;
-      return { currentResponse, historyResponse, payload, attempts: attempt };
-    }
-    return { currentResponse, historyResponse, payload, attempts: Math.max(1, Math.min(8, Number(maxAttempts) || 5)), conflict: true };
-  } finally {
-    clearTimeout(timer);
-    controller.abort();
-  }
+  const dateKey = normalizeHistoryDateKey(localPayload?.dateKey) || kstDateKey(Date.now());
+  const commit = {
+    dateKey,
+    body: JSON.stringify(localPayload || {}),
+    commitId: resolutionId || ('phone-' + Date.now()),
+    reason: 'phoneOverwrite',
+    revision: Number(localPayload?.stateRevision || 0),
+    inventoryRevision: Number(localPayload?.inventoryRevision || 0)
+  };
+  return putConfirmedSaveTargets(commit, timeoutMs, maxAttempts);
 }
-
 function mergeConfirmedEntryZonePatchPayload(currentRemote, historyRemote, localPayload, patches) {
   const cleanPatches = sanitizeEntryZonePatches(patches);
   if (!cleanPatches.length) return null;
@@ -9269,33 +9263,72 @@ function parseConfirmedSaveQueue(raw) {
   return { v: 1, active, queued };
 }
 
+function compactConfirmedCommit(commit) {
+  if (!commit || typeof commit !== 'object') return commit;
+  let payload = null;
+  try { payload = JSON.parse(commit.body); } catch { return commit; }
+  if (!payload || typeof payload !== 'object') return commit;
+  delete payload.debugLogs;
+  delete payload.calc;
+  delete payload.sfaAnalysisReadModel;
+  if (payload.sfaOrderLedger && typeof payload.sfaOrderLedger === 'object') {
+    delete payload.sfaOrderLedger.sourceTable;
+  }
+  return { ...commit, body: JSON.stringify(payload) };
+}
+
+function compactConfirmedQueue(queue) {
+  const source = queue && typeof queue === 'object' ? queue : emptyConfirmedSaveQueue();
+  return {
+    v: 1,
+    active: source.active ? compactConfirmedCommit(source.active) : null,
+    queued: source.queued ? compactConfirmedCommit(source.queued) : null
+  };
+}
+
+function freeConfirmedSaveStorage() {
+  try { localStorage.removeItem(DEBUG_LOG_STORAGE_KEY); } catch {}
+  try { localStorage.removeItem(SAVE_LOG_STORAGE_KEY); } catch {}
+}
+
 function readConfirmedSaveQueue() {
   try {
     const queue = parseConfirmedSaveQueue(localStorage.getItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY));
     confirmedSaveQueueBlocked = false;
     return queue;
   } catch (error) {
-    confirmedSaveQueueBlocked = true;
     console.error('[confirmed-save] queue read blocked', error);
-    return null;
+    try {
+      const broken = localStorage.getItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY) || '';
+      if (broken) localStorage.setItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY + '_broken', broken.slice(0, 80000));
+    } catch {}
+    try { localStorage.removeItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY); } catch {}
+    confirmedSaveQueueBlocked = false;
+    return emptyConfirmedSaveQueue();
   }
 }
 
 function writeConfirmedSaveQueue(queue) {
-  if (confirmedSaveQueueBlocked) return false;
-  try {
-    const normalized = parseConfirmedSaveQueue(JSON.stringify(queue));
-    const serialized = JSON.stringify(normalized);
-    localStorage.setItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY, serialized);
-    if (localStorage.getItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY) !== serialized) throw new Error('confirmed queue verify failed');
-    return true;
-  } catch (error) {
-    confirmedSaveQueueBlocked = true;
-    console.error('[confirmed-save] queue write blocked', error);
-    renderSaveState('확정 저장 보관 실패', 'error');
-    toast('저장 보관 공간 오류 — 원격 전송하지 않음');
-    return false;
+  const attempts = [queue, compactConfirmedQueue(queue)];
+  let lastError = null;
+  for (let i = 0; i < attempts.length; i += 1) {
+    try {
+      const normalized = parseConfirmedSaveQueue(JSON.stringify(attempts[i]));
+      const serialized = JSON.stringify(normalized);
+      localStorage.setItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY, serialized);
+      if (localStorage.getItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY) !== serialized) throw new Error('confirmed queue verify failed');
+      confirmedSaveQueueBlocked = false;
+      return true;
+    } catch (error) {
+      lastError = error;
+      freeConfirmedSaveStorage();
+    }
   }
+  confirmedSaveQueueBlocked = true;
+  console.error('[confirmed-save] queue write blocked', lastError);
+  renderSaveState('확정 저장 보관 실패', 'error');
+  toast('저장 보관 공간 오류 — 원격 전송하지 않음');
+  return false;
 }
 
 function hasConfirmedSaveQueue() {
@@ -9379,10 +9412,7 @@ function scheduleConfirmedSaveRetry(commit, label) {
 }
 
 function confirmCurrentSave(reason = 'enter') {
-  if (confirmedSaveQueueBlocked) {
-    renderSaveState('확정 저장 보관 실패', 'error');
-    return false;
-  }
+  if (confirmedSaveQueueBlocked) confirmedSaveQueueBlocked = false;
   const commit = buildConfirmedSaveCommit(reason);
   const queue = readConfirmedSaveQueue();
   if (!queue) return false;
@@ -9810,10 +9840,6 @@ function hasPendingLocalSync() {
 
 function retryConfirmedRemotePending(reason = 'recovery') {
   const queue = readConfirmedSaveQueue();
-  if (confirmedSaveQueueBlocked) {
-    renderSaveState('확정 저장 기록 손상 · 전송 중지', 'error');
-    return false;
-  }
   if (!queue?.active) return false;
   if (saveRetryTimer) {
     clearTimeout(saveRetryTimer);
@@ -9957,6 +9983,8 @@ function startOrderHelperApp() {
   updateCycleHint();
 
   document.getElementById('appVer').textContent = 'v' + APP_VERSION;
+  const phoneOverwriteBtn = document.getElementById('phoneOverwriteBtn');
+  if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = !phoneLocalSnapshotPresentAtBoot;
   bindDesktopAccessActions();
   bindBaseSalesInput();
   renderSalesInputs();
