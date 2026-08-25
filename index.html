@@ -733,7 +733,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0826.0430';
+const APP_VERSION = '0826.0434';
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const FACTORY_BROWSER_URL = 'https://218.147.118.71/orderhelper_browser.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
@@ -9363,26 +9363,42 @@ function parseConfirmedSaveQueue(raw) {
   return { v: 1, active, queued };
 }
 
-function compactConfirmedCommit(commit) {
+function shrinkPhonePayload(payload, level = 0) {
+  const p = JSON.parse(JSON.stringify(payload && typeof payload === 'object' ? payload : {}));
+  delete p.debugLogs;
+  delete p.calc;
+  delete p.sfaAnalysisReadModel;
+  if (p.sfaOrderLedger && typeof p.sfaOrderLedger === 'object') delete p.sfaOrderLedger.sourceTable;
+  if (level >= 1) {
+    p.sfaOrderLedger = p.sfaAnalysisHistory || { version: 2, eventCount: 0, records: [] };
+    delete p.aiUsageEvidence;
+  }
+  if (level >= 2) {
+    delete p.sfaOrderLedger;
+    delete p.sfaAnalysisHistory;
+    delete p.sfaActualHistory;
+    delete p.aiUsageEvidence;
+    delete p.aiUsageAdvisory;
+    delete p.aiUsageAccepted;
+    delete p.salesWeights;
+  }
+  return p;
+}
+
+function compactConfirmedCommit(commit, level = 1) {
   if (!commit || typeof commit !== 'object') return commit;
   let payload = null;
   try { payload = JSON.parse(commit.body); } catch { return commit; }
   if (!payload || typeof payload !== 'object') return commit;
-  delete payload.debugLogs;
-  delete payload.calc;
-  delete payload.sfaAnalysisReadModel;
-  if (payload.sfaOrderLedger && typeof payload.sfaOrderLedger === 'object') {
-    delete payload.sfaOrderLedger.sourceTable;
-  }
-  return { ...commit, body: JSON.stringify(payload) };
+  return { ...commit, body: JSON.stringify(shrinkPhonePayload(payload, level)) };
 }
 
 function compactConfirmedQueue(queue) {
   const source = queue && typeof queue === 'object' ? queue : emptyConfirmedSaveQueue();
   return {
     v: 1,
-    active: source.active ? compactConfirmedCommit(source.active) : null,
-    queued: source.queued ? compactConfirmedCommit(source.queued) : null
+    active: source.active ? compactConfirmedCommit(source.active, 2) : null,
+    queued: source.queued ? compactConfirmedCommit(source.queued, 2) : null
   };
 }
 
@@ -9472,7 +9488,7 @@ function factoryEnvelopeFromRemote(remote) {
   return { current: currentRemote, history: historyRemote };
 }
 
-async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 2) {
+async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 3) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const localPayload = JSON.parse(commit.body);
@@ -9486,19 +9502,26 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
       historyRemote = env.history;
     }
   } catch (_) {}
-  const payload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now());
-  const cutoff = Date.now() - 14 * 86400000;
-  const shots = Math.max(1, Math.min(3, Number(maxAttempts) || 2));
+  const basePayload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now());
+  const shots = Math.max(1, Math.min(3, Number(maxAttempts) || 3));
+  const putMax = 1800000;
   let response = null;
   let body = '';
+  let sendPayload = basePayload;
   try {
     for (let attempt = 1; attempt <= shots; attempt += 1) {
-      const sendPayload = attempt === 1 ? payload : JSON.parse(compactConfirmedCommit({ body: JSON.stringify(payload) }).body);
-      const history = Object.fromEntries(Object.entries({ ...historyRemote, [commit.dateKey]: sendPayload }).filter(([key, value]) => {
-        const stamp = Number(value?.savedAt || Date.parse(key));
-        return Number.isFinite(stamp) && stamp >= cutoff;
-      }));
+      const level = attempt - 1;
+      sendPayload = shrinkPhonePayload(basePayload, level);
+      const daySpan = level >= 2 ? 0 : (level >= 1 ? 2 : 14);
+      const cutoff = Date.now() - daySpan * 86400000;
+      const history = level >= 2
+        ? { [commit.dateKey]: sendPayload }
+        : Object.fromEntries(Object.entries({ ...historyRemote, [commit.dateKey]: sendPayload }).filter(([key, value]) => {
+          const stamp = Number(value?.savedAt || Date.parse(key));
+          return Number.isFinite(stamp) && stamp >= cutoff;
+        }));
       body = JSON.stringify({ current: sendPayload, history });
+      if (body.length > putMax && attempt < shots) continue;
       response = await fetch(FACTORY_ORDER_URL, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' },
@@ -9506,13 +9529,14 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
         signal: controller.signal
       });
       if (response && response.ok) {
-        lastBrowserPut = { ok: true, at: Date.now(), error: '', trigger: 'put' };
+        lastBrowserPut = { ok: true, at: Date.now(), error: '', trigger: 'put' + level };
         noteFactoryEnvelope({ current: sendPayload, history });
         return { currentResponse: response, historyResponse: response, payload: sendPayload, body, attempts: attempt };
       }
+      if (response && response.status !== 413 && attempt < shots) continue;
     }
     lastBrowserPut = { ok: false, at: Date.now(), error: String(response && response.status || 'no_response'), trigger: 'put' };
-    return { currentResponse: response, historyResponse: response, payload, body, attempts: shots };
+    return { currentResponse: response, historyResponse: response, payload: sendPayload, body, attempts: shots };
   } finally {
     clearTimeout(timer);
     controller.abort();
