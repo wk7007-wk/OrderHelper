@@ -164,6 +164,48 @@
   .grid-sort-control { display: inline-flex; align-items: center; gap: 3px; padding: 2px; border: 1px solid #315a8d; border-radius: 8px; background: rgba(8, 14, 24, 0.42); }
   .top .grid-sort-control button { padding: 5px 9px; border-radius: 5px; background: transparent; color: #9fb2ca; }
   .top .grid-sort-control button.active { background: #315a8d; color: #fff; }
+  .ux2-chip { display: none; min-height: 22px; align-items: center; padding: 2px 7px; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: 999px; background: rgba(34, 197, 94, 0.14); color: #bbf7d0; font-size: 10px; font-weight: 900; white-space: nowrap; }
+  .ux2-work-mode .ux2-chip { display: inline-flex; }
+  .ux2-work-sales { white-space: nowrap; font-weight: 800; color: #dbeafe; }
+  .ux2-work-sales[hidden] { display: none !important; }
+  .ux2-work-mode .ux2-work-sales { display: inline-flex; }
+  .ux2-work-mode #orderAmountSummary { font-size: 12px; }
+  .ux2-work-mode #workProgress,
+  .ux2-work-mode #sfaAnalyzeBtn,
+  .ux2-work-mode #sfaCompareBtn,
+  .ux2-work-mode #phoneOverwriteBtn,
+  .ux2-work-mode #badge,
+  .ux2-work-mode #appVer,
+  .ux2-work-mode .top > label,
+  .ux2-work-mode #browserDiag,
+  .ux2-work-mode .sales-row,
+  .ux2-work-mode #cycleHint { display: none !important; }
+  .ux2-work-mode .top { gap: 8px; padding-top: 7px; padding-bottom: 7px; }
+  .ux2-work-mode #saveState, .ux2-work-mode #lastSaved { white-space: nowrap; }
+  @media (min-width: 601px) and (max-width: 760px) {
+    .ux2-work-mode .table-wrap { overflow-x: hidden; padding: 4px 6px 8px; }
+    .ux2-work-mode table, .ux2-work-mode tbody { display: block; width: 100%; min-width: 0; }
+    .ux2-work-mode thead { display: block; width: 100%; }
+    .ux2-work-mode #thead { display: grid; grid-template-columns: minmax(0, 1fr) 82px 30px; width: 100%; }
+    .ux2-work-mode #thead th { display: none; }
+    .ux2-work-mode #thead th[data-column="name"], .ux2-work-mode #thead th[data-column="order"], .ux2-work-mode #thead th[data-column="actions"] { display: flex; }
+    .ux2-work-mode #thead th[data-column="name"] { grid-column: 1; justify-content: flex-start; }
+    .ux2-work-mode #thead th[data-column="order"] { grid-column: 2; }
+    .ux2-work-mode #thead th[data-column="actions"] { grid-column: 3; }
+    .ux2-work-mode #tbody { display: grid; gap: 3px; }
+    .ux2-work-mode #tbody tr[data-entry-key] { display: grid; grid-template-columns: minmax(0, 1fr) 82px 30px; grid-template-areas: "name order actions"; width: 100%; min-width: 0; min-height: 42px; }
+    .ux2-work-mode #tbody tr[data-entry-key] > td { position: static !important; display: none !important; min-width: 0 !important; max-width: none !important; padding: 4px 6px; white-space: normal; }
+    .ux2-work-mode #tbody tr[data-entry-key] > td[data-column="name"], .ux2-work-mode #tbody tr[data-entry-key] > td[data-column="order"], .ux2-work-mode #tbody tr[data-entry-key] > td[data-column="actions"] { display: flex !important; }
+    .ux2-work-mode #tbody td[data-column="name"] { grid-area: name; align-items: center; overflow: visible; }
+    .ux2-work-mode #tbody td[data-column="order"] { grid-area: order; align-items: center; justify-content: center; }
+    .ux2-work-mode #tbody td[data-column="actions"] { grid-area: actions; align-items: center; justify-content: center; }
+    .ux2-work-mode #tbody .item-title { min-height: 32px; font-size: 13px; line-height: 1.25; }
+    .ux2-work-mode #tbody .output-order-value { min-height: 32px; font-size: 20px; }
+    .ux2-work-mode #tbody .order-analysis, .ux2-work-mode #tbody .order-amount { display: none !important; }
+    .ux2-work-mode #tbody td.actions > button:not(.mobile-row-toggle) { display: none; }
+    .ux2-work-mode #tbody td.actions button.mobile-row-toggle { display: inline-flex; min-width: 26px; min-height: 32px; }
+    .ux2-work-mode #tbody .inline-alias-correction, .ux2-work-mode #tbody .inline-site-match { display: none; }
+  }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; min-width: 1180px; border-collapse: separate; border-spacing: 0; }
   thead { background: #0f3460; z-index: 5; }
@@ -595,6 +637,7 @@
   <h1>BBQ 발주</h1>
   <span class="badge" id="badge">발주 0개</span>
   <span class="order-total-summary" id="orderAmountSummary">오늘 발주 예상 총액 0원 · 가격 확인 필요 0건</span>
+  <span class="meta ux2-work-sales" id="ux2WorkSalesSummary" hidden></span>
   <label style="font-size:12px;color:#aaa">발주일수
     <select id="orderDays" style="background:#0f3460;color:#fff;border:1px solid #0f3460;border-radius:4px;padding:3px 6px;font-size:13px;margin-left:4px">
       <option value="1">1</option><option value="2">2</option><option value="3">3</option>
@@ -624,6 +667,7 @@
   <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
   <span class="meta" id="appVer"></span>
+  <span class="ux2-chip" id="ux2Chip" aria-label="UX2 임시 수신">CLI-OK-0826UX2</span>
 </div>
 <button type="button" id="browserDiag" class="browser-diag" onclick="toggleBrowserDiag()" aria-expanded="false">브라우저 상태 확인 중</button>
 <pre id="browserDiagDetail" class="browser-diag-detail hidden"></pre>
@@ -733,7 +777,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0826.0441';
+const APP_VERSION = '0826.0616';
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const FACTORY_BROWSER_URL = 'https://218.147.118.71/orderhelper_browser.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
@@ -1644,7 +1688,8 @@ const MASTER = [
   {sfaSeq:62.2,name:"여과지필터(320*535)(14)",unit:"장",policy:"전부",buffer:1,daily:0.01},
   {sfaSeq:63,name:"수제맥주 공케그(빈통)",unit:"",policy:"여유",buffer:0,daily:0.09},
   {sfaSeq:63,name:"(컵소스)BBQ양념치킨소스(배달용)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.12},
-  {sfaSeq:64,name:"스티커T_컷팅칼(떡볶이스티커)",unit:"개/봉",policy:"여유",buffer:1,daily:0},
+  {sfaSeq:64,name:"스티커(BBQ스티커T)",unit:"개/개",policy:"여유",buffer:0,daily:0},
+  {sfaSeq:64.1,name:"포장팩커팅칼(250EA/봉)",unit:"개/봉",policy:"여유",buffer:0,daily:0},
   {sfaSeq:65,name:"BBQ뿜치킹시즈닝(58g)",unit:"",policy:"",buffer:0.3,daily:0.06},
   {sfaSeq:66,name:"BBQ뿜치킹시즈닝(25g)",unit:"",policy:"전부",buffer:0.2,daily:0.16},
   {sfaSeq:99,name:"30분 주차권",unit:"",policy:"",buffer:1,daily:0},
@@ -1661,6 +1706,7 @@ const ITEM_NAME_ALIASES = {
   "BBQ시크릿양념소스(주방용)": "BBQ양념치킨소스",
   "BBQ시크릿양념소스(배달용)": "(컵소스)BBQ양념치킨소스(배달용)",
   "직사각용기1(190,감자),2(230,치즈스틱)": "직사각용기1(190,감자)",
+  "스티커T_컷팅칼(떡볶이스티커)": "스티커(BBQ스티커T)",
 };
 
 // 직사각용기는 과거 내부 품목 하나에 1호·2호가 함께 매핑됐다.
@@ -1687,6 +1733,7 @@ let overrides = {};   // {name: {k?, l?}}  — 품목별 보정
 let dailySales = [];  // [number?] 길이 = days, 매출(만). null이면 1.0 weight
 let baseSales = DEFAULT_BASE_SALES;  // 매출대비 하루사용량 기준 매출(만)
 let gridSortMode = 'input';
+let ux2LastPendingStockCount = null;
 let zoneOrder = [];
 const ZONE_ORDER_STORAGE_KEY = 'bbq_zone_order_v1';
 let lastGridFocus = null;
@@ -3804,8 +3851,31 @@ function outputOrderQty(item, days) {
   return recommendedOrderQty(item, calcG(item, days));
 }
 
+function screenOrderPackSize(item) {
+  const name = String(item?.name || '');
+  if (name === '통다리바베큐,자메이카') return 10;
+  if (name === 'BBQ양념치킨소스') return 4;
+  if (name === '올리브치킨용배터믹스-파우다') return 4;
+  return 1;
+}
+
+function screenOrderQty(item, days) {
+  const qty = Number(outputOrderQty(item, days));
+  if (!Number.isFinite(qty) || qty <= 0) return 0;
+  const stock = totalStock(item.name);
+  const limitedNames = new Set([
+    '레몬보이', '산가측정페이퍼', '블랙페퍼시즈닝(15g)', 'BBQ블랙페퍼시즈닝(벌크)',
+    '배달소스-순살크래커소스', '볼케이노핫소스', 'B볼케이노핫소스', '(신)롤백(500매)'
+  ]);
+  if (limitedNames.has(item.name) && (stock > 1 || qty === 1)) return 0;
+  if (item.name === '트레이(소)' && ![0, 6].includes(kstGetDay())) return 2;
+  if (item.name === '비닐-BBQ비닐봉투(소)' && qty < 2) return 2;
+  const pack = screenOrderPackSize(item);
+  return Math.ceil((qty - 1e-9) / pack) * pack;
+}
+
 function displayOrderQty(item, days) {
-  return fmt(outputOrderQty(item, days), 1);
+  return fmt(screenOrderQty(item, days), 0);
 }
 
 function displayDecimal(value) {
@@ -4768,10 +4838,12 @@ function renderOrderAmountSummary(rows = []) {
   const amountGapText = summary.unresolvedAmountCount ? ` · 단위 확인 필요 ${summary.unresolvedAmountCount}건` : '';
   const scaleHint = fridgeScaleHintText();
   el.textContent = `오늘 발주 예상 총액 ${totalText} · 가격 확인 필요 ${summary.unresolvedPriceCount}건${amountGapText}`;
+  el.dataset.ux2Total = totalText;
   if (scaleHint) el.textContent += ` · ${scaleHint}`;
   el.classList.toggle('unresolved', summary.unresolvedPriceCount > 0 || summary.unresolvedAmountCount > 0);
   el.title = `유효 금액 ${summary.validAmountCount}/${summary.needCount}건만 합산`;
   updateCycleHint();
+  updateUx2WorkMode();
   return summary;
 }
 
@@ -8074,6 +8146,9 @@ function collectStockWorkStats() {
 
 function refreshWorkProgress() {
   const stats = collectStockWorkStats();
+  const completedNow = stats.pending === 0 && entries.length && (ux2LastPendingStockCount === null || ux2LastPendingStockCount > 0);
+  if (completedNow && gridSortMode === 'input') gridSortMode = 'sfa';
+  ux2LastPendingStockCount = stats.pending;
   const bar = document.getElementById('workProgress');
   const countEl = document.getElementById('workProgressCount');
   const metaEl = document.getElementById('workProgressMeta');
@@ -8082,6 +8157,7 @@ function refreshWorkProgress() {
   if (countEl) countEl.textContent = stats.pending ? `미입력 ${stats.pending}개` : '재고 입력 완료';
   if (metaEl) metaEl.textContent = `완료 ${stats.checked} · 숨김 ${stats.hidden}`;
   if (nextBtn) nextBtn.disabled = stats.pending === 0;
+  updateGridSortButtons();
   return stats;
 }
 
@@ -8518,6 +8594,30 @@ function renderPreservingGridFocus() {
 function updateGridSortButtons() {
   document.getElementById('sortInputBtn')?.classList.toggle('active', gridSortMode === 'input');
   document.getElementById('sortSfaBtn')?.classList.toggle('active', gridSortMode === 'sfa');
+  updateUx2WorkMode();
+}
+
+function isUx2WorkMode() {
+  return gridSortMode === 'sfa' || collectStockWorkStats().pending === 0;
+}
+
+function sfaDisplayNameForItem(item, resolvedRow = null) {
+  if (gridSortMode !== 'sfa') return item.name;
+  const actualName = String(resolvedRow?.actualName || resolvedRow?.siteName || '').trim();
+  return actualName || item.name;
+}
+
+function updateUx2WorkMode() {
+  const active = isUx2WorkMode();
+  document.body.classList.toggle('ux2-work-mode', active);
+  const chip = document.getElementById('ux2Chip');
+  if (chip) chip.hidden = !(active && gridSortMode === 'sfa');
+  const summary = document.getElementById('orderAmountSummary');
+  if (active && summary) {
+    const count = orderItemList().filter(item => calcG(item, currentOrderDaysValue()) > 0).length;
+    const total = summary.dataset.ux2Total || '';
+    summary.textContent = `발주 ${count}개 · 총액 ${total || '확인 필요'}`;
+  }
 }
 
 function setGridSortMode(mode) {
@@ -9029,7 +9129,8 @@ function render(options = {}) {
     if (!isFirst) tr.classList.add('dup-row');
     applySfaOrderRowState(tr, sfaOrderRowState(item, hidden, sfaSortContext));
 
-    const nameDisplay = item.name;
+    const resolvedOrderRow = resolvedOrderRowsByItemKey.get(itemKeyForName(item.name)) || null;
+    const nameDisplay = sfaDisplayNameForItem(item, resolvedOrderRow);
     const safeEntryId = escapeHtml(ent.id);
     const safeEntryKey = escapeHtml(ent.entryKey || ent.id);
     const safeItemKey = escapeHtml(ent.itemKey || itemKeyForName(item.name));
@@ -9037,7 +9138,6 @@ function render(options = {}) {
     const inlineSiteControls = isFirst ? inlineSiteMatchesHtml(item.name, inlineSiteRows) : '';
     const daysLeft = hidden ? daysUntilReturn(item.name) : 0;
     const orderText = isNeed ? displayOrderQty(item, days) : '';
-    const resolvedOrderRow = resolvedOrderRowsByItemKey.get(itemKeyForName(item.name)) || null;
     const needCell = hidden
       ? `<td class="qty need-qty dup" data-column="need" data-item-key="${escapeHtml(itemKeyForName(item.name))}"><span class="need-output-value">${isFirst ? `💤 ${daysLeft}일 후 복귀` : ''}</span></td>`
       : `<td class="qty need-qty ${isNeed ? 'need-output' : ''}" data-column="need" data-item-key="${escapeHtml(itemKeyForName(item.name))}"><span class="need-output-value">${isNeed ? displayDecimal(g) : ''}</span></td>`;
@@ -9254,15 +9354,18 @@ function renderSalesInputs() {
   if (!wrap) return;
   wrap.innerHTML = '';
   const today = new Date();
+  const cycleStartDay = (kstGetDay() + 1) % 7;
+  const workLabels = [];
   for (let i = 0; i < days; i++) {
     const d = new Date(today.getTime() + i * 86400000);
-    const wd = ['일','월','화','수','목','금','토'][d.getDay()];
+    const wd = ['일','월','화','수','목','금','토'][(cycleStartDay + i) % 7];
     const isLost = i < lost;
     const block = document.createElement('span');
     block.className = 'day-block' + (isLost ? ' lost' : '');
     const lbl = document.createElement('span');
     lbl.className = 'day-label';
-    lbl.textContent = (i === 0 ? '오늘' : '+' + i) + '(' + wd + ')';
+    lbl.textContent = wd;
+    workLabels.push(`${wd}${dailySales[i] != null && Number.isFinite(Number(dailySales[i])) ? Number(dailySales[i]) : '-'}`);
     const inp = document.createElement('input');
     inp.type = 'number';
     inp.className = 'sales';
@@ -9284,6 +9387,11 @@ function renderSalesInputs() {
     block.appendChild(lbl);
     block.appendChild(inp);
     wrap.appendChild(block);
+  }
+  const workSummary = document.getElementById('ux2WorkSalesSummary');
+  if (workSummary) {
+    workSummary.textContent = `${workLabels.join(' ')} 여유150 · 기준${getBaseSales().toFixed(0)}`;
+    workSummary.hidden = false;
   }
   updateSalesAvg();
 }
@@ -9924,7 +10032,8 @@ function applyFBData(data) {
   orderItemList().forEach(item => {
     if (!entries.some(e => e.name === item.name)) {
       const entryKey = newId();
-      entries.push({ id: entryKey, entryKey, itemKey: itemKeyForName(item.name), name: item.name, zone: '', stock: null });
+      const initialStock = item.name === '스티커(BBQ스티커T)' ? 1 : (item.name === '포장팩커팅칼(250EA/봉)' ? 0 : null);
+      entries.push({ id: entryKey, entryKey, itemKey: itemKeyForName(item.name), name: item.name, zone: '', stock: initialStock });
     }
   });
   localStorage.setItem('bbq_savedAt', String(data.savedAt));
