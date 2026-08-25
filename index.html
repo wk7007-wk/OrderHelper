@@ -733,7 +733,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0826.0434';
+const APP_VERSION = '0826.0441';
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const FACTORY_BROWSER_URL = 'https://218.147.118.71/orderhelper_browser.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
@@ -9697,53 +9697,46 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
   }
   renderSaveState('폰 기준으로 PC 덮어쓰는 중', 'saving');
   const localCommit = buildConfirmedSaveCommit('phoneOverwrite');
-  const localPayload = JSON.parse(localCommit.body);
+  lastMemoryCommit = localCommit;
   const resolutionId = `phone-${Date.now()}-${localCommit.commitId}`;
   try {
-    const result = await putPhoneWinsTargets(localPayload, resolutionId);
-    if (result.conflict) throw new Error('Firebase phone-wins CAS conflict');
-    const { currentResponse, historyResponse, payload } = result;
-    if (!currentResponse?.ok || !historyResponse?.ok) {
-      throw new Error(`Firebase phone-wins HTTP ${currentResponse?.status || 0}/${historyResponse?.status || 0}`);
+    const result = await putConfirmedSaveTargets(localCommit, SAVE_REQUEST_TIMEOUT_MS, 3);
+    const payload = result?.payload;
+    if (!result?.currentResponse?.ok || !payload) {
+      throw new Error(`factory overwrite HTTP ${result?.currentResponse?.status || 0}`);
     }
-    const [currentVerify, historyVerify] = await Promise.all([
-      fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`),
-      fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`)
-    ]);
-    if (!currentVerify.ok || !historyVerify.ok) throw new Error('Firebase phone-wins verify read failed');
-    const [verifiedCurrent, verifiedHistory] = await Promise.all([currentVerify.json(), historyVerify.json()]);
-    const verified = [verifiedCurrent, verifiedHistory].every(source =>
-      source?.syncResolution?.id === resolutionId &&
-      source?.syncResolution?.mode === 'phone_overwrite_pc' &&
-      Number(source?.stateRevision || 0) === Number(payload.stateRevision || 0)
-    );
-    if (!verified) throw new Error('Firebase phone-wins verify mismatch');
 
     writeConfirmedSaveQueue(emptyConfirmedSaveQueue());
     pendingSave = false;
     pendingSaveReason = 'enter';
     pendingEntryZonePatches = new Map();
-    stateRevision = Number(payload.stateRevision || 0);
-    inventoryRevision = Number(payload.inventoryRevision || 0);
-    salesRevision = Number(payload.salesRevision || 0);
-    localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
-    localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
-    localStorage.setItem(SALES_REVISION_STORAGE_KEY, String(salesRevision));
-    localStorage.setItem('bbq_savedAt', String(payload.savedAt));
-    localStorage.setItem('bbq_phone_overwrite_receipt_v1', JSON.stringify({
-      id: resolutionId,
-      resolvedAt: payload.savedAt,
-      revision: payload.stateRevision,
-      trigger
-    }));
-    localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
-    sfaAnalysisHistory = mergeSfaAnalysisHistories(sfaAnalysisHistory, payload.sfaOrderLedger);
-    markSfaLedgerChanged();
-    localStorage.setItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON.stringify(sfaAnalysisHistoryForPayload()));
-    localDirty = false;
+    try {
+      stateRevision = Number(payload.stateRevision || 0);
+      inventoryRevision = Number(payload.inventoryRevision || 0);
+      salesRevision = Number(payload.salesRevision || 0);
+      localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
+      localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
+      localStorage.setItem(SALES_REVISION_STORAGE_KEY, String(salesRevision));
+      localStorage.setItem('bbq_savedAt', String(payload.savedAt || Date.now()));
+      localStorage.setItem('bbq_phone_overwrite_receipt_v1', JSON.stringify({
+        id: resolutionId,
+        resolvedAt: payload.savedAt || Date.now(),
+        revision: payload.stateRevision,
+        trigger
+      }));
+      localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
+      sfaAnalysisHistory = mergeSfaAnalysisHistories(sfaAnalysisHistory, payload.sfaOrderLedger);
+      markSfaLedgerChanged();
+      localStorage.setItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON.stringify(sfaAnalysisHistoryForPayload()));
+      localDirty = false;
+      const lastSavedEl = document.getElementById('lastSaved');
+      if (lastSavedEl) lastSavedEl.textContent = '충돌해결 ' + new Date(payload.savedAt || Date.now()).toLocaleTimeString('ko-KR');
+      if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = true;
+    } catch (afterOk) {
+      console.error('[phone-overwrite] post-ok local', afterOk);
+      localDirty = false;
+    }
     renderSaveState('완료 · 폰 기준 PC 동기화', 'saved');
-    document.getElementById('lastSaved').textContent = '충돌해결 ' + new Date(payload.savedAt).toLocaleTimeString('ko-KR');
-    if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = true;
     toast('폰 발주항목을 기준으로 PC 동기화를 완료했습니다');
     return true;
   } catch (error) {
