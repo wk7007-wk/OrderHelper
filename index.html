@@ -777,7 +777,27 @@
 </div>
 
 <script>
-const APP_VERSION = '0826.0616';
+const APP_VERSION = '0826.0630';
+(function(){
+  var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
+  if (!v) {
+    var m = document.querySelector('meta[name="web-v"]');
+    v = m ? m.getAttribute("content") : "";
+  }
+  if (!v) return;
+  try {
+    var u = new URL(location.href);
+    if (u.searchParams.get("v") !== v) {
+      u.searchParams.set("v", v);
+      location.replace(u.toString());
+      return;
+    }
+  } catch (e) {}
+  window.addEventListener("pageshow", function (ev) { if (ev.persisted) location.reload(); });
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); });
+  }
+})();
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const FACTORY_BROWSER_URL = 'https://218.147.118.71/orderhelper_browser.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
