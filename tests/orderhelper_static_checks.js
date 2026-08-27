@@ -8,7 +8,11 @@ const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g)).map(m
 
 new Function(scripts);
 
-assert.match(html, /const APP_VERSION = '0826\.\d{4}';/);
+assert.match(html, /const APP_VERSION = '\d{4}\.\d{4}';/);
+assert.doesNotMatch(html, /scheduleSalesAutoSave/);
+assert.match(html, /addEventListener\('blur', flushSalesAutoSave\)/);
+assert.match(html, /id="baseSalesInput"/);
+assert.match(html, /id="salesInputs"/);
 assert.match(html, /CLI-OK-0826UX2/);
 assert.match(html, /function screenOrderPackSize\(item\)/);
 assert.match(html, /name:"스티커\(BBQ스티커T\)"[\s\S]*?buffer:0,daily:0/);

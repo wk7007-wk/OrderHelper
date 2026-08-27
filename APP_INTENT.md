@@ -7,6 +7,10 @@
 - 모바일에서 재고 입력 흐름이 끊기지 않아야 한다.
 - 출력 순서와 발주량이 최초 SFA 발주 동선에 맞아야 한다.
 
+## 배포 버전
+- 화면 `APP_VERSION`은 배포 직전 KST `date +%m%d.%H%M` 값이다. 형식은 `MMdd.HHmm`.
+- 예전 버전 문자열을 남긴 채 배포하지 않는다. 패킷에 적힌 숫자를 복사하지 말고 저장 직전 실행 시각으로 찍는다.
+
 ## 절대 기준
 - SFA 자동입력은 품목명, 단위, 별칭, 환산 규칙이 확정된 뒤에만 진행한다.
 - 계산식과 사용자 입력 기록은 화면 정리 때문에 숨기거나 잃지 않는다. 숫자 입력·스크롤 중에는 발주량/금액 resolver/90일 분석처럼 순간 메모리를 쓰는 계산을 돌리지 않는다. 그런 계산은 idle 시간 조각으로 나누고, 결과가 안정되기 전에는 부분 숫자를 그리지 않으며 `계산 중`만 보여 준다. Enter 또는 모바일 다음(아직 그 칸에 있을 때)은 기존 행을 그 자리에서 한 번 정렬한 뒤 다음 미입력 재고칸으로 커서를 한 번만 옮긴다. 그 뒤에 다시 정렬하거나 커서를 다시 두지 않고, tbody를 통째로 다시 만들지 않는다. 이미 다른 칸에 있으면 정렬만 하고 커서는 그대로 둔다. 완료 전 `input` draft와 다른 필드의 일반 blur/change는 원격 전송하지 않는다.
@@ -89,7 +93,7 @@
 ## 완료 기준
 - 검증: 정적 검사, 모바일 브라우저 입력 흐름, Firebase read-only preflight, Playwright desktop/mobile screenshot, DOM smoke, Axe, empty state, 공장 PC/SiteBot evidence
 - 전달: 웹 URL 반영 확인
-- 최신 배포판 기준: `20260816-02` / `0816.2151` / SFA view uses original sfaSeq only. 상단에서 미입력 재고 수와 다음 칸 이동을 바로 쓰고, 숨김 행은 재고 Enter 다음 대상으로 쓰지 않는다. 예상매출은 수정 가능하며 입력/blur 즉시 current+history에 동기화한다. 재고 숫자 Enter 게이트와 분리한다. 필요량 숫자와 추천발주 숫자는 같은 28px 첫 줄의 수평선에 배치하고 분석·예상금액은 그 아래에 표시한다. 표는 `구역 → 품목명 → 재고 → 필요량 → 추천발주` 순서이며, 재고까지 왼쪽 고정 열로 유지해 가로 스크롤 중에도 연속 입력할 수 있다. 발주 0행도 확인된 단가를 compact card로 표시하고 실제 누락만 `단가 확인 필요`로 구분한다. 구역은 기존값 선택과 수기 입력을 함께 지원한다. `직사각용기1(190,감자)`와 `직사각용기2(230,치즈스틱)`는 별도 품목·별도 실발주명·별도 가격으로 처리하며, 과거 합본 재고는 1호에 한 번만 이관하고 2호를 빈 재고로 추가해 중복하지 않는다. SFA의 20G 소포장/58G 조리용 시즈닝은 규격을 지우지 않고 각각 25g/58g 체크 품목에 고정 연결하며, `JHP종이봉투(대)`는 대/소 통합 체크 품목의 우선 원명으로 쓴다. 기존 이름 연결·숫자 보정 2단계, `연결 안 함`, compact save status, exact hash 자동 진입, 저장/CAS/수동값 보호는 유지한다.
+- 최신 배포판 기준: 화면 `APP_VERSION`은 해당 배포 직전 KST `MMdd.HHmm`이다. SFA view uses original sfaSeq only. 상단에서 미입력 재고 수와 다음 칸 이동을 바로 쓰고, 숨김 행은 재고 Enter 다음 대상으로 쓰지 않는다. 예상매출은 수정 가능하며 타이핑은 로컬만, 원격은 blur/change/Enter의 `flushSalesAutoSave`만 한다. 재고 숫자 Enter 게이트와 분리한다. 필요량 숫자와 추천발주 숫자는 같은 28px 첫 줄의 수평선에 배치하고 분석·예상금액은 그 아래에 표시한다. 표는 `구역 → 품목명 → 재고 → 필요량 → 추천발주` 순서이며, 재고까지 왼쪽 고정 열로 유지해 가로 스크롤 중에도 연속 입력할 수 있다. 발주 0행도 확인된 단가를 compact card로 표시하고 실제 누락만 `단가 확인 필요`로 구분한다. 구역은 기존값 선택과 수기 입력을 함께 지원한다. `직사각용기1(190,감자)`와 `직사각용기2(230,치즈스틱)`는 별도 품목·별도 실발주명·별도 가격으로 처리하며, 과거 합본 재고는 1호에 한 번만 이관하고 2호를 빈 재고로 추가해 중복하지 않는다. SFA의 20G 소포장/58G 조리용 시즈닝은 규격을 지우지 않고 각각 25g/58g 체크 품목에 고정 연결하며, `JHP종이봉투(대)`는 대/소 통합 체크 품목의 우선 원명으로 쓴다. 기존 이름 연결·숫자 보정 2단계, `연결 안 함`, compact save status, exact hash 자동 진입, 저장/CAS/수동값 보호는 유지한다.
 - 완료 포인터: `20260717-23 Align need and recommended-order numbers`; 이전 포인터 `20260717-22 Keep stock input beside item names`, `20260717-21 Show idle unit prices and split rectangular containers`.
 - 완료 검증: `node tests/orderhelper_static_checks.js`, `node tests/orderhelper_inventory_matching_regression.js`, `node tests/orderhelper_single_grid_ledger_regression.js`, `node tests/orderhelper_p1_review_regression.js`, `node tests/orderhelper_autosave_regression.js`, `python3 tests/orderhelper_autosave_browser.py`, `python3 tests/orderhelper_expand_viewport_browser.py`, inline JS syntax, `git diff --check`. 로컬 Playwright는 Firebase를 interception해 ETag pair-CAS, IME/change/Enter, stored-XSS, delegated listener와 390×844 펼침/접기 viewport anchor를 검증한다. 실제 공장 PC/SiteBot worker·live 배포 검증은 별도 확인 대상이다.
 - 운영 감시: 서버폰 Termux AI Ops가 PC/SiteBot 상태와 SFA 요청 정체를 감시한다. 앱 코드 변경 없이 감시만 바뀐 경우 APK/웹 배포는 필요 없다.
