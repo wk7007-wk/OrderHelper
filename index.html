@@ -38,6 +38,10 @@
   tr.calc-pending .order-amount { visibility: hidden; }
   .top button { background: #0f3460; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
   .top button.primary { background: var(--solid-accent-bg); color: var(--solid-accent-fg); }
+  .browser-diag { display: block; width: 100%; margin: 0; padding: 6px 14px; border: 0; border-bottom: 1px solid #0f3460; background: #0f1b33; color: #93c5fd; font-size: 11px; font-weight: 700; text-align: left; cursor: pointer; }
+  .browser-diag.warn { color: #fdba74; }
+  .browser-diag.err { color: #fca5a5; }
+  .browser-diag-detail { margin: 0; padding: 8px 14px 10px; background: #0b1224; color: #cbd5e1; font-size: 11px; line-height: 1.45; white-space: pre-wrap; word-break: break-all; }
   .top button.green { background: #27ae60; }
   .meta { font-size: 11px; color: #888; }
   .work-progress { display: inline-flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 8px 4px 10px; border: 1px solid rgba(249, 115, 22, 0.4); border-radius: 12px; background: rgba(249, 115, 22, 0.12); }
@@ -160,6 +164,47 @@
   .grid-sort-control { display: inline-flex; align-items: center; gap: 3px; padding: 2px; border: 1px solid #315a8d; border-radius: 8px; background: rgba(8, 14, 24, 0.42); }
   .top .grid-sort-control button { padding: 5px 9px; border-radius: 5px; background: transparent; color: #9fb2ca; }
   .top .grid-sort-control button.active { background: #315a8d; color: #fff; }
+  .ux2-chip { display: none; min-height: 22px; align-items: center; padding: 2px 7px; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: 999px; background: rgba(34, 197, 94, 0.14); color: #bbf7d0; font-size: 10px; font-weight: 900; white-space: nowrap; }
+  .ux2-work-mode .ux2-chip { display: inline-flex; }
+  .ux2-work-sales { white-space: nowrap; font-weight: 800; color: #dbeafe; }
+  .ux2-work-sales[hidden] { display: none !important; }
+  .ux2-work-mode .ux2-work-sales { display: inline-flex; }
+  .ux2-work-mode #orderAmountSummary { font-size: 12px; }
+  .ux2-work-mode #workProgress,
+  .ux2-work-mode #sfaAnalyzeBtn,
+  .ux2-work-mode #sfaCompareBtn,
+  .ux2-work-mode #phoneOverwriteBtn,
+  .ux2-work-mode #badge,
+  .ux2-work-mode #appVer,
+  .ux2-work-mode .top > label,
+  .ux2-work-mode #browserDiag,
+  .ux2-work-mode #cycleHint { display: none !important; }
+  .ux2-work-mode .top { gap: 8px; padding-top: 7px; padding-bottom: 7px; }
+  .ux2-work-mode #saveState, .ux2-work-mode #lastSaved { white-space: nowrap; }
+  @media (min-width: 601px) and (max-width: 760px) {
+    .ux2-work-mode .table-wrap { overflow-x: hidden; padding: 4px 6px 8px; }
+    .ux2-work-mode table, .ux2-work-mode tbody { display: block; width: 100%; min-width: 0; }
+    .ux2-work-mode thead { display: block; width: 100%; }
+    .ux2-work-mode #thead { display: grid; grid-template-columns: minmax(0, 1fr) 82px 30px; width: 100%; }
+    .ux2-work-mode #thead th { display: none; }
+    .ux2-work-mode #thead th[data-column="name"], .ux2-work-mode #thead th[data-column="order"], .ux2-work-mode #thead th[data-column="actions"] { display: flex; }
+    .ux2-work-mode #thead th[data-column="name"] { grid-column: 1; justify-content: flex-start; }
+    .ux2-work-mode #thead th[data-column="order"] { grid-column: 2; }
+    .ux2-work-mode #thead th[data-column="actions"] { grid-column: 3; }
+    .ux2-work-mode #tbody { display: grid; gap: 3px; }
+    .ux2-work-mode #tbody tr[data-entry-key] { display: grid; grid-template-columns: minmax(0, 1fr) 82px 30px; grid-template-areas: "name order actions"; width: 100%; min-width: 0; min-height: 42px; }
+    .ux2-work-mode #tbody tr[data-entry-key] > td { position: static !important; display: none !important; min-width: 0 !important; max-width: none !important; padding: 4px 6px; white-space: normal; }
+    .ux2-work-mode #tbody tr[data-entry-key] > td[data-column="name"], .ux2-work-mode #tbody tr[data-entry-key] > td[data-column="order"], .ux2-work-mode #tbody tr[data-entry-key] > td[data-column="actions"] { display: flex !important; }
+    .ux2-work-mode #tbody td[data-column="name"] { grid-area: name; align-items: center; overflow: visible; }
+    .ux2-work-mode #tbody td[data-column="order"] { grid-area: order; align-items: center; justify-content: center; }
+    .ux2-work-mode #tbody td[data-column="actions"] { grid-area: actions; align-items: center; justify-content: center; }
+    .ux2-work-mode #tbody .item-title { min-height: 32px; font-size: 13px; line-height: 1.25; }
+    .ux2-work-mode #tbody .output-order-value { min-height: 32px; font-size: 20px; }
+    .ux2-work-mode #tbody .order-analysis, .ux2-work-mode #tbody .order-amount { display: none !important; }
+    .ux2-work-mode #tbody td.actions > button:not(.mobile-row-toggle) { display: none; }
+    .ux2-work-mode #tbody td.actions button.mobile-row-toggle { display: inline-flex; min-width: 26px; min-height: 32px; }
+    .ux2-work-mode #tbody .inline-alias-correction, .ux2-work-mode #tbody .inline-site-match { display: none; }
+  }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; min-width: 1180px; border-collapse: separate; border-spacing: 0; }
   thead { background: #0f3460; z-index: 5; }
@@ -591,9 +636,11 @@
   <h1>BBQ 발주</h1>
   <span class="badge" id="badge">발주 0개</span>
   <span class="order-total-summary" id="orderAmountSummary">오늘 발주 예상 총액 0원 · 가격 확인 필요 0건</span>
+  <span class="meta ux2-work-sales" id="ux2WorkSalesSummary" hidden></span>
   <label style="font-size:12px;color:#aaa">발주일수
     <select id="orderDays" style="background:#0f3460;color:#fff;border:1px solid #0f3460;border-radius:4px;padding:3px 6px;font-size:13px;margin-left:4px">
       <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      <option value="3.5">3.5</option>
       <option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option>
     </select>
   </label>
@@ -619,7 +666,10 @@
   <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
   <span class="meta" id="appVer"></span>
+  <span class="ux2-chip" id="ux2Chip" aria-label="UX2 임시 수신">CLI-OK-0826UX2</span>
 </div>
+<button type="button" id="browserDiag" class="browser-diag" onclick="toggleBrowserDiag()" aria-expanded="false">브라우저 상태 확인 중</button>
+<pre id="browserDiagDetail" class="browser-diag-detail hidden"></pre>
 
 <div class="sfa-panel hidden" id="sfaComparePanel">
   <div class="sfa-panel-head">
@@ -726,8 +776,29 @@
 </div>
 
 <script>
-const APP_VERSION = '0826.0418';
+const APP_VERSION = '0826.0630';
+(function(){
+  var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
+  if (!v) {
+    var m = document.querySelector('meta[name="web-v"]');
+    v = m ? m.getAttribute("content") : "";
+  }
+  if (!v) return;
+  try {
+    var u = new URL(location.href);
+    if (u.searchParams.get("v") !== v) {
+      u.searchParams.set("v", v);
+      location.replace(u.toString());
+      return;
+    }
+  } catch (e) {}
+  window.addEventListener("pageshow", function (ev) { if (ev.persisted) location.reload(); });
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); });
+  }
+})();
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
+const FACTORY_BROWSER_URL = 'https://218.147.118.71/orderhelper_browser.json';
 const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
 async function fetchOrderDeskRead() {
   const empty = { ok: true, json: async () => ({ current: {}, history: {} }) };
@@ -738,14 +809,18 @@ async function fetchOrderDeskRead() {
       const obj = JSON.parse(text || '{}');
       if (obj && obj.schema === 'factory_log_harvest/v1') return empty;
       return res;
-    } catch (_) { return res; }
+    } catch (_) {
+      return res;
+    }
   };
   try {
-    const ok = await asRes(await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now()));
+    const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
+    const ok = await asRes(res);
     if (ok) return ok;
   } catch (_) {}
   try {
-    const ok = await asRes(await fetch(`${GIST_ORDER_URL}?_=` + Date.now()));
+    const res = await fetch(`${GIST_ORDER_URL}?_=` + Date.now());
+    const ok = await asRes(res);
     if (ok) return ok;
   } catch (_) {}
   return empty;
@@ -777,6 +852,24 @@ const DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS = Object.freeze({
   '냉동-핫윙,비비윙스': 10,
   '냉동-떡볶이(16개)': 16,
 });
+
+// 배달옵션 메뉴 → 발주 SKU (메뉴믹스/cycleHint 후속). 윙봉 주문은 벌크신선통날개.
+const MENU_OPTION_ALIASES = Object.freeze({
+  '윙봉': '벌크신선통날개',
+});
+// 부패가 빠른 신선 부위. 화 입고 3.5일(금 선입고)은 적용하지 않고 3일로 자른다. 목 4일(주말 윙봉)은 유지.
+const PERISHABLE_ITEMS = Object.freeze(['벌크신선통날개']);
+// 장사필수: 떨어지면 영업 불가. 10호 냉장고 매출스케일 면제, 화 3.5일 선입고 유지. K는 아래로 자동조정하지 않음.
+const MUST_HAVE_ITEMS = Object.freeze([
+  '통다리바베큐소스(1kg)',
+  '올리브치킨용배터믹스-파우다',
+  '(신)올리브오일',
+  '올리브마리네이드(신)',
+  'BBQ양념치킨소스',
+]);
+// (신)올리브오일 일사용 L은 소비량이 아니라 최대 교체량. 그 이상 쓰지 않음.
+// 최근/3개월 혼합·예상매출 가중·화 3.5 선입고·냉장고 매출스케일을 적용하지 않는다.
+const OIL_REPLACEMENT_ITEMS = Object.freeze(['(신)올리브오일']);
 
 // Static 1-order-unit KRW defaults from SFA 2026-06-01..08-22 amount/qty.
 // Live excel / sfaPriceHistory win; these fill 오늘 발주 예상 총액 when evidence is missing.
@@ -865,7 +958,7 @@ const DEFAULT_ORDER_UNIT_PRICES = Object.freeze({
   "(신)롤백(500매)": 4257,
   "수제맥주 공케그(빈통)": 0,
 });
-const DAILY_USAGE_STORAGE_VERSION = 'mate-daily-inbound-20260601-0821';
+const DAILY_USAGE_STORAGE_VERSION = 'mate-daily-inbound-recent70-0825';
 const DAILY_USAGE_STORAGE_KEY = 'bbq_dailyUsageVersion';
 const CALIBRATED_DAILY_ITEM_NAMES = Object.freeze([
   "(신)스모크치킨",
@@ -1531,91 +1624,93 @@ document.getElementById('pinInput').addEventListener('input', e => {
 
 // 93 품목 마스터 (Excel 발주리스트 2026-05-08 스냅샷 + 2026-08-23 SFA 원문 5종, D 순 정렬)
 const MASTER = [
-  {sfaSeq:3,name:"(신)올리브오일",unit:"캔/캔",policy:"전부",buffer:3.7,daily:1.1},
-  {sfaSeq:3.3,name:"냉동-핫윙,비비윙스",unit:"개/박스",policy:"전부",buffer:3,daily:3.18},
+  // (신)올리브오일 daily는 최대 교체량 동결값. 소비 평균으로 재계산하지 않음.
+  {sfaSeq:3,name:"(신)올리브오일",unit:"캔/캔",policy:"전부",buffer:4,daily:1.09},
+  {sfaSeq:3.3,name:"냉동-핫윙,비비윙스",unit:"개/박스",policy:"전부",buffer:3,daily:2.98},
   {sfaSeq:5,name:"두마리치킨,파더스",unit:"개/박스",policy:"여유",buffer:2,daily:0},
   {sfaSeq:5.1,name:"BBQ충진식패티(100g)(마일드)",unit:"개/박스",policy:"",buffer:0,daily:0},
   {sfaSeq:5.2,name:"BBQ페퍼로니씬피자",unit:"개/박스",policy:"",buffer:0,daily:0},
-  {sfaSeq:5,name:"냉동-닭껍데기(국내산)",unit:"개/개",policy:"여유",buffer:2,daily:1.79},
+  {sfaSeq:5,name:"냉동-닭껍데기(국내산)",unit:"개/개",policy:"여유",buffer:2,daily:1.86},
   {sfaSeq:6,name:"냉동-크런치너겟,순살크래커",unit:"개/박스",policy:"여유",buffer:4,daily:0},
   {sfaSeq:6.1,name:"냉동-바사칸윙",unit:"개/박스",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:6.2,name:"냉동-롱김말이",unit:"봉/봉",policy:"여유",buffer:1,daily:0.28},
-  {sfaSeq:6.3,name:"냉동-가지튀김",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.13},
-  {sfaSeq:8,name:"냉동-레귤러컷(감자튀김)",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.4},
-  {sfaSeq:9,name:"냉동-치즈볼-BBQ치즈볼(크림)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.35},
-  {sfaSeq:10,name:"냉동-치즈볼-BBQ황금알치즈볼",unit:"봉/봉",policy:"여유",buffer:0.5,daily:0.47},
-  {sfaSeq:11,name:"냉동-치즈볼-더블치즈볼",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.39},
-  {sfaSeq:11.2,name:"냉동-BBQ소떡소떡",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.27},
-  {sfaSeq:12,name:"냉동-모둠감자튀김,모듬",unit:"개/개",policy:"여유",buffer:0.8,daily:0.78},
+  {sfaSeq:6.2,name:"냉동-롱김말이",unit:"봉/봉",policy:"여유",buffer:0.9,daily:0.22},
+  {sfaSeq:6.3,name:"냉동-가지튀김",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.15},
+  {sfaSeq:8,name:"냉동-레귤러컷(감자튀김)",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.33},
+  {sfaSeq:9,name:"냉동-치즈볼-BBQ치즈볼(크림)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.4},
+  {sfaSeq:10,name:"냉동-치즈볼-BBQ황금알치즈볼",unit:"봉/봉",policy:"여유",buffer:0.5,daily:0.54},
+  {sfaSeq:11,name:"냉동-치즈볼-더블치즈볼",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.41},
+  {sfaSeq:11.2,name:"냉동-BBQ소떡소떡",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.25},
+  {sfaSeq:12,name:"냉동-모둠감자튀김,모듬",unit:"개/개",policy:"여유",buffer:0.8,daily:0.79},
   {sfaSeq:12.4,name:"냉동-멘보샤",unit:"개/박스",policy:"전부",buffer:0.3,daily:0.3},
-  {sfaSeq:14,name:"냉동-오징어튀김(오징어다리아님)",unit:"봉/봉",policy:"여유",buffer:0,daily:0.13},
-  {sfaSeq:15,name:"냉동-오감볼",unit:"개/개",policy:"여유",buffer:2,daily:1.15},
+  {sfaSeq:14,name:"냉동-오징어튀김(오징어다리아님)",unit:"봉/봉",policy:"여유",buffer:0,daily:0.11},
+  {sfaSeq:15,name:"냉동-오감볼",unit:"개/개",policy:"여유",buffer:1.9,daily:0.94},
   {sfaSeq:15.1,name:"냉동-치즈스틱",unit:"개/개",policy:"여유",buffer:1,daily:0.02},
   {sfaSeq:17,name:"냉동-타르타르새우",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.23},
-  {sfaSeq:17.1,name:"냉동-고추튀김",unit:"개/개",policy:"여유",buffer:0.2,daily:0.17},
-  {sfaSeq:18,name:"BBQ싱싱옥수수콘립",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.35},
-  {sfaSeq:18.1,name:"냉동-떡볶이(16개)",unit:"개/박스",policy:"전부",buffer:3,daily:3.75},
+  {sfaSeq:17.1,name:"냉동-고추튀김",unit:"개/개",policy:"여유",buffer:0.2,daily:0.12},
+  {sfaSeq:18,name:"BBQ싱싱옥수수콘립",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.27},
+  {sfaSeq:18.1,name:"냉동-떡볶이(16개)",unit:"개/박스",policy:"전부",buffer:3,daily:3.44},
   {sfaSeq:18.2,name:"BBQ필크런치플레이크",unit:"개/박스",policy:"",buffer:0,daily:0},
-  {sfaSeq:19,name:"신선육(10호)-뼈한마리",unit:"박/박스",policy:"전부",buffer:0.8,daily:2.3},
-  {sfaSeq:20,name:"통다리바베큐,자메이카",unit:"개/개",policy:"전부",buffer:4,daily:7.45},
+  {sfaSeq:19,name:"신선육(10호)-뼈한마리",unit:"박/박스",policy:"전부",buffer:0.9,daily:2.4},
+  {sfaSeq:20,name:"통다리바베큐,자메이카",unit:"개/개",policy:"전부",buffer:4.1,daily:8.65},
   {sfaSeq:21,name:"신선순살(720g)",unit:"박/박스",policy:"전부",buffer:1,daily:1.92},
-  {sfaSeq:22,name:"신선북채(신)-다리",unit:"팩/팩",policy:"전부",buffer:1,daily:2.56},
-  {sfaSeq:23,name:"벌크신선통날개",unit:"팩/팩",policy:"전부",buffer:0.3,daily:1.09},
-  {sfaSeq:24,name:"(신)스모크치킨",unit:"봉/봉",policy:"전부",buffer:0.7,daily:0.44},
-  {sfaSeq:24.1,name:"파인마요",unit:"박스/박스",policy:"여유",buffer:0.5,daily:0.13},
+  {sfaSeq:22,name:"신선북채(신)-다리",unit:"팩/팩",policy:"전부",buffer:1,daily:2.58},
+  {sfaSeq:23,name:"벌크신선통날개",unit:"팩/팩",policy:"전부",buffer:0.3,daily:1.15},
+  {sfaSeq:24,name:"(신)스모크치킨",unit:"봉/봉",policy:"전부",buffer:0.7,daily:0.43},
+  {sfaSeq:24.1,name:"파인마요",unit:"박스/박스",policy:"여유",buffer:0.5,daily:0.09},
   {sfaSeq:24.2,name:"극한갈비소스",unit:"",policy:"",buffer:1,daily:0.22},
-  {sfaSeq:25,name:"배달소스-순살크래커소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0.03},
-  {sfaSeq:26,name:"맵소디소스",unit:"팩/팩",policy:"여유",buffer:0.2,daily:0.12},
-  {sfaSeq:27,name:"배달소스-(신)비비소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0.11},
-  {sfaSeq:27.1,name:"레몬보이",unit:"봉/봉",policy:"여유",buffer:1,daily:0.04},
-  {sfaSeq:28,name:"배달소스-(신)스모크소스",unit:"봉/봉",policy:"여유",buffer:1,daily:0.12},
-  {sfaSeq:29,name:"볼케이노핫소스",unit:"박스/박스",policy:"여유",buffer:1,daily:0.09},
-  {sfaSeq:29.1,name:"BBQ필크런치소스",unit:"봉/봉",policy:"",buffer:0,daily:0.26},
+  {sfaSeq:25,name:"배달소스-순살크래커소스",unit:"봉/봉",policy:"여유",buffer:1.1,daily:0.03},
+  {sfaSeq:26,name:"맵소디소스",unit:"팩/팩",policy:"여유",buffer:0.2,daily:0.16},
+  {sfaSeq:27,name:"배달소스-(신)비비소스",unit:"봉/봉",policy:"여유",buffer:1.1,daily:0.12},
+  {sfaSeq:27.1,name:"레몬보이",unit:"봉/봉",policy:"여유",buffer:0.9,daily:0.04},
+  {sfaSeq:28,name:"배달소스-(신)스모크소스",unit:"봉/봉",policy:"여유",buffer:1.1,daily:0.13},
+  {sfaSeq:29,name:"볼케이노핫소스",unit:"박스/박스",policy:"여유",buffer:0.9,daily:0.07},
+  {sfaSeq:29.1,name:"BBQ필크런치소스",unit:"봉/봉",policy:"",buffer:0,daily:0.30},
   {sfaSeq:29.5,name:"산가측정페이퍼",unit:"",policy:"전부",buffer:1,daily:0.01},
-  {sfaSeq:30,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1,daily:1.51},
-  {sfaSeq:30.1,name:"치킨무(벌크)",unit:"팩/박스",policy:"여유",buffer:1,daily:0.1},
-  {sfaSeq:32,name:"햇반",unit:"박스/박스",policy:"여유",buffer:1,daily:0.08},
-  {sfaSeq:33,name:"먹태버터맛,매운맛",unit:"봉/봉",policy:"전부",buffer:1,daily:0.12},
-  {sfaSeq:34,name:"핫앤크리스피마리네이드",unit:"팩/팩",policy:"여유",buffer:0.3,daily:0.41},
+  {sfaSeq:30,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1.1,daily:1.61},
+  {sfaSeq:30.1,name:"치킨무(벌크)",unit:"팩/박스",policy:"여유",buffer:0.9,daily:0.09},
+  {sfaSeq:32,name:"햇반",unit:"박스/박스",policy:"여유",buffer:0.9,daily:0.07},
+  {sfaSeq:33,name:"먹태버터맛,매운맛",unit:"봉/봉",policy:"전부",buffer:1.1,daily:0.12},
+  {sfaSeq:34,name:"핫앤크리스피마리네이드",unit:"팩/팩",policy:"여유",buffer:0.3,daily:0.37},
   {sfaSeq:35,name:"블랙페퍼시즈닝(15g)",unit:"봉/봉",policy:"",buffer:1,daily:0.04},
-  {sfaSeq:36,name:"골든크리스피배터믹스(맵소반죽)",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.43},
-  {sfaSeq:37,name:"BBQ양념치킨소스",unit:"팩/팩",policy:"여유",buffer:1.5,daily:1.67},
-  {sfaSeq:39,name:"땡쇼크소스",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.17},
-  {sfaSeq:41,name:"올리브치킨용배터믹스-파우다",unit:"팩/팩",policy:"여유",buffer:2,daily:3.06},
-  {sfaSeq:42,name:"올리브마리네이드(신)",unit:"팩/팩",policy:"여유",buffer:1.2,daily:0.81},
-  {sfaSeq:43,name:"빠리배터믹스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.08},
+  {sfaSeq:36,name:"골든크리스피배터믹스(맵소반죽)",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.51},
+  {sfaSeq:37,name:"BBQ양념치킨소스",unit:"팩/팩",policy:"여유",buffer:3,daily:1.75},
+  {sfaSeq:39,name:"땡쇼크소스",unit:"팩/팩",policy:"여유",buffer:0.5,daily:0.16},
+  {sfaSeq:41,name:"올리브치킨용배터믹스-파우다",unit:"팩/팩",policy:"여유",buffer:4,daily:3.02},
+  {sfaSeq:42,name:"올리브마리네이드(신)",unit:"팩/팩",policy:"여유",buffer:2,daily:0.77},
+  {sfaSeq:43,name:"빠리배터믹스",unit:"팩/팩",policy:"여유",buffer:0.4,daily:0.09},
   {sfaSeq:44,name:"쉐킷쉐킷치즈맛시즈닝",unit:"",policy:"",buffer:1,daily:0},
-  {sfaSeq:45,name:"일회용 케찹",unit:"박스/박스",policy:"",buffer:1,daily:0.03},
-  {sfaSeq:46,name:"통다리바베큐소스(1kg)",unit:"팩/팩",policy:"여유",buffer:1,daily:0.69},
-  {sfaSeq:47,name:"BBQ박스패키지(대)",unit:"박/박스",policy:"여유",buffer:0.3,daily:0.21},
-  {sfaSeq:48,name:"BBQ박스패키지(중)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.5},
-  {sfaSeq:49,name:"BBQ박스패키지(소)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.19},
+  {sfaSeq:45,name:"일회용 케찹",unit:"박스/박스",policy:"",buffer:1.1,daily:0.03},
+  {sfaSeq:46,name:"통다리바베큐소스(1kg)",unit:"팩/팩",policy:"여유",buffer:2,daily:0.83},
+  {sfaSeq:47,name:"BBQ박스패키지(대)",unit:"박/박스",policy:"여유",buffer:0.3,daily:0.26},
+  {sfaSeq:48,name:"BBQ박스패키지(중)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.48},
+  {sfaSeq:49,name:"BBQ박스패키지(소)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.2},
   {sfaSeq:49.1,name:"BBQ버라이어티팩패키지",unit:"박/박스",policy:"",buffer:0,daily:0.03},
-  {sfaSeq:50,name:"트레이(중)",unit:"박/박스",policy:"여유",buffer:0.6,daily:0.53},
+  {sfaSeq:50,name:"트레이(중)",unit:"박/박스",policy:"여유",buffer:0.6,daily:0.54},
   {sfaSeq:51,name:"트레이(소)",unit:"박/박스",policy:"여유",buffer:0.5,daily:0.63},
-  {sfaSeq:52,name:"비닐-BBQ비닐봉투(소)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.28},
+  {sfaSeq:52,name:"비닐-BBQ비닐봉투(소)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.21},
   {sfaSeq:52.1,name:"피자비닐봉투",unit:"봉/봉",policy:"",buffer:0,daily:0.01},
   {sfaSeq:53,name:"비닐-(신규)BBQ비닐쇼핑백(대)",unit:"봉/봉",policy:"전부",buffer:1,daily:0.01},
-  {sfaSeq:54,name:"비닐-(신규)BBQ비닐쇼핑백(중)",unit:"봉/봉",policy:"여유",buffer:1,daily:0.66},
+  {sfaSeq:54,name:"비닐-(신규)BBQ비닐쇼핑백(중)",unit:"봉/봉",policy:"여유",buffer:1.1,daily:0.69},
   {sfaSeq:54.1,name:"JHP종이봉투(대)or(소)",unit:"묶/묶음",policy:"여유",buffer:0.3,daily:0.07},
   {sfaSeq:54.2,name:"BBQ종이봉투(대)",unit:"봉/봉",policy:"",buffer:0,daily:0.01},
-  {sfaSeq:55,name:"종이쇼핑백",unit:"박/박스",policy:"여유",buffer:1,daily:0.04},
+  {sfaSeq:55,name:"종이쇼핑백",unit:"박/박스",policy:"여유",buffer:1.1,daily:0.04},
   {sfaSeq:56,name:"치킨간지",unit:"박스/박스",policy:"",buffer:0.2,daily:0.1},
   {sfaSeq:56,name:"알루미늄캔(뚜껑포함)",unit:"",policy:"",buffer:0.5,daily:0.03},
   {sfaSeq:58,name:"내프킨,냅킨",unit:"박스/박스",policy:"",buffer:1,daily:0.02},
-  {sfaSeq:58,name:"직사각용기1(190,감자)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.1},
+  {sfaSeq:58,name:"직사각용기1(190,감자)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.07},
   {sfaSeq:58.1,name:"직사각용기2(230,치즈스틱)",unit:"묶/묶음",policy:"여유",buffer:0.5,daily:0.03},
   {sfaSeq:59,name:"물티슈(500)",unit:"",policy:"전부",buffer:1,daily:0.02},
-  {sfaSeq:59,name:"소독저(젓가락)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.18},
-  {sfaSeq:60,name:"안신스티커,BBQ테이프(N)",unit:"",policy:"",buffer:1,daily:0.04},
+  {sfaSeq:59,name:"소독저(젓가락)",unit:"박/박스",policy:"여유",buffer:0.2,daily:0.19},
+  {sfaSeq:60,name:"안신스티커,BBQ테이프(N)",unit:"",policy:"",buffer:0.9,daily:0.03},
   {sfaSeq:61,name:"(신)롤백(500매)",unit:"개",policy:"",buffer:1,daily:0.01},
-  {sfaSeq:62,name:"(신)위생장갑(200매)",unit:"개/개",policy:"전부",buffer:0.4,daily:0.39},
+  {sfaSeq:62,name:"(신)위생장갑(200매)",unit:"개/개",policy:"전부",buffer:0.4,daily:0.29},
   {sfaSeq:62.2,name:"여과지필터(320*535)(14)",unit:"장",policy:"전부",buffer:1,daily:0.01},
   {sfaSeq:63,name:"수제맥주 공케그(빈통)",unit:"",policy:"여유",buffer:0,daily:0.09},
-  {sfaSeq:63,name:"(컵소스)BBQ양념치킨소스(배달용)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.11},
-  {sfaSeq:64,name:"스티커T_컷팅칼(떡볶이스티커)",unit:"개/봉",policy:"여유",buffer:1,daily:0},
-  {sfaSeq:65,name:"BBQ뿜치킹시즈닝(58g)",unit:"",policy:"",buffer:0.3,daily:0.1},
-  {sfaSeq:66,name:"BBQ뿜치킹시즈닝(25g)",unit:"",policy:"전부",buffer:0.2,daily:0.08},
+  {sfaSeq:63,name:"(컵소스)BBQ양념치킨소스(배달용)",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.12},
+  {sfaSeq:64,name:"스티커(BBQ스티커T)",unit:"개/개",policy:"여유",buffer:0,daily:0},
+  {sfaSeq:64.1,name:"포장팩커팅칼(250EA/봉)",unit:"개/봉",policy:"여유",buffer:0,daily:0},
+  {sfaSeq:65,name:"BBQ뿜치킹시즈닝(58g)",unit:"",policy:"",buffer:0.3,daily:0.06},
+  {sfaSeq:66,name:"BBQ뿜치킹시즈닝(25g)",unit:"",policy:"전부",buffer:0.2,daily:0.16},
   {sfaSeq:99,name:"30분 주차권",unit:"",policy:"",buffer:1,daily:0},
   {sfaSeq:99,name:"종이,쿠킹호일(25cm*50m)",unit:"개/개",policy:"여유",buffer:1,daily:0},
   {sfaSeq:99,name:"삿포로, 스텔라",unit:"",policy:"여유",buffer:1,daily:0},
@@ -1630,6 +1725,7 @@ const ITEM_NAME_ALIASES = {
   "BBQ시크릿양념소스(주방용)": "BBQ양념치킨소스",
   "BBQ시크릿양념소스(배달용)": "(컵소스)BBQ양념치킨소스(배달용)",
   "직사각용기1(190,감자),2(230,치즈스틱)": "직사각용기1(190,감자)",
+  "스티커T_컷팅칼(떡볶이스티커)": "스티커(BBQ스티커T)",
 };
 
 // 직사각용기는 과거 내부 품목 하나에 1호·2호가 함께 매핑됐다.
@@ -1656,6 +1752,7 @@ let overrides = {};   // {name: {k?, l?}}  — 품목별 보정
 let dailySales = [];  // [number?] 길이 = days, 매출(만). null이면 1.0 weight
 let baseSales = DEFAULT_BASE_SALES;  // 매출대비 하루사용량 기준 매출(만)
 let gridSortMode = 'input';
+let ux2LastPendingStockCount = null;
 let zoneOrder = [];
 const ZONE_ORDER_STORAGE_KEY = 'bbq_zone_order_v1';
 let lastGridFocus = null;
@@ -2384,7 +2481,14 @@ function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, n
 
 async function putPhoneWinsTargets(localPayload, resolutionId, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 5) {
   const dateKey = normalizeHistoryDateKey(localPayload?.dateKey) || kstDateKey(Date.now());
-  const commit = { dateKey, body: JSON.stringify(localPayload || {}), commitId: resolutionId || ('phone-' + Date.now()), reason: 'phoneOverwrite', revision: Number(localPayload?.stateRevision || 0), inventoryRevision: Number(localPayload?.inventoryRevision || 0) };
+  const commit = {
+    dateKey,
+    body: JSON.stringify(localPayload || {}),
+    commitId: resolutionId || ('phone-' + Date.now()),
+    reason: 'phoneOverwrite',
+    revision: Number(localPayload?.stateRevision || 0),
+    inventoryRevision: Number(localPayload?.inventoryRevision || 0)
+  };
   return putConfirmedSaveTargets(commit, timeoutMs, maxAttempts);
 }
 function mergeConfirmedEntryZonePatchPayload(currentRemote, historyRemote, localPayload, patches) {
@@ -3108,7 +3212,7 @@ const AI_USAGE_ACCEPTED_STORAGE_KEY = 'bbq_ai_usage_accepted_v1';
 const STATE_REVISION_STORAGE_KEY = 'bbq_state_revision';
 const INVENTORY_REVISION_STORAGE_KEY = 'bbq_inventory_revision';
 const ORDER_DAYS_RULE_STORAGE_KEY = 'bbq_orderDaysRuleVersion';
-const ORDER_DAYS_RULE_VERSION = '20260607-thu-fri-4';
+const ORDER_DAYS_RULE_VERSION = '20260825-tue-3.5-thu-4';
 function newId() { return 'e' + (nextId++); }
 
 function baseDailyUsage(item) {
@@ -3121,13 +3225,25 @@ function applyDailyUsageCalibration(sourceOverrides = overrides, force = false) 
   const storedVersion = localStorage.getItem(DAILY_USAGE_STORAGE_KEY);
   if (!force && storedVersion === DAILY_USAGE_STORAGE_VERSION) return sourceOverrides || {};
   const calibrated = new Set(CALIBRATED_DAILY_ITEM_NAMES);
+  const masterDailyByName = {};
+  MASTER.forEach(item => { masterDailyByName[item.name] = item.daily; });
   const next = {};
   Object.keys(sourceOverrides || {}).forEach(name => {
     const row = sourceOverrides[name];
     if (!row || typeof row !== 'object' || Array.isArray(row)) return;
-    const copy = { ...row };
-    if (calibrated.has(name) && Object.prototype.hasOwnProperty.call(copy, 'l')) delete copy.l;
-    if (Object.keys(copy).length) next[name] = copy;
+    // 현장 일사용(.l)은 소스 오브 트루스. 보정으로 지우지 않는다.
+    next[name] = { ...row };
+  });
+  // 봇이 일사용을 채우고 원규가 사이트에서 수정한다. 없는 .l만 MASTER.daily로 채움.
+  // 다음 SFA 엑셀/입고 작업: 실발주나 현장 일사용/여유가 봇 추천과 다르면 사용자 조정으로 유지.
+  calibrated.forEach(name => {
+    if (!Object.prototype.hasOwnProperty.call(masterDailyByName, name)) return;
+    const row = next[name];
+    if (row && Object.prototype.hasOwnProperty.call(row, 'l')) return;
+    next[name] = { ...(row || {}), l: masterDailyByName[name] };
+  });
+  Object.keys(next).forEach(name => {
+    if (!next[name] || !Object.keys(next[name]).length) delete next[name];
   });
   localStorage.setItem(DAILY_USAGE_STORAGE_KEY, DAILY_USAGE_STORAGE_VERSION);
   localStorage.setItem('bbq_overrides', JSON.stringify(next));
@@ -3754,8 +3870,31 @@ function outputOrderQty(item, days) {
   return recommendedOrderQty(item, calcG(item, days));
 }
 
+function screenOrderPackSize(item) {
+  const name = String(item?.name || '');
+  if (name === '통다리바베큐,자메이카') return 10;
+  if (name === 'BBQ양념치킨소스') return 4;
+  if (name === '올리브치킨용배터믹스-파우다') return 4;
+  return 1;
+}
+
+function screenOrderQty(item, days) {
+  const qty = Number(outputOrderQty(item, days));
+  if (!Number.isFinite(qty) || qty <= 0) return 0;
+  const stock = totalStock(item.name);
+  const limitedNames = new Set([
+    '레몬보이', '산가측정페이퍼', '블랙페퍼시즈닝(15g)', 'BBQ블랙페퍼시즈닝(벌크)',
+    '배달소스-순살크래커소스', '볼케이노핫소스', 'B볼케이노핫소스', '(신)롤백(500매)'
+  ]);
+  if (limitedNames.has(item.name) && (stock > 1 || qty === 1)) return 0;
+  if (item.name === '트레이(소)' && ![0, 6].includes(kstGetDay())) return 2;
+  if (item.name === '비닐-BBQ비닐봉투(소)' && qty < 2) return 2;
+  const pack = screenOrderPackSize(item);
+  return Math.ceil((qty - 1e-9) / pack) * pack;
+}
+
 function displayOrderQty(item, days) {
-  return fmt(outputOrderQty(item, days), 1);
+  return fmt(screenOrderQty(item, days), 0);
 }
 
 function displayDecimal(value) {
@@ -4716,9 +4855,14 @@ function renderOrderAmountSummary(rows = []) {
   if (!el) return summary;
   const totalText = summary.validAmountCount > 0 || summary.needCount === 0 ? formatWon(summary.total) : '미계산';
   const amountGapText = summary.unresolvedAmountCount ? ` · 단위 확인 필요 ${summary.unresolvedAmountCount}건` : '';
+  const scaleHint = fridgeScaleHintText();
   el.textContent = `오늘 발주 예상 총액 ${totalText} · 가격 확인 필요 ${summary.unresolvedPriceCount}건${amountGapText}`;
+  el.dataset.ux2Total = totalText;
+  if (scaleHint) el.textContent += ` · ${scaleHint}`;
   el.classList.toggle('unresolved', summary.unresolvedPriceCount > 0 || summary.unresolvedAmountCount > 0);
   el.title = `유효 금액 ${summary.validAmountCount}/${summary.needCount}건만 합산`;
+  updateCycleHint();
+  updateUx2WorkMode();
   return summary;
 }
 
@@ -4726,7 +4870,7 @@ function updateOutputOrderForName(name, resolvedRowsByItemKey = null) {
   const item = orderItemByName(name);
   if (!item) return;
   const itemKey = itemKeyForName(item.name);
-  const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
+  const days = currentOrderDaysValue();
   const g = calcG(item, days);
   const isNeed = g > 0;
   const resolvedRow = resolvedRowsByItemKey?.get?.(itemKey) || null;
@@ -4782,16 +4926,96 @@ function getBaseSales() {
   const n = Number(baseSales);
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_BASE_SALES;
 }
-function dailyWeights(days) {
-  const ds = [];
-  for (let i = 0; i < days; i++) ds.push(dailySales[i] != null ? dailySales[i] : null);
-  const base = getBaseSales();
-  return ds.map(x => {
-    if (x == null) return 1;
-    const n = Number(x);
-    if (!Number.isFinite(n)) return 1;
-    return Math.max(0, n) / base;
-  });
+const FRIDGE_CAP_ITEM_NAME = '신선육(10호)-뼈한마리';
+const FRIDGE_CAP_HEADROOM = 9;
+let effectiveSalesScale = 1;
+let fridgeScaleCacheKey = '';
+
+function rawDailyWeightAt(i) {
+  const x = dailySales[i];
+  if (x == null) return 1;
+  const n = Number(x);
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(0, n) / getBaseSales();
+}
+
+function unscaledDailyWeights(days) {
+  const nDays = Number(days);
+  const full = Math.max(0, Math.floor(nDays));
+  const frac = nDays - full;
+  const weights = [];
+  for (let i = 0; i < full; i++) weights.push(rawDailyWeightAt(i));
+  if (frac > 1e-12) weights.push(frac * rawDailyWeightAt(full));
+  return weights;
+}
+
+function dailyWeights(days, scale) {
+  const weights = unscaledDailyWeights(days);
+  const s = scale != null && Number.isFinite(Number(scale))
+    ? Math.max(0, Number(scale))
+    : getEffectiveSalesScale(days);
+  if (!Number.isFinite(s) || s === 1) return weights;
+  return weights.map(w => w * s);
+}
+
+function fridgeCapItem() {
+  return orderItemByName(FRIDGE_CAP_ITEM_NAME);
+}
+
+function fridgeScaleInputsKey(days) {
+  const item = fridgeCapItem();
+  if (!item) return 'none:' + String(days);
+  return [
+    Number(days),
+    JSON.stringify(dailySales),
+    getBaseSales(),
+    totalStock(item.name),
+    getL(item),
+    getK(item),
+    conversionFactorForItem(item),
+    isItemHidden(item.name)
+  ].join('|');
+}
+
+function fridgeCapHolds(days, scale) {
+  const item = fridgeCapItem();
+  if (!item || isItemHidden(item.name)) return true;
+  const E = totalStock(item.name);
+  const L = getL(item);
+  const g = calcG(item, days, { salesScale: scale });
+  const order = recommendedOrderQty(item, g);
+  return (E + order - L) <= FRIDGE_CAP_HEADROOM + 1e-9;
+}
+
+function computeFridgeSalesScale(days) {
+  const item = fridgeCapItem();
+  if (!item || isItemHidden(item.name)) return 1;
+  if (fridgeCapHolds(days, 1)) return 1;
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (fridgeCapHolds(days, mid)) lo = mid;
+    else hi = mid;
+  }
+  if (!fridgeCapHolds(days, lo)) return 0;
+  return lo;
+}
+
+function getEffectiveSalesScale(days) {
+  const nDays = Number(days);
+  const safeDays = Number.isFinite(nDays) && nDays > 0 ? nDays : recommendedDays();
+  const key = fridgeScaleInputsKey(safeDays);
+  if (key === fridgeScaleCacheKey) return effectiveSalesScale;
+  effectiveSalesScale = computeFridgeSalesScale(safeDays);
+  fridgeScaleCacheKey = key;
+  return effectiveSalesScale;
+}
+
+function fridgeScaleHintText(scale) {
+  const s = Number(scale != null ? scale : effectiveSalesScale);
+  if (!Number.isFinite(s) || s >= 1 - 1e-12) return '';
+  return `냉장고 상한: 예상매출 ×${s.toFixed(2)}로 전체 발주`;
 }
 
 function normalizeNumberArray(value) {
@@ -4847,12 +5071,43 @@ function salesWeightForInterval(record, gapDays) {
   return { sum: gapDays, basis: 'gapDays_fallback', missing: days, fallback: true };
 }
 
+function isPerishableItem(item) {
+  const name = typeof item === 'string' ? item : (item && item.name);
+  return Boolean(name) && PERISHABLE_ITEMS.includes(name);
+}
+function isMustHaveItem(item) {
+  const name = typeof item === 'string' ? item : (item && item.name);
+  return Boolean(name) && MUST_HAVE_ITEMS.includes(name);
+}
+function isOilReplacementItem(item) {
+  const name = typeof item === 'string' ? item : (item && item.name);
+  return Boolean(name) && OIL_REPLACEMENT_ITEMS.includes(name);
+}
+// 전역 days가 3.5(일·월 → 화 입고 선입고)일 때만 통날개를 3일로. 장사필수·목 4일·그 외 품목은 그대로.
+// 올리브오일은 최대교체량 공식이라 발주일수를 쓰지 않는다(3.5 선입고를 강제하지 않음).
+function orderDaysForItem(item, days) {
+  const n = Number(days);
+  if (!Number.isFinite(n)) return days;
+  if (isOilReplacementItem(item)) return n;
+  if (isMustHaveItem(item)) return n;
+  if (isPerishableItem(item) && Math.abs(n - 3.5) < 1e-9) return 3;
+  return n;
+}
+
 function calcG(item, days, options = {}) {
   if (isItemHidden(item.name)) return 0;
   const L = options.baseDaily ? baseDailyUsage(item) : getL(item);
   const K = getK(item);
   const E = totalStock(item.name);
-  const weights = dailyWeights(days);
+  // 오일: G = max(0, L + K - E). L*Σweight·발주일수 배수 없음. 여유 K·ceil 발주량은 기존 경로.
+  if (isOilReplacementItem(item)) return Math.max(0, L + K - E);
+  const itemDays = orderDaysForItem(item, days);
+  // 냉장고 스케일은 전역 사이클 days 기준. 통날개만 가중 일수를 3으로.
+  // 장사필수는 10호 냉장고 예상매출 스케일을 무시한다(영업 필수 재고).
+  const scale = options.salesScale != null
+    ? options.salesScale
+    : (isMustHaveItem(item) ? 1 : getEffectiveSalesScale(days));
+  const weights = dailyWeights(itemDays, scale);
   const M = L * (weights[0] || 0);
   const totalUsage = L * weights.reduce((a, b) => a + b, 0);
   if (E < M) return totalUsage - M + K;
@@ -4920,7 +5175,7 @@ function normalizeHistoryRecord(key, snapshot) {
 }
 
 function currentAnalysisSnapshot() {
-  const days = parseInt(document.getElementById('orderDays')?.value || recommendedDays());
+  const days = currentOrderDaysValue();
   const calc = {};
   orderItemList().forEach(item => {
     const g = calcG(item, days, { baseDaily: true });
@@ -5210,8 +5465,8 @@ async function loadUsageHistory(silent = true) {
 }
 
 function currentOrderDaysValue() {
-  const fromUi = parseInt(document.getElementById('orderDays')?.value || '', 10);
-  return Number.isFinite(fromUi) && fromUi > 0 ? fromUi : recommendedDays();
+  const fromUi = parseFloat(document.getElementById('orderDays')?.value || '');
+  return Number.isFinite(fromUi) && fromUi >= 1 && fromUi <= 7 ? fromUi : recommendedDays();
 }
 
 function currentCalcSnapshot(days = currentOrderDaysValue()) {
@@ -5308,18 +5563,36 @@ async function flushCurrentBeforeSfaAnalysisRequest() {
   return waitForSaveIdle();
 }
 
+function kstGetDay(ts = Date.now()) {
+  return new Date(Number(ts) + 9 * 3600000).getUTCDay();
+}
 function recommendedDays() {
-  const d = new Date().getDay();
-  if (d === 4 || d === 5) return 4;
-  return 3;
+  const d = kstGetDay();
+  if (d === 0 || d === 1) return 3.5; // 월 SFA → 화 입고, 수목금 선입고
+  if (d === 2 || d === 3) return 4;   // 수 SFA → 목 입고, 금토일월
+  return 3;                           // 금 SFA → 토 입고
 }
 // 발주 후 물류 도착 전까지 lost 일수 (그 동안 사용량 0)
-// 목/금 사이클(4일치): 주말 물류 공백을 포함해 오늘+내일까지 lost → 2일
-// 나머지 요일(3일치): 도착이 다음날 새벽이라 거의 lost 없음 → 0일
+// 목/금은 기존 2일 lost를 유지. 3.5일(일·월) 사이클은 0.
 function recommendedLostDays() {
-  const d = new Date().getDay();
+  const d = kstGetDay();
   if (d === 4 || d === 5) return 2;
   return 0;
+}
+function recommendedCycleHint(d = kstGetDay()) {
+  const rec = recommendedDays();
+  let inbound = '토 입고';
+  if (d === 0 || d === 1) inbound = '화 입고';
+  else if (d === 2 || d === 3) inbound = '목 입고';
+  return `${dayName(d)}요일 → 추천 ${rec}일 (${inbound})`;
+}
+function updateCycleHint() {
+  const el = document.getElementById('cycleHint');
+  if (!el) return;
+  getEffectiveSalesScale(currentOrderDaysValue());
+  const recHint = recommendedCycleHint();
+  const scaleHint = fridgeScaleHintText();
+  el.textContent = scaleHint ? `${recHint} · ${scaleHint}` : recHint;
 }
 const dayName = d => ['일','월','화','수','목','금','토'][d];
 
@@ -7652,6 +7925,98 @@ function renderSaveState(label, tone = 'idle') {
   el.textContent = label;
   el.className = nextClass;
   updateStickyOffsets();
+  renderBrowserDiag();
+}
+
+let browserDiagOpen = new URLSearchParams(location.search || '').get('diag') === '1';
+let lastBrowserFactory = { ok: null, savedAt: 0, entries: 0, stocked: 0, error: '', at: 0 };
+let lastBrowserPut = { ok: null, at: 0, error: '', trigger: '' };
+
+function lsBytes(key) {
+  try { return (localStorage.getItem(key) || '').length; } catch { return -1; }
+}
+
+function collectBrowserDiag() {
+  const queue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
+  const stocked = (entries || []).filter(e => e && e.stock != null && e.stock !== '').length;
+  const host = String(location.host || '');
+  const addr = host.indexOf('218.147.118.71') >= 0 ? '공장주소' : (host.indexOf('github.io') >= 0 ? '깃허브주소' : host);
+  const queueLabel = confirmedSaveQueueBlocked ? '보관잠금' : (queue.active ? '확정대기' : (queue.queued ? '다음대기' : '큐없음'));
+  const factoryLabel = lastBrowserFactory.ok === true
+    ? (lastBrowserFactory.entries ? `공장 ${lastBrowserFactory.stocked}칸` : '공장 빈값')
+    : (lastBrowserFactory.ok === false ? '공장읽기실패' : '공장미확인');
+  const putLabel = lastBrowserPut.ok === true ? '송신OK' : (lastBrowserPut.ok === false ? '송신실패' : '송신없음');
+  const line = `${APP_VERSION} · ${addr} · 로컬재고 ${stocked} · ${queueLabel} · ${factoryLabel} · ${putLabel}`;
+  const detail = [
+    `버전 ${APP_VERSION}`,
+    `주소 ${location.href.split('#')[0]}`,
+    `로컬 품목 ${entries.length} / 재고입력 ${stocked} / dirty ${localDirty ? '예' : '아니오'}`,
+    `확정큐 ${queueLabel} / 메모리커밋 ${lastMemoryCommit ? '있음' : '없음'}`,
+    `공장 current 저장 ${lastBrowserFactory.savedAt ? new Date(lastBrowserFactory.savedAt).toLocaleString('ko-KR') : '-'} / 칸 ${lastBrowserFactory.entries} / 재고 ${lastBrowserFactory.stocked}`,
+    `마지막송신 ${lastBrowserPut.ok == null ? '-' : (lastBrowserPut.ok ? '성공' : '실패')} ${lastBrowserPut.error || ''} ${lastBrowserPut.trigger || ''}`,
+    `큐용량 ${lsBytes(CONFIRMED_SAVE_QUEUE_STORAGE_KEY)}자 / 엔트리 ${lsBytes('bbq_entries')}자`
+  ].join('\n');
+  const tone = confirmedSaveQueueBlocked || lastBrowserPut.ok === false || (stocked && lastBrowserFactory.ok === true && lastBrowserFactory.stocked === 0)
+    ? 'err'
+    : (queue.active || localDirty ? 'warn' : '');
+  return { line, detail, tone, stocked, queueLabel, addr };
+}
+
+function renderBrowserDiag() {
+  const btn = document.getElementById('browserDiag');
+  const pre = document.getElementById('browserDiagDetail');
+  if (!btn || !pre) return;
+  const diag = collectBrowserDiag();
+  btn.textContent = diag.line;
+  btn.className = 'browser-diag' + (diag.tone ? ' ' + diag.tone : '');
+  btn.setAttribute('aria-expanded', browserDiagOpen ? 'true' : 'false');
+  pre.textContent = diag.detail;
+  pre.classList.toggle('hidden', !browserDiagOpen);
+}
+
+function toggleBrowserDiag() {
+  browserDiagOpen = !browserDiagOpen;
+  renderBrowserDiag();
+}
+
+function noteFactoryEnvelope(remote) {
+  const env = factoryEnvelopeFromRemote(remote);
+  const cur = env.current || {};
+  const ents = Array.isArray(cur.entries) ? cur.entries : [];
+  lastBrowserFactory = {
+    ok: true,
+    savedAt: Number(cur.savedAt || 0),
+    entries: ents.length,
+    stocked: ents.filter(e => e && e.stock != null && e.stock !== '').length,
+    error: '',
+    at: Date.now()
+  };
+  renderBrowserDiag();
+}
+
+async function publishBrowserDiag(trigger = 'tick') {
+  const diag = collectBrowserDiag();
+  const packet = {
+    schema: 'orderhelper_browser/v1',
+    at: new Date().toISOString(),
+    version: APP_VERSION,
+    host: String(location.host || ''),
+    trigger,
+    line: diag.line,
+    stocked: diag.stocked,
+    queue: diag.queueLabel,
+    dirty: Boolean(localDirty),
+    blocked: Boolean(confirmedSaveQueueBlocked),
+    factory: lastBrowserFactory,
+    put: lastBrowserPut
+  };
+  try {
+    await fetch(FACTORY_BROWSER_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' },
+      body: JSON.stringify(packet)
+    });
+  } catch (_) {}
 }
 
 function saveReasonLabel(reason) {
@@ -7800,6 +8165,9 @@ function collectStockWorkStats() {
 
 function refreshWorkProgress() {
   const stats = collectStockWorkStats();
+  const completedNow = stats.pending === 0 && entries.length && (ux2LastPendingStockCount === null || ux2LastPendingStockCount > 0);
+  if (completedNow && gridSortMode === 'input') gridSortMode = 'sfa';
+  ux2LastPendingStockCount = stats.pending;
   const bar = document.getElementById('workProgress');
   const countEl = document.getElementById('workProgressCount');
   const metaEl = document.getElementById('workProgressMeta');
@@ -7808,6 +8176,7 @@ function refreshWorkProgress() {
   if (countEl) countEl.textContent = stats.pending ? `미입력 ${stats.pending}개` : '재고 입력 완료';
   if (metaEl) metaEl.textContent = `완료 ${stats.checked} · 숨김 ${stats.hidden}`;
   if (nextBtn) nextBtn.disabled = stats.pending === 0;
+  updateGridSortButtons();
   return stats;
 }
 
@@ -8244,6 +8613,30 @@ function renderPreservingGridFocus() {
 function updateGridSortButtons() {
   document.getElementById('sortInputBtn')?.classList.toggle('active', gridSortMode === 'input');
   document.getElementById('sortSfaBtn')?.classList.toggle('active', gridSortMode === 'sfa');
+  updateUx2WorkMode();
+}
+
+function isUx2WorkMode() {
+  return gridSortMode === 'sfa' || collectStockWorkStats().pending === 0;
+}
+
+function sfaDisplayNameForItem(item, resolvedRow = null) {
+  if (gridSortMode !== 'sfa') return item.name;
+  const actualName = String(resolvedRow?.actualName || resolvedRow?.siteName || '').trim();
+  return actualName || item.name;
+}
+
+function updateUx2WorkMode() {
+  const active = isUx2WorkMode();
+  document.body.classList.toggle('ux2-work-mode', active);
+  const chip = document.getElementById('ux2Chip');
+  if (chip) chip.hidden = !(active && gridSortMode === 'sfa');
+  const summary = document.getElementById('orderAmountSummary');
+  if (active && summary) {
+    const count = orderItemList().filter(item => calcG(item, currentOrderDaysValue()) > 0).length;
+    const total = summary.dataset.ux2Total || '';
+    summary.textContent = `발주 ${count}개 · 총액 ${total || '확인 필요'}`;
+  }
 }
 
 function setGridSortMode(mode) {
@@ -8388,7 +8781,7 @@ function startDerivedPaintJob(work, revision) {
   return {
     revision,
     names,
-    days: parseInt(document.getElementById('orderDays')?.value || recommendedDays()),
+    days: currentOrderDaysValue(),
     updateSales: work.updateSales,
     updateBadge: work.updateBadge,
     recomputeUsage: work.recomputeUsage,
@@ -8714,7 +9107,9 @@ function render(options = {}) {
   renderSaveLogs();
   renderZoneOptions(entries);
   updateGridSortButtons();
-  const days = parseInt(document.getElementById('orderDays').value);
+  const days = currentOrderDaysValue();
+  getEffectiveSalesScale(days);
+  updateCycleHint();
   recomputeUsageAnalysis();
 
   refreshNeedBadge(days);
@@ -8753,7 +9148,8 @@ function render(options = {}) {
     if (!isFirst) tr.classList.add('dup-row');
     applySfaOrderRowState(tr, sfaOrderRowState(item, hidden, sfaSortContext));
 
-    const nameDisplay = item.name;
+    const resolvedOrderRow = resolvedOrderRowsByItemKey.get(itemKeyForName(item.name)) || null;
+    const nameDisplay = sfaDisplayNameForItem(item, resolvedOrderRow);
     const safeEntryId = escapeHtml(ent.id);
     const safeEntryKey = escapeHtml(ent.entryKey || ent.id);
     const safeItemKey = escapeHtml(ent.itemKey || itemKeyForName(item.name));
@@ -8761,7 +9157,6 @@ function render(options = {}) {
     const inlineSiteControls = isFirst ? inlineSiteMatchesHtml(item.name, inlineSiteRows) : '';
     const daysLeft = hidden ? daysUntilReturn(item.name) : 0;
     const orderText = isNeed ? displayOrderQty(item, days) : '';
-    const resolvedOrderRow = resolvedOrderRowsByItemKey.get(itemKeyForName(item.name)) || null;
     const needCell = hidden
       ? `<td class="qty need-qty dup" data-column="need" data-item-key="${escapeHtml(itemKeyForName(item.name))}"><span class="need-output-value">${isFirst ? `💤 ${daysLeft}일 후 복귀` : ''}</span></td>`
       : `<td class="qty need-qty ${isNeed ? 'need-output' : ''}" data-column="need" data-item-key="${escapeHtml(itemKeyForName(item.name))}"><span class="need-output-value">${isNeed ? displayDecimal(g) : ''}</span></td>`;
@@ -8809,7 +9204,7 @@ function render(options = {}) {
   return true;
 }
 
-function refreshNeedBadge(days = parseInt(document.getElementById('orderDays')?.value || recommendedDays())) {
+function refreshNeedBadge(days = currentOrderDaysValue()) {
   let cnt = 0;
   orderItemList().forEach(it => { if (calcG(it, days) > 0) cnt++; });
   document.getElementById('badge').textContent = '발주 ' + cnt + '개';
@@ -8822,7 +9217,7 @@ function updateGForName(name, resolvedRowsByItemKey = null) {
   if (!item) return;
   gridPerf.keyedRowPatches += 1;
   const itemKey = itemKeyForName(item.name);
-  const days = parseInt(document.getElementById('orderDays').value);
+  const days = currentOrderDaysValue();
   const g = calcG(item, days);
   const isNeed = g > 0;
   // 포커스된 input DOM은 건드리지 않고 같은 itemKey의 계산 셀만 즉시 패치한다.
@@ -8961,32 +9356,31 @@ function bindBaseSalesInput() {
     const n = v === '' ? null : parseFloat(v);
     baseSales = Number.isFinite(n) && n > 0 ? n : null;
     scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'base' });
+    scheduleSalesAutoSave();
   });
-  // change/blur is still draft-only. Mobile keyboards often emit change
-  // without Enter; only the explicit Enter path confirms a remote save.
-  inp.addEventListener('keydown', e => {
-    if (e.isComposing || e.keyCode === 229 || e.key !== 'Enter') return;
-    e.preventDefault();
-    flushAutoSave('enter');
-  });
+  inp.addEventListener('blur', flushSalesAutoSave);
+  inp.addEventListener('change', flushSalesAutoSave);
 }
 
 function renderSalesInputs() {
-  const days = parseInt(document.getElementById('orderDays').value);
+  const days = currentOrderDaysValue();
   const lost = recommendedLostDays();
   const wrap = document.getElementById('salesInputs');
   if (!wrap) return;
   wrap.innerHTML = '';
   const today = new Date();
+  const cycleStartDay = (kstGetDay() + 1) % 7;
+  const workLabels = [];
   for (let i = 0; i < days; i++) {
     const d = new Date(today.getTime() + i * 86400000);
-    const wd = ['일','월','화','수','목','금','토'][d.getDay()];
+    const wd = ['일','월','화','수','목','금','토'][(cycleStartDay + i) % 7];
     const isLost = i < lost;
     const block = document.createElement('span');
     block.className = 'day-block' + (isLost ? ' lost' : '');
     const lbl = document.createElement('span');
     lbl.className = 'day-label';
-    lbl.textContent = (i === 0 ? '오늘' : '+' + i) + '(' + wd + ')';
+    lbl.textContent = wd;
+    workLabels.push(`${wd}${dailySales[i] != null && Number.isFinite(Number(dailySales[i])) ? Number(dailySales[i]) : '-'}`);
     const inp = document.createElement('input');
     inp.type = 'number';
     inp.className = 'sales';
@@ -8998,22 +9392,24 @@ function renderSalesInputs() {
       const num = v === '' ? null : parseFloat(v);
       dailySales[parseInt(e.target.dataset.idx)] = num;
       scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'sales' });
+      scheduleSalesAutoSave();
     });
-    // Keep change/blur local-only; Enter is the explicit confirmation boundary.
-    inp.addEventListener('keydown', e => {
-      if (e.isComposing || e.keyCode === 229 || e.key !== 'Enter') return;
-      e.preventDefault();
-      flushAutoSave('enter');
-    });
+    inp.addEventListener('blur', flushSalesAutoSave);
+    inp.addEventListener('change', flushSalesAutoSave);
     block.appendChild(lbl);
     block.appendChild(inp);
     wrap.appendChild(block);
+  }
+  const workSummary = document.getElementById('ux2WorkSalesSummary');
+  if (workSummary) {
+    workSummary.textContent = `${workLabels.join(' ')} 여유150 · 기준${getBaseSales().toFixed(0)}`;
+    workSummary.hidden = false;
   }
   updateSalesAvg();
 }
 
 function updateSalesAvg() {
-  const days = parseInt(document.getElementById('orderDays').value);
+  const days = currentOrderDaysValue();
   const explicit = [];
   for (let i = 0; i < days; i++) {
     const n = Number(dailySales[i]);
@@ -9031,7 +9427,7 @@ function updateSalesAvg() {
   el.textContent = `기준 ${base.toFixed(0)}만 → 오늘 ${weights[0].toFixed(2)}배 / 총 ${total.toFixed(2)}일분`;
 }
 
-// Enter/명시 저장으로 확정된 immutable body만 원격 전송한다.
+// 입력/blur 즉시 확정된 immutable body만 원격 전송한다.
 // local draft와 remote confirmed queue는 서로 다른 durable state다.
 let saveInFlight = false;
 let pendingSave = false;
@@ -9042,7 +9438,8 @@ let saveAttempt = 0;
 let saveAttemptCommitId = '';
 let confirmedSaveSequence = 0;
 let confirmedSaveQueueBlocked = false;
-const SAVE_BACKOFF = [5000, 10000, 20000];
+let lastMemoryCommit = null;
+const SAVE_BACKOFF = [400, 1500, 4000];
 
 function emptyConfirmedSaveQueue() {
   return { v: 1, active: null, queued: null };
@@ -9086,6 +9483,50 @@ function parseConfirmedSaveQueue(raw) {
   return { v: 1, active, queued };
 }
 
+function shrinkPhonePayload(payload, level = 0) {
+  const p = JSON.parse(JSON.stringify(payload && typeof payload === 'object' ? payload : {}));
+  delete p.debugLogs;
+  delete p.calc;
+  delete p.sfaAnalysisReadModel;
+  if (p.sfaOrderLedger && typeof p.sfaOrderLedger === 'object') delete p.sfaOrderLedger.sourceTable;
+  if (level >= 1) {
+    p.sfaOrderLedger = p.sfaAnalysisHistory || { version: 2, eventCount: 0, records: [] };
+    delete p.aiUsageEvidence;
+  }
+  if (level >= 2) {
+    delete p.sfaOrderLedger;
+    delete p.sfaAnalysisHistory;
+    delete p.sfaActualHistory;
+    delete p.aiUsageEvidence;
+    delete p.aiUsageAdvisory;
+    delete p.aiUsageAccepted;
+    delete p.salesWeights;
+  }
+  return p;
+}
+
+function compactConfirmedCommit(commit, level = 1) {
+  if (!commit || typeof commit !== 'object') return commit;
+  let payload = null;
+  try { payload = JSON.parse(commit.body); } catch { return commit; }
+  if (!payload || typeof payload !== 'object') return commit;
+  return { ...commit, body: JSON.stringify(shrinkPhonePayload(payload, level)) };
+}
+
+function compactConfirmedQueue(queue) {
+  const source = queue && typeof queue === 'object' ? queue : emptyConfirmedSaveQueue();
+  return {
+    v: 1,
+    active: source.active ? compactConfirmedCommit(source.active, 2) : null,
+    queued: source.queued ? compactConfirmedCommit(source.queued, 2) : null
+  };
+}
+
+function freeConfirmedSaveStorage() {
+  try { localStorage.removeItem(DEBUG_LOG_STORAGE_KEY); } catch {}
+  try { localStorage.removeItem(SAVE_LOG_STORAGE_KEY); } catch {}
+}
+
 function readConfirmedSaveQueue() {
   try {
     const queue = parseConfirmedSaveQueue(localStorage.getItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY));
@@ -9103,34 +9544,12 @@ function readConfirmedSaveQueue() {
   }
 }
 
-function compactConfirmedCommit(commit) {
-  if (!commit || typeof commit !== 'object') return commit;
-  let payload = null;
-  try { payload = JSON.parse(commit.body); } catch { return commit; }
-  if (!payload || typeof payload !== 'object') return commit;
-  delete payload.debugLogs;
-  delete payload.calc;
-  delete payload.sfaAnalysisReadModel;
-  if (payload.sfaOrderLedger && typeof payload.sfaOrderLedger === 'object') delete payload.sfaOrderLedger.sourceTable;
-  return { ...commit, body: JSON.stringify(payload) };
-}
-
-function compactConfirmedQueue(queue) {
-  const source = queue && typeof queue === 'object' ? queue : emptyConfirmedSaveQueue();
-  return { v: 1, active: source.active ? compactConfirmedCommit(source.active) : null, queued: source.queued ? compactConfirmedCommit(source.queued) : null };
-}
-
-function freeConfirmedSaveStorage() {
-  try { localStorage.removeItem(DEBUG_LOG_STORAGE_KEY); } catch {}
-  try { localStorage.removeItem(SAVE_LOG_STORAGE_KEY); } catch {}
-}
-
 function writeConfirmedSaveQueue(queue) {
   const attempts = [queue, compactConfirmedQueue(queue)];
   let lastError = null;
-  for (const attempt of attempts) {
+  for (let i = 0; i < attempts.length; i += 1) {
     try {
-      const normalized = parseConfirmedSaveQueue(JSON.stringify(attempt));
+      const normalized = parseConfirmedSaveQueue(JSON.stringify(attempts[i]));
       const serialized = JSON.stringify(normalized);
       localStorage.setItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY, serialized);
       if (localStorage.getItem(CONFIRMED_SAVE_QUEUE_STORAGE_KEY) !== serialized) throw new Error('confirmed queue verify failed');
@@ -9159,7 +9578,7 @@ function buildConfirmedSaveCommit(reason = 'enter') {
   const revision = Number(stateRevision || 0);
   const inventoryRevisionValue = Number(inventoryRevision || 0);
   const dateKey = kstDateKey(now);
-  const days = parseInt(document.getElementById('orderDays').value);
+  const days = currentOrderDaysValue();
   const calc = {};
   orderItemList().forEach(item => {
     const g = calcG(item, days);
@@ -9178,25 +9597,66 @@ function buildConfirmedSaveCommit(reason = 'enter') {
   return { commitId, revision, inventoryRevision: inventoryRevisionValue, dateKey, reason, createdAt: now, body: JSON.stringify(payload), entryZonePatches: entryZonePatchesForCommit() };
 }
 
-async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = FIREBASE_LEDGER_CAS_ATTEMPTS) {
+function factoryEnvelopeFromRemote(remote) {
+  if (!remote || typeof remote !== 'object' || remote.schema === 'factory_log_harvest/v1') {
+    return { current: {}, history: {} };
+  }
+  const currentRemote = remote.current && typeof remote.current === 'object'
+    ? remote.current
+    : (Array.isArray(remote.entries) ? remote : {});
+  const historyRemote = remote.history && typeof remote.history === 'object' ? remote.history : {};
+  return { current: currentRemote, history: historyRemote };
+}
+
+async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 3) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const localPayload = JSON.parse(commit.body);
+  let currentRemote = {};
+  let historyRemote = {};
   try {
     const read = await fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`, { signal: controller.signal });
-    if (!read.ok) throw new Error(`Factory read HTTP ${read.status}`);
-    const remote = await read.json();
-    const currentRemote = remote?.current && typeof remote.current === 'object' ? remote.current : {};
-    const historyRemote = remote?.history && typeof remote.history === 'object' ? remote.history : {};
-    const payload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now());
-    const cutoff = Date.now() - 14 * 86400000;
-    const history = Object.fromEntries(Object.entries({ ...historyRemote, [commit.dateKey]: payload }).filter(([key, value]) => {
-      const stamp = Number(value?.savedAt || Date.parse(key));
-      return Number.isFinite(stamp) && stamp >= cutoff;
-    }));
-    const body = JSON.stringify({ current: payload, history });
-    const response = await fetch(FACTORY_ORDER_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' }, body, signal: controller.signal });
-    return { currentResponse: response, historyResponse: response, payload, body, attempts: 1 };
+    if (read.ok) {
+      const env = factoryEnvelopeFromRemote(await read.json());
+      currentRemote = env.current;
+      historyRemote = env.history;
+    }
+  } catch (_) {}
+  const basePayload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now());
+  const shots = Math.max(1, Math.min(3, Number(maxAttempts) || 3));
+  const putMax = 1800000;
+  let response = null;
+  let body = '';
+  let sendPayload = basePayload;
+  try {
+    for (let attempt = 1; attempt <= shots; attempt += 1) {
+      const level = attempt - 1;
+      sendPayload = shrinkPhonePayload(basePayload, level);
+      const daySpan = level >= 2 ? 0 : (level >= 1 ? 2 : 14);
+      const cutoff = Date.now() - daySpan * 86400000;
+      const history = level >= 2
+        ? { [commit.dateKey]: sendPayload }
+        : Object.fromEntries(Object.entries({ ...historyRemote, [commit.dateKey]: sendPayload }).filter(([key, value]) => {
+          const stamp = Number(value?.savedAt || Date.parse(key));
+          return Number.isFinite(stamp) && stamp >= cutoff;
+        }));
+      body = JSON.stringify({ current: sendPayload, history });
+      if (body.length > putMax && attempt < shots) continue;
+      response = await fetch(FACTORY_ORDER_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' },
+        body,
+        signal: controller.signal
+      });
+      if (response && response.ok) {
+        lastBrowserPut = { ok: true, at: Date.now(), error: '', trigger: 'put' + level };
+        noteFactoryEnvelope({ current: sendPayload, history });
+        return { currentResponse: response, historyResponse: response, payload: sendPayload, body, attempts: attempt };
+      }
+      if (response && response.status !== 413 && attempt < shots) continue;
+    }
+    lastBrowserPut = { ok: false, at: Date.now(), error: String(response && response.status || 'no_response'), trigger: 'put' };
+    return { currentResponse: response, historyResponse: response, payload: sendPayload, body, attempts: shots };
   } finally {
     clearTimeout(timer);
     controller.abort();
@@ -9204,7 +9664,8 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
 }
 
 function scheduleConfirmedSaveRetry(commit, label) {
-  if (!commit || confirmedSaveQueueBlocked) return;
+  if (!commit) return;
+  lastMemoryCommit = commit;
   if (saveAttemptCommitId !== commit.commitId) {
     saveAttemptCommitId = commit.commitId;
     saveAttempt = 0;
@@ -9221,35 +9682,30 @@ function scheduleConfirmedSaveRetry(commit, label) {
   const guardedCommitId = commit.commitId;
   saveRetryTimer = setTimeout(() => {
     saveRetryTimer = null;
-    const queue = readConfirmedSaveQueue();
-    if (queue?.active?.commitId !== guardedCommitId) return;
     sendActiveConfirmedSave('retry');
   }, delay);
-  renderSaveState(`확정 저장 재시도 ${delay / 1000}초`, 'dirty');
+  renderSaveState(delay < 1000 ? '저장 재시도' : `확정 저장 재시도 ${delay / 1000}초`, 'dirty');
 }
 
 function confirmCurrentSave(reason = 'enter') {
-  if (confirmedSaveQueueBlocked) {
-    renderSaveState('확정 저장 보관 실패', 'error');
-    return false;
-  }
+  if (confirmedSaveQueueBlocked) confirmedSaveQueueBlocked = false;
   const commit = buildConfirmedSaveCommit(reason);
-  const queue = readConfirmedSaveQueue();
-  if (!queue) return false;
+  lastMemoryCommit = commit;
+  const queue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
   if (queue.active) queue.queued = commit;
   else queue.active = commit;
-  if (!writeConfirmedSaveQueue(queue)) return false;
+  writeConfirmedSaveQueue(queue);
   pendingSave = Boolean(queue.queued);
   pendingSaveReason = reason;
-  renderSaveState(queue.queued ? '다음 Enter 저장 대기' : '확정 저장 대기', 'dirty');
-  if (!saveInFlight && !saveRetryTimer) sendActiveConfirmedSave('confirmed');
+  renderSaveState('저장 중', 'saving');
+  if (!saveInFlight) sendActiveConfirmedSave('confirmed');
   return true;
 }
 
 async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_REQUEST_TIMEOUT_MS) {
-  if (saveInFlight || confirmedSaveQueueBlocked) return false;
+  if (saveInFlight) return false;
   const queue = readConfirmedSaveQueue();
-  const commit = queue?.active;
+  const commit = queue?.active || lastMemoryCommit;
   if (!commit) return false;
   saveInFlight = true;
   activeSaveCommitId = commit.commitId;
@@ -9259,26 +9715,20 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
   try {
     const result = await putConfirmedSaveTargets(commit, timeoutMs);
     if (resetGenerationAtStart !== syncResetGeneration) return false;
-    if (result.conflict) {
-      pendingSave = true;
-      pendingSaveReason = commit.reason;
-      scheduleConfirmedSaveRetry(commit, result.conflictReason || 'CAS conflict');
-      return false;
-    }
     const { currentResponse, historyResponse, payload } = result;
-    if (!currentResponse.ok || !historyResponse.ok) {
+    if (!currentResponse || !currentResponse.ok || !historyResponse || !historyResponse.ok) {
       const currentText = await currentResponse.text().catch(() => '');
       const historyText = await historyResponse.text().catch(() => '');
       console.error('[confirmed-save] HTTP FAIL', currentResponse.status, historyResponse.status, currentText, historyText);
       scheduleConfirmedSaveRetry(commit, `HTTP ${currentResponse.status}/${historyResponse.status}`);
       return false;
     }
-    const freshQueue = readConfirmedSaveQueue();
-    if (!freshQueue || freshQueue.active?.commitId !== commit.commitId) return false;
-    const nextQueue = freshQueue.queued
+    const freshQueue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
+    const nextQueue = (freshQueue && freshQueue.queued)
       ? { v: 1, active: freshQueue.queued, queued: null }
       : emptyConfirmedSaveQueue();
-    if (!writeConfirmedSaveQueue(nextQueue)) return false;
+    writeConfirmedSaveQueue(nextQueue);
+    if (!nextQueue.active) lastMemoryCommit = null;
     applyMergedSalesPayloadIfNewer(payload);
     localStorage.setItem('bbq_savedAt', String(payload.savedAt));
     const saveMatchesLatestState = commit.revision === stateRevision &&
@@ -9314,9 +9764,12 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
     else renderSaveState('저장됨', 'saved');
     document.getElementById('lastSaved').textContent = lastSavedLabel(commit.reason) + ' ' + new Date(payload.savedAt).toLocaleTimeString('ko-KR');
     loadUsageHistory(true);
+    publishBrowserDiag('saved');
     return true;
   } catch (error) {
     if (resetGenerationAtStart !== syncResetGeneration) return false;
+    lastBrowserPut = { ok: false, at: Date.now(), error: String(error && error.name || error), trigger: trigger };
+    renderBrowserDiag();
     console.error('[confirmed-save] EXCEPTION', error);
     scheduleConfirmedSaveRetry(commit, error.name || 'EXCEPTION');
     return false;
@@ -9350,11 +9803,7 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
     toast('이 브라우저에 기존 폰 저장본이 없어 덮어쓰지 않았습니다');
     return false;
   }
-  const queue = readConfirmedSaveQueue();
-  if (!queue || confirmedSaveQueueBlocked) {
-    renderSaveState('중단 · 폰 저장기록 확인 필요', 'error');
-    return false;
-  }
+  const queue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
 
   flushDeferredInputWork();
   if (saveRetryTimer) clearTimeout(saveRetryTimer);
@@ -9368,53 +9817,46 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
   }
   renderSaveState('폰 기준으로 PC 덮어쓰는 중', 'saving');
   const localCommit = buildConfirmedSaveCommit('phoneOverwrite');
-  const localPayload = JSON.parse(localCommit.body);
+  lastMemoryCommit = localCommit;
   const resolutionId = `phone-${Date.now()}-${localCommit.commitId}`;
   try {
-    const result = await putPhoneWinsTargets(localPayload, resolutionId);
-    if (result.conflict) throw new Error('Firebase phone-wins CAS conflict');
-    const { currentResponse, historyResponse, payload } = result;
-    if (!currentResponse?.ok || !historyResponse?.ok) {
-      throw new Error(`Firebase phone-wins HTTP ${currentResponse?.status || 0}/${historyResponse?.status || 0}`);
+    const result = await putConfirmedSaveTargets(localCommit, SAVE_REQUEST_TIMEOUT_MS, 3);
+    const payload = result?.payload;
+    if (!result?.currentResponse?.ok || !payload) {
+      throw new Error(`factory overwrite HTTP ${result?.currentResponse?.status || 0}`);
     }
-    const [currentVerify, historyVerify] = await Promise.all([
-      fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`),
-      fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`)
-    ]);
-    if (!currentVerify.ok || !historyVerify.ok) throw new Error('Firebase phone-wins verify read failed');
-    const [verifiedCurrent, verifiedHistory] = await Promise.all([currentVerify.json(), historyVerify.json()]);
-    const verified = [verifiedCurrent, verifiedHistory].every(source =>
-      source?.syncResolution?.id === resolutionId &&
-      source?.syncResolution?.mode === 'phone_overwrite_pc' &&
-      Number(source?.stateRevision || 0) === Number(payload.stateRevision || 0)
-    );
-    if (!verified) throw new Error('Firebase phone-wins verify mismatch');
 
     writeConfirmedSaveQueue(emptyConfirmedSaveQueue());
     pendingSave = false;
     pendingSaveReason = 'enter';
     pendingEntryZonePatches = new Map();
-    stateRevision = Number(payload.stateRevision || 0);
-    inventoryRevision = Number(payload.inventoryRevision || 0);
-    salesRevision = Number(payload.salesRevision || 0);
-    localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
-    localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
-    localStorage.setItem(SALES_REVISION_STORAGE_KEY, String(salesRevision));
-    localStorage.setItem('bbq_savedAt', String(payload.savedAt));
-    localStorage.setItem('bbq_phone_overwrite_receipt_v1', JSON.stringify({
-      id: resolutionId,
-      resolvedAt: payload.savedAt,
-      revision: payload.stateRevision,
-      trigger
-    }));
-    localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
-    sfaAnalysisHistory = mergeSfaAnalysisHistories(sfaAnalysisHistory, payload.sfaOrderLedger);
-    markSfaLedgerChanged();
-    localStorage.setItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON.stringify(sfaAnalysisHistoryForPayload()));
-    localDirty = false;
+    try {
+      stateRevision = Number(payload.stateRevision || 0);
+      inventoryRevision = Number(payload.inventoryRevision || 0);
+      salesRevision = Number(payload.salesRevision || 0);
+      localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
+      localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
+      localStorage.setItem(SALES_REVISION_STORAGE_KEY, String(salesRevision));
+      localStorage.setItem('bbq_savedAt', String(payload.savedAt || Date.now()));
+      localStorage.setItem('bbq_phone_overwrite_receipt_v1', JSON.stringify({
+        id: resolutionId,
+        resolvedAt: payload.savedAt || Date.now(),
+        revision: payload.stateRevision,
+        trigger
+      }));
+      localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
+      sfaAnalysisHistory = mergeSfaAnalysisHistories(sfaAnalysisHistory, payload.sfaOrderLedger);
+      markSfaLedgerChanged();
+      localStorage.setItem(SFA_ANALYSIS_HISTORY_STORAGE_KEY, JSON.stringify(sfaAnalysisHistoryForPayload()));
+      localDirty = false;
+      const lastSavedEl = document.getElementById('lastSaved');
+      if (lastSavedEl) lastSavedEl.textContent = '충돌해결 ' + new Date(payload.savedAt || Date.now()).toLocaleTimeString('ko-KR');
+      if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = true;
+    } catch (afterOk) {
+      console.error('[phone-overwrite] post-ok local', afterOk);
+      localDirty = false;
+    }
     renderSaveState('완료 · 폰 기준 PC 동기화', 'saved');
-    document.getElementById('lastSaved').textContent = '충돌해결 ' + new Date(payload.savedAt).toLocaleTimeString('ko-KR');
-    if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = true;
     toast('폰 발주항목을 기준으로 PC 동기화를 완료했습니다');
     return true;
   } catch (error) {
@@ -9539,9 +9981,12 @@ document.addEventListener('focusout', e => {
 });
 
 function normalizeOrderDays(value) {
-  const n = parseInt(String(value || '').replace(/\D/g, ''), 10);
+  const n = parseFloat(String(value ?? '').trim());
   if (!Number.isFinite(n) || n < 1 || n > 7) return '';
-  return String(n);
+  if (Math.abs(n - 3.5) < 1e-9) return '3.5';
+  const i = Math.round(n);
+  if (Math.abs(n - i) < 1e-9 && i >= 1 && i <= 7) return String(i);
+  return '';
 }
 
 function setOrderDaysValue(value) {
@@ -9599,7 +10044,8 @@ function applyFBData(data) {
   orderItemList().forEach(item => {
     if (!entries.some(e => e.name === item.name)) {
       const entryKey = newId();
-      entries.push({ id: entryKey, entryKey, itemKey: itemKeyForName(item.name), name: item.name, zone: '', stock: null });
+      const initialStock = item.name === '스티커(BBQ스티커T)' ? 1 : (item.name === '포장팩커팅칼(250EA/봉)' ? 0 : null);
+      entries.push({ id: entryKey, entryKey, itemKey: itemKeyForName(item.name), name: item.name, zone: '', stock: initialStock });
     }
   });
   localStorage.setItem('bbq_savedAt', String(data.savedAt));
@@ -9623,6 +10069,7 @@ async function autoLoadFromFB(silent) {
     if (!res.ok) { console.warn('[autoLoad] HTTP', res.status); return; }
     const envelope = await res.json();
     factoryOrderEnvelope = envelope && typeof envelope === 'object' ? envelope : {};
+    noteFactoryEnvelope(envelope);
     const data = envelope?.current && typeof envelope.current === 'object' ? envelope.current : null;
     if (!data || Object.keys(data).length === 0) return;
     const resetApplied = applyRemoteSyncResetIfNeeded(data);
@@ -9640,10 +10087,22 @@ async function autoLoadFromFB(silent) {
   }
 }
 
-// 타이핑은 local draft만 저장한다. remote commit은 Enter/명시 액션만 수행한다.
+// 매출 입력은 짧은 debounce 후 원격 동기화하고, blur/change에서는 즉시 동기화한다.
 let autoSaveTimer = null;
 function scheduleAutoSave() {
   return false;
+}
+function scheduleSalesAutoSave() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => {
+    autoSaveTimer = null;
+    flushAutoSave('salesChange');
+  }, 250);
+}
+function flushSalesAutoSave() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = null;
+  flushAutoSave('salesChange');
 }
 function flushAutoSave(reason) {
   if (!reason || reason === 'auto') return false;
@@ -9657,10 +10116,6 @@ function hasPendingLocalSync() {
 
 function retryConfirmedRemotePending(reason = 'recovery') {
   const queue = readConfirmedSaveQueue();
-  if (confirmedSaveQueueBlocked) {
-    renderSaveState('확정 저장 기록 손상 · 전송 중지', 'error');
-    return false;
-  }
   if (!queue?.active) return false;
   if (saveRetryTimer) {
     clearTimeout(saveRetryTimer);
@@ -9801,9 +10256,11 @@ function startOrderHelperApp() {
   const savedDays = localStorage.getItem('bbq_orderDays');
   const savedDaysRule = localStorage.getItem(ORDER_DAYS_RULE_STORAGE_KEY);
   setOrderDaysValue(savedDaysRule === ORDER_DAYS_RULE_VERSION ? (savedDays || rec) : rec);
-  document.getElementById('cycleHint').textContent = `${dayName(new Date().getDay())}요일 → 추천 ${rec}일`;
+  updateCycleHint();
 
   document.getElementById('appVer').textContent = 'v' + APP_VERSION;
+  const phoneOverwriteBtn = document.getElementById('phoneOverwriteBtn');
+  if (phoneOverwriteBtn) phoneOverwriteBtn.hidden = !phoneLocalSnapshotPresentAtBoot;
   bindDesktopAccessActions();
   bindBaseSalesInput();
   renderSalesInputs();
@@ -9823,7 +10280,10 @@ function startOrderHelperApp() {
   } else {
     autoLoadFromFB(true).then(() => retryConfirmedRemotePending('startup'));
   }
+  renderBrowserDiag();
+  publishBrowserDiag('startup');
   setInterval(() => autoLoadFromFB(true), 5000);
+  setInterval(() => { renderBrowserDiag(); publishBrowserDiag('tick'); }, 20000);
   setInterval(() => loadUsageHistory(true), 300000);
   setInterval(() => loadSfaPriceHistory(true), 300000);
   setInterval(() => loadAiUsageAdvisoryLatest(true), 300000);
