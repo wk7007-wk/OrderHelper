@@ -9356,10 +9356,12 @@ function bindBaseSalesInput() {
     const n = v === '' ? null : parseFloat(v);
     baseSales = Number.isFinite(n) && n > 0 ? n : null;
     scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'base' });
-    scheduleSalesAutoSave();
   });
   inp.addEventListener('blur', flushSalesAutoSave);
   inp.addEventListener('change', flushSalesAutoSave);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') flushSalesAutoSave();
+  });
 }
 
 function renderSalesInputs() {
@@ -9392,10 +9394,12 @@ function renderSalesInputs() {
       const num = v === '' ? null : parseFloat(v);
       dailySales[parseInt(e.target.dataset.idx)] = num;
       scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'sales' });
-      scheduleSalesAutoSave();
     });
     inp.addEventListener('blur', flushSalesAutoSave);
     inp.addEventListener('change', flushSalesAutoSave);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') flushSalesAutoSave();
+    });
     block.appendChild(lbl);
     block.appendChild(inp);
     wrap.appendChild(block);
@@ -10087,17 +10091,9 @@ async function autoLoadFromFB(silent) {
   }
 }
 
-// 매출 입력은 짧은 debounce 후 원격 동기화하고, blur/change에서는 즉시 동기화한다.
 let autoSaveTimer = null;
 function scheduleAutoSave() {
   return false;
-}
-function scheduleSalesAutoSave() {
-  clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => {
-    autoSaveTimer = null;
-    flushAutoSave('salesChange');
-  }, 250);
 }
 function flushSalesAutoSave() {
   clearTimeout(autoSaveTimer);
