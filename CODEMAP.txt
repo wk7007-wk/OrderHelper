@@ -51,7 +51,7 @@
 
 ## 2026-08-23 handoff
 - index.html/tests: APP_VERSION 0823.0405 applies inbound-window × MATE daily POS (2026-06-01..08-21, 82 days) to MASTER.daily. Formula daily = qty_stock * baseline_won / sales_in_windows, round 2 decimals. Baseline DEFAULT_BASE_SALES=268.06. Wings N=10 → 3.18개/일, 떡볶이 N=16 → 3.75개/일, 올리브오일 1.1, 통다리 7.45, 신선육 2.3. Buffer/policy/unit/prices unchanged. Skipped unknown-N 개/박스: 냉동-멘보샤, 냉동-바사칸윙, 냉동-크런치너겟,순살크래커, 두마리치킨,파더스, BBQ필크런치플레이크, 스티커T_컷팅칼(떡볶이스티커) — daily kept. One-off 햄야채볶음밥/등심돈까스(통살)/황금죽 stay out of MASTER. Single-inbound items keep 83-day daily.
-- DAILY_USAGE_STORAGE_VERSION `mate-daily-inbound-20260601-0821` is a one-shot calibration like BASE_SALES_STORAGE_VERSION. On load (after name migrate) and on remote current without this version, overrides.l for calibrated names is stripped so live daily uses new MASTER.daily. overrides.k (여유) is never touched. After the version is stored, later custom l is kept.
+- DAILY_USAGE_STORAGE_VERSION `mate-daily-inbound-recent70-0825` is kept (no wipe bump). On load/remote mismatch, existing overrides.l is source of truth; missing calibrated .l is filled from MASTER.daily. overrides.k is never touched. Next SFA excel/inbound: actual order or on-site 일사용/여유 that differs from bot 추천 is a user adjustment and must be kept.
 - DEFAULT_ORDER_UNIT_PRICES is a static MASTER-name → 1 SFA order-unit KRW map from the 3-month file (amount/qty). Live excel / sfaPriceHistory win. Missing evidence falls back to these defaults so 오늘 발주 예상 총액 = qty * orderUnitPrice (qty already ceil(need/N)). Per-stock price = orderUnitPrice / N. Do not invert N. 0 KRW (empty keg) is not a usable default.
 - Aliases unchanged: 파더스 vs 마늘 stay separate; 20G vs 58G stay separate; 1호 vs 2호 stay separate. Static N: 비비윙스 10, 떡볶이 16. DEFAULT_BASE_SALES is 268.06만원 (82-day MATE daily average).
 
@@ -60,3 +60,6 @@
 
 ## 2026-08-23 agent-pc passwordless trust
 - index.html/tests: APP_VERSION 0823.0416 adds agent-pc hash 50329b86dec951289d905364f156d5fd620400284d984a818cd84fd2e21e3395 to the passwordless list and allowedDevices. PIN-only overlay for unknown devices unchanged.
+
+## 2026-08-25 oil freeze + keep overrides.l
+- index.html/tests: APP_VERSION 0825.0746. OIL_REPLACEMENT_ITEMS (신)올리브오일 uses calcG=max(0,L+K-E); MASTER.daily stays 1.09; buffer 4. applyDailyUsageCalibration no longer deletes overrides.l. Fridge 10호<=9, MUST_HAVE scale-exempt, perishable 통날개 3.5->3, recommendedDays 3.5/4/3 remain. No 250-320만 total clamp.

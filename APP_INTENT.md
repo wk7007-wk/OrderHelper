@@ -18,7 +18,7 @@
 - 후보/default는 완료값과 구분해 `확인 필요`로 표시한다. 직원 행에는 `1발주=N개` 대신 실제 단위를 써서 `1박스 = 재고 16개`처럼 방향을 보여주고, 단위명이 없을 때만 `발주 1개 = 재고 N개`로 표시한다. 상세 분석면에는 자동 후보 상태를 보존한다. 단일 최신비교의 `필요량 ÷ 실발주량`이 1.5처럼 소수로 나온 경우는 환산 후보에는 남기되 자동 적용 기본값으로 쓰지 않는다. 사용자 확정, 동일단위, 정수 묶음 후보 또는 충분히 반복된 실사용 근거만 자동 기본값이 될 수 있다.
 - 사용자가 `연결 안 함`을 선택하면 `orderAliasMappings`에 `unlinked` 상태로 저장한다. 이 상태는 자동 후보, exact mapped-name 가격 fallback, SFA/AI 분석 매핑, 사이트 자동 연결보다 우선하며 `effectiveOrderAliasMappings`에서는 제외한다. 후보는 나중에 다시 연결할 수 있도록 선택 목록에만 남긴다. 기존 사용자 확정 환산값은 raw 상태에 보존하되 연결 안 함 동안 계산에는 적용하지 않는다.
 - 체크단위와 발주단위가 다르면 과거 재고 변동값, 날짜별 `필요기준-체크재고` 실사용량 추정값, SFA 실발주량으로 품목별 `orderUnitToStockFactor`를 추정해 발주량에 반영한다.
-- 하루사용량 입력/계산은 수동값을 기준으로 한다. `이전 남은재고 + 실발주 입고량 - 다음 남은재고 = 실사용량` 분석값은 엑셀분석 참고/리포트이며, 수동값과 발주 계산을 자동 덮어쓰지 않는다. 예외: `DAILY_USAGE_STORAGE_VERSION` 원샷 보정은 SFA 출고 입고창(화/목/토→다음 트럭 전 월/수/금)과 MATE 일자별 POS(2026-06-01..08-21, 82일)로 `MASTER.daily`를 넣고, 같은 버전이 아닐 때만 해당 품목 `overrides.l`을 지워 새 값이 쓰이게 한다. `overrides.k`(여유)는 바꾸지 않는다.
+- 하루사용량 입력/계산은 수동값을 기준으로 한다. `이전 남은재고 + 실발주 입고량 - 다음 남은재고 = 실사용량` 분석값은 엑셀분석 참고/리포트이며, 수동값과 발주 계산을 자동 덮어쓰지 않는다. 봇이 일사용/여유/추천을 채우고 원규가 사이트에서 수정한 값은 소스 오브 트루스다. `DAILY_USAGE_STORAGE_VERSION` 원샷 보정은 같은 버전이 아닐 때만 실행하며, 이미 있는 `overrides.l`은 지우지 않고 없는 품목만 `MASTER.daily`로 채운다. `overrides.k`(여유)는 바꾸지 않는다. 다음 SFA 엑셀/입고 작업에서 실발주나 현장 일사용/여유가 봇 추천과 다르면 사용자 조정으로 유지한다.
 - 엑셀분석으로 기록된 실발주 이력은 실사용 참고 배지/툴팁에 즉시 반영한다. 오늘 발주 예상 총액의 단가는 최신 엑셀/Firebase `sfaPriceHistory`를 쓰고, 없을 때만 `DEFAULT_ORDER_UNIT_PRICES`(기간 파일 amount/qty, 발주 1단위 KRW)를 쓴다. 예상액은 추천 발주수량 × 발주 1단위 가격이며 N을 가격에 다시 곱하거나 나누어 뒤집지 않는다.
 - 엑셀/SFA 분석은 최신 결과 확인으로 끝내지 않는다. 분석 결과 적용 시 `bbq_sfa_analysis_history` localStorage에 run 단위로 append/merge하고, 원본명·매핑명·수량 0·단위·금액·분석 source·분석일을 보존해 이후 별명 후보와 실사용/환산 후보 계산에서 참조한다.
 - 엑셀/SFA 분석 결과가 새로 도착하면 화면 적용 시점에 최신 `entries`/`overrides`/`orderDays`/`orderAliasMappings`와 `sfaActualHistory`로 별명 draft/effective mapping, 환산 후보, inline 보정을 다시 계산한다. 저장된 `confirmed`/`manual` 값은 유지하고 `default`/draft만 최신화한다.
@@ -115,3 +115,8 @@
 
 ## 2026-08-23 agent-pc passwordless trust
 - APP_VERSION 0823.0416 adds SHA-256 `50329b86dec951289d905364f156d5fd620400284d984a818cd84fd2e21e3395` to PASSWORDLESS_TRUSTED_DEVICE_HASHES and AUTH_GEO.allowedDevices as enabled agent-pc / user_this_pc. Existing three hashes stay. restoreAuthIfPossible still auto-unlocks trusted hashes without PIN. PIN overlay stays PIN-only (no 단말기명). PIN_HASH, MASTER dailies, prices, and buffers unchanged.
+
+## 2026-08-25 oil freeze + keep overrides.l
+- `(신)올리브오일` 일사용은 소비량이 아니라 최대 교체량이다. `OIL_REPLACEMENT_ITEMS=['(신)올리브오일']`. `calcG = max(0, L+K-E)`. 최근/3개월 혼합, 예상매출 가중, 화 3.5 선입고, 냉장고 매출스케일을 적용하지 않는다. `MASTER.daily`는 live 0825.0746 값 1.09로 동결. MUST_HAVE 여유 4, `getK` 유지. 발주량은 기존 `recommendedOrderQty` ceil.
+- 화 3.5 / 목 4 / 토 3 일수 분할이 주 3회 입고 금액을 비슷하게 만든다. 오늘 총액을 250~320만 상자로 클램프하지 않는다.
+- 냉장고 10호 leftover ≤9, 장사필수 매출스케일 면제, 벌크신선통날개 화 3.5→3 는 유지한다.
