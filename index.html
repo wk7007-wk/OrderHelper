@@ -777,7 +777,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0831.0208';
+const APP_VERSION = '0831.0311';
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
   if (!v) {
@@ -2456,6 +2456,58 @@ function buildPhoneWinsPayload(currentRemote, historyRemote, localPayload, now =
   return merged;
 }
 
+function isFilledStaffNumber(value) {
+  if (value === '' || value == null) return false;
+  return Number.isFinite(Number(value));
+}
+
+function preserveFilledStaffFields(remote, local) {
+  const remotePayload = remote && typeof remote === 'object' && !Array.isArray(remote) ? remote : {};
+  const localPayload = local && typeof local === 'object' && !Array.isArray(local) ? { ...local } : {};
+  const remoteOverrides = remotePayload.overrides && typeof remotePayload.overrides === 'object' && !Array.isArray(remotePayload.overrides)
+    ? remotePayload.overrides
+    : {};
+  const localOverrides = localPayload.overrides && typeof localPayload.overrides === 'object' && !Array.isArray(localPayload.overrides)
+    ? { ...localPayload.overrides }
+    : {};
+  Object.keys(remoteOverrides).forEach(name => {
+    const remoteRow = remoteOverrides[name];
+    if (!remoteRow || typeof remoteRow !== 'object' || Array.isArray(remoteRow)) return;
+    const existing = localOverrides[name];
+    const localRow = existing && typeof existing === 'object' && !Array.isArray(existing) ? { ...existing } : {};
+    let changed = false;
+    ['l', 'k'].forEach(field => {
+      if (!isFilledStaffNumber(localRow[field]) && isFilledStaffNumber(remoteRow[field])) {
+        localRow[field] = Number(remoteRow[field]);
+        changed = true;
+      }
+    });
+    if (changed) localOverrides[name] = localRow;
+  });
+  localPayload.overrides = localOverrides;
+
+  const remoteSales = Array.isArray(remotePayload.dailySales) ? remotePayload.dailySales : [];
+  const localSales = Array.isArray(localPayload.dailySales) ? localPayload.dailySales.slice() : [];
+  const localSalesWereEmpty = !localSales.some(isFilledStaffNumber);
+  const salesLen = Math.max(remoteSales.length, localSales.length);
+  const nextSales = localSales.slice();
+  for (let i = 0; i < salesLen; i++) {
+    if (!isFilledStaffNumber(nextSales[i]) && isFilledStaffNumber(remoteSales[i])) {
+      nextSales[i] = Number(remoteSales[i]);
+    }
+  }
+  localPayload.dailySales = nextSales;
+
+  const localBase = localPayload.baseSales;
+  const remoteBase = remotePayload.baseSales;
+  const localBaseUnfilled = !isFilledStaffNumber(localBase) || Number(localBase) <= 0
+    || (localSalesWereEmpty && Number(localBase) === Number(DEFAULT_BASE_SALES));
+  if (localBaseUnfilled && isFilledStaffNumber(remoteBase) && Number(remoteBase) > 0) {
+    localPayload.baseSales = Number(remoteBase);
+  }
+  return localPayload;
+}
+
 function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, now = Date.now()) {
   const local = localPayload && typeof localPayload === 'object' ? localPayload : {};
   const revision = Math.max(
@@ -2469,10 +2521,13 @@ function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, n
     inventoryRevision: revision,
     salesRevision: Math.max(Number(local.salesRevision || 0), revision)
   };
-  return mergeFirebasePayloadLedger(
+  let merged = mergeFirebasePayloadLedger(
     historyRemote,
     mergeFirebasePayloadLedger(currentRemote, localWins)
   );
+  merged = preserveFilledStaffFields(currentRemote, merged);
+  merged = preserveFilledStaffFields(historyRemote, merged);
+  return merged;
 }
 
 async function putPhoneWinsTargets(localPayload, resolutionId, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 5) {
@@ -9950,6 +10005,7 @@ function saveToFB(reason = 'manual') {
 // 입력 포커스 추적 (실시간 동기화 시 덮어쓰기 방지)
 let inputFocused = false;
 let pendingFBData = null;
+let pendingStaffSalesRender = false;
 
 function syncResetMarkerFromPayload(data) {
   const source = data?.syncReset;
@@ -10026,12 +10082,44 @@ function shouldApplyIncomingCurrent(data) {
   return incomingSavedAt > localSavedAt;
 }
 
+function applyIncomingStaffFieldsIfEmpty(remote) {
+  if (!remote || typeof remote !== 'object') return false;
+  const preserved = preserveFilledStaffFields(remote, { overrides, dailySales, baseSales });
+  const nextOverrides = preserved.overrides && typeof preserved.overrides === 'object' ? preserved.overrides : overrides;
+  const nextSales = Array.isArray(preserved.dailySales) ? preserved.dailySales : dailySales;
+  const nextBase = preserved.baseSales;
+  const overridesChanged = JSON.stringify(nextOverrides) !== JSON.stringify(overrides);
+  const salesChanged = JSON.stringify(nextSales) !== JSON.stringify(dailySales);
+  const baseChanged = nextBase !== baseSales;
+  if (!overridesChanged && !salesChanged && !baseChanged) return false;
+  if (overridesChanged) overrides = nextOverrides;
+  if (salesChanged) dailySales = nextSales;
+  if (baseChanged && isFilledStaffNumber(nextBase) && Number(nextBase) > 0) baseSales = Number(nextBase);
+  suppressAutoSave = true;
+  saveLocal();
+  suppressAutoSave = false;
+  const salesInputFocused = document.activeElement?.matches?.('#baseSalesInput, #salesInputs input.sales');
+  if (!salesInputFocused) {
+    pendingStaffSalesRender = false;
+    setBaseSalesInputValue();
+    renderSalesInputs();
+  } else {
+    pendingStaffSalesRender = true;
+  }
+  render();
+  return true;
+}
+
 function applyPendingFBDataIfSafe() {
   if (!pendingFBData || inputFocused) return false;
-  if (localDirty || deferredInputWork.dirty || saveInFlight || hasConfirmedSaveQueue()) return false;
+  if (localDirty || deferredInputWork.dirty || saveInFlight || hasConfirmedSaveQueue()) {
+    applyIncomingStaffFieldsIfEmpty(pendingFBData);
+    return false;
+  }
   const data = pendingFBData;
   if (!shouldApplyIncomingCurrent(data)) {
     pendingFBData = null;
+    applyIncomingStaffFieldsIfEmpty(data);
     return false;
   }
   pendingFBData = null;
@@ -10047,6 +10135,11 @@ document.addEventListener('focusout', e => {
     setTimeout(() => {
       applyPendingFBDataIfSafe();
       flushPendingGridRenderIfSafe();
+      if (pendingStaffSalesRender && !document.activeElement?.matches?.('#baseSalesInput, #salesInputs input.sales')) {
+        pendingStaffSalesRender = false;
+        setBaseSalesInputValue();
+        renderSalesInputs();
+      }
     }, 300);
   }
 });
@@ -10144,13 +10237,23 @@ async function autoLoadFromFB(silent) {
     const data = envelope?.current && typeof envelope.current === 'object' ? envelope.current : null;
     if (!data || Object.keys(data).length === 0) return;
     const resetApplied = applyRemoteSyncResetIfNeeded(data);
-    if (!shouldApplyIncomingCurrent(data)) return;
-    if (!resetApplied && (localDirty || hasConfirmedSaveQueue())) return; // reset 표식 없이는 로컬 draft/확정 queue를 보호한다.
-    if (!resetApplied && inputFocused) {
-      if (!pendingFBData || Number(data.stateRevision || data.savedAt || 0) >= Number(pendingFBData.stateRevision || pendingFBData.savedAt || 0)) pendingFBData = data;
+    if (!shouldApplyIncomingCurrent(data)) {
+      applyIncomingStaffFieldsIfEmpty(data);
       return;
     }
-    if (!applyFBData(data)) return;
+    if (!resetApplied && (localDirty || hasConfirmedSaveQueue())) {
+      applyIncomingStaffFieldsIfEmpty(data);
+      return; // reset 표식 없이는 로컬 draft/확정 queue를 보호한다.
+    }
+    if (!resetApplied && inputFocused) {
+      if (!pendingFBData || Number(data.stateRevision || data.savedAt || 0) >= Number(pendingFBData.stateRevision || pendingFBData.savedAt || 0)) pendingFBData = data;
+      applyIncomingStaffFieldsIfEmpty(data);
+      return;
+    }
+    if (!applyFBData(data)) {
+      applyIncomingStaffFieldsIfEmpty(data);
+      return;
+    }
     pushSaveLog('다른 기기 저장 반영', 'sync', data.savedAt);
     if (!silent) toast('동기화 (' + new Date(data.savedAt).toLocaleTimeString('ko-KR') + ')');
   } catch (e) {
