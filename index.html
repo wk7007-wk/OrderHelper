@@ -777,7 +777,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0831.0439';
+const APP_VERSION = '0831.0444';
 const FACTORY_STAFF_POLL_MS = 2000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -2391,7 +2391,7 @@ function mergeFirebaseSalesState(mergedPayload, remotePayload, localPayload) {
   const remote = remotePayload && typeof remotePayload === 'object' ? remotePayload : {};
   const local = localPayload && typeof localPayload === 'object' ? localPayload : {};
   const source = firebaseSalesPayloadIsNewer(remote, local) ? remote : local;
-  ['dailySales', 'baseSales', 'salesWeights', 'salesRevision'].forEach(key => {
+  ['dailySales', 'dailySalesAt', 'baseSales', 'baseSalesAt', 'salesWeights', 'salesRevision', 'orderDays', 'orderDaysAt'].forEach(key => {
     if (Object.prototype.hasOwnProperty.call(source, key)) merged[key] = source[key];
   });
   return merged;
@@ -2425,6 +2425,7 @@ function mergeFirebasePayloadLedger(remotePayload, localPayload) {
   if (timed.orderDays != null && timed.orderDays !== '') merged.orderDays = timed.orderDays;
   if (timed.orderDaysAt) merged.orderDaysAt = timed.orderDaysAt;
   else delete merged.orderDaysAt;
+  delete merged.priorSavedAt;
   return merged;
 }
 
@@ -2531,6 +2532,65 @@ function numericFieldAt(value) {
 
 function payloadSavedAt(payload) {
   return numericFieldAt(payload && (payload.savedAt || payload.updatedAt));
+}
+
+function payloadFieldFallback(payload) {
+  return numericFieldAt(payload && (payload.priorSavedAt || payload.savedAt || payload.updatedAt));
+}
+
+function isMasterDailyDefaultValue(name, value) {
+  const item = typeof orderItemByName === 'function' ? orderItemByName(name) : null;
+  if (!item || !isFilledStaffNumber(value) || !isFilledStaffNumber(item.daily)) return false;
+  return Number(value) === Number(item.daily);
+}
+
+function entryHasStockValue(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (numericFieldAt(row.stockAt) > 0) return true;
+  return row.stock != null && row.stock !== '' && Number.isFinite(Number(row.stock));
+}
+
+function entryHasZoneValue(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (numericFieldAt(row.zoneAt) > 0) return true;
+  return String(row.zone || '') !== '';
+}
+
+function overrideHasUserField(name, row, field) {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+  if (numericFieldAt(row[field + 'At']) > 0) return true;
+  if (!Object.prototype.hasOwnProperty.call(row, field)) return false;
+  if (field === 'l' && isMasterDailyDefaultValue(name, row[field])) return false;
+  const value = row[field];
+  return value != null && value !== '' && Number.isFinite(Number(value));
+}
+
+function dailySalesHasValue(sales, times, idx) {
+  if (numericFieldAt(Array.isArray(times) ? times[idx] : 0) > 0) return true;
+  if (!Array.isArray(sales) || idx >= sales.length) return false;
+  const value = sales[idx];
+  return value != null && value !== '' && Number.isFinite(Number(value));
+}
+
+function payloadHasBaseSales(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  if (numericFieldAt(payload.baseSalesAt) > 0) return true;
+  if (payload.baseSales == null || payload.baseSales === '') return false;
+  const n = Number(payload.baseSales);
+  if (!Number.isFinite(n) || n <= 0) return false;
+  return n !== Number(DEFAULT_BASE_SALES);
+}
+
+function payloadHasOrderDays(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  if (numericFieldAt(payload.orderDaysAt) > 0) return true;
+  if (payload.orderDays == null || payload.orderDays === '') return false;
+  const n = Number(payload.orderDays);
+  if (!Number.isFinite(n)) return false;
+  try {
+    if (typeof recommendedDays === 'function' && n === Number(recommendedDays())) return false;
+  } catch (_) {}
+  return true;
 }
 
 function sameNumericInput(a, b) {
@@ -2759,10 +2819,10 @@ function mergeLastInputEntries(remoteEntries, localEntries, remoteFallback, loca
     const next = { ...localRow };
     if (!isStaffFieldSkipped(skip, 'stock:' + key)) {
       const picked = pickLastInputField(
-        Object.prototype.hasOwnProperty.call(localRow, 'stock') || numericFieldAt(localRow.stockAt) > 0,
+        entryHasStockValue(localRow),
         localRow.stock,
         localRow.stockAt,
-        Object.prototype.hasOwnProperty.call(remoteRow, 'stock') || numericFieldAt(remoteRow.stockAt) > 0,
+        entryHasStockValue(remoteRow),
         remoteRow.stock,
         remoteRow.stockAt,
         localFallback,
@@ -2774,10 +2834,10 @@ function mergeLastInputEntries(remoteEntries, localEntries, remoteFallback, loca
     }
     if (!isStaffFieldSkipped(skip, 'zone:' + key)) {
       const picked = pickLastInputField(
-        true,
+        entryHasZoneValue(localRow),
         localRow.zone,
         localRow.zoneAt,
-        true,
+        entryHasZoneValue(remoteRow),
         remoteRow.zone,
         remoteRow.zoneAt,
         localFallback,
@@ -2808,10 +2868,10 @@ function mergeLastInputOverrides(remoteOverrides, localOverrides, remoteFallback
     ['l', 'k'].forEach(field => {
       if (isStaffFieldSkipped(skip, staffOverrideKey(name, field))) return;
       const picked = pickLastInputField(
-        overrideRowHasField(localRow, field),
+        overrideHasUserField(name, localRow, field),
         Object.prototype.hasOwnProperty.call(localRow, field) ? localRow[field] : null,
         localRow[field + 'At'],
-        overrideRowHasField(remoteRow, field),
+        overrideHasUserField(name, remoteRow, field),
         Object.prototype.hasOwnProperty.call(remoteRow, field) ? remoteRow[field] : null,
         remoteRow[field + 'At'],
         localFallback,
@@ -2841,8 +2901,8 @@ function mergeLastInputDailySales(remoteSales, remoteAt, localSales, localAt, re
   const nextAt = localTimes.slice();
   for (let i = 0; i < len; i++) {
     if (isStaffFieldSkipped(skip, staffSalesKey(i))) continue;
-    const localHas = i < localVals.length || numericFieldAt(localTimes[i]) > 0;
-    const remoteHas = i < remoteVals.length || numericFieldAt(remoteTimes[i]) > 0;
+    const localHas = dailySalesHasValue(localVals, localTimes, i);
+    const remoteHas = dailySalesHasValue(remoteVals, remoteTimes, i);
     const picked = pickLastInputField(
       localHas,
       localHas ? localVals[i] : null,
@@ -2864,8 +2924,8 @@ function mergeLastInputFieldPayload(remote, local, skipKeys) {
   const skip = skipKeys || null;
   const remotePayload = remote && typeof remote === 'object' && !Array.isArray(remote) ? remote : {};
   const localPayload = local && typeof local === 'object' && !Array.isArray(local) ? { ...local } : {};
-  const remoteFallback = payloadSavedAt(remotePayload);
-  const localFallback = payloadSavedAt(localPayload);
+  const remoteFallback = payloadFieldFallback(remotePayload);
+  const localFallback = payloadFieldFallback(localPayload);
   localPayload.entries = mergeLastInputEntries(
     remotePayload.entries,
     localPayload.entries,
@@ -2892,15 +2952,11 @@ function mergeLastInputFieldPayload(remote, local, skipKeys) {
   localPayload.dailySales = salesMerged.dailySales;
   localPayload.dailySalesAt = salesMerged.dailySalesAt;
   if (!isStaffFieldSkipped(skip, STAFF_BASE_KEY)) {
-    const localHasBase = numericFieldAt(localPayload.baseSalesAt) > 0 ||
-      (localPayload.baseSales != null && Number(localPayload.baseSales) > 0 && Number(localPayload.baseSales) !== Number(DEFAULT_BASE_SALES));
-    const remoteHasBase = numericFieldAt(remotePayload.baseSalesAt) > 0 ||
-      Object.prototype.hasOwnProperty.call(remotePayload, 'baseSales');
     const picked = pickLastInputField(
-      localHasBase,
+      payloadHasBaseSales(localPayload),
       localPayload.baseSales,
       localPayload.baseSalesAt,
-      remoteHasBase,
+      payloadHasBaseSales(remotePayload),
       remotePayload.baseSales,
       remotePayload.baseSalesAt,
       localFallback,
@@ -2914,15 +2970,11 @@ function mergeLastInputFieldPayload(remote, local, skipKeys) {
     }
   }
   if (!isStaffFieldSkipped(skip, ORDER_DAYS_FIELD_KEY)) {
-    const localHasDays = numericFieldAt(localPayload.orderDaysAt) > 0 ||
-      (localPayload.orderDays != null && localPayload.orderDays !== '');
-    const remoteHasDays = numericFieldAt(remotePayload.orderDaysAt) > 0 ||
-      Object.prototype.hasOwnProperty.call(remotePayload, 'orderDays');
     const picked = pickLastInputField(
-      localHasDays,
+      payloadHasOrderDays(localPayload),
       localPayload.orderDays,
       localPayload.orderDaysAt,
-      remoteHasDays,
+      payloadHasOrderDays(remotePayload),
       remotePayload.orderDays,
       remotePayload.orderDaysAt,
       localFallback,
@@ -2947,9 +2999,11 @@ function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, n
     maxFirebasePayloadRevision(currentRemote, historyRemote, local),
     Number(now) || Date.now()
   ) + 1;
+  const priorSavedAt = numericFieldAt(local.priorSavedAt) || payloadSavedAt(local);
   const localWins = {
     ...local,
     savedAt: Number(now) || Date.now(),
+    priorSavedAt,
     stateRevision: revision,
     inventoryRevision: revision,
     salesRevision: Math.max(Number(local.salesRevision || 0), revision)
@@ -2969,6 +3023,7 @@ function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, n
   if (timed.orderDays != null && timed.orderDays !== '') merged.orderDays = timed.orderDays;
   if (timed.orderDaysAt) merged.orderDaysAt = timed.orderDaysAt;
   else delete merged.orderDaysAt;
+  delete merged.priorSavedAt;
   return merged;
 }
 
@@ -10160,7 +10215,8 @@ function buildConfirmedSaveCommit(reason = 'enter') {
   const orderAliasMappingDrafts = orderAliasMappingDraftsForPayload(lastSfaCompareData, aliasMatches);
   const effectiveOrderAliasMappings = effectiveOrderAliasMappingsForPayload(lastSfaCompareData, aliasMatches);
   const ledger = sfaOrderLedgerForPayload();
-  const payload = { savedAt: now, stateRevision: revision, inventoryRevision: inventoryRevisionValue, salesRevision: Number(salesRevision || 0), dateKey, orderDays: days, orderDaysAt: numericFieldAt(orderDaysAt) || undefined, zoneOrder: sanitizeZoneOrder(zoneOrder, entries), entries: sanitizeEntries(entries), inventoryByItemKey: inventoryByItemKeyForPayload(), overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), sfaAnalysisHistory: sfaLedgerPointer(ledger), sfaOrderLedger: ledger, sfaActualHistory: sfaActualHistoryPointer(ledger), aiUsageEvidence: buildAiUsageEvidenceSummary(now, ledger), aiUsageAdvisory: sanitizeAiUsageAdvisory(), aiUsageAccepted: sanitizeAiUsageAccepted(), sfaAnalysisReadModel: buildSfaAnalysisReadModel(lastSfaCompareData), dailySales, dailySalesAt: Array.isArray(dailySalesAt) ? dailySalesAt : [], baseSales: getBaseSales(), baseSalesAt: numericFieldAt(baseSalesAt) || undefined, dailyUsageVersion: DAILY_USAGE_STORAGE_VERSION, salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
+  const priorSavedAt = numericFieldAt(localStorage.getItem('bbq_savedAt'));
+  const payload = { savedAt: now, priorSavedAt: priorSavedAt || undefined, stateRevision: revision, inventoryRevision: inventoryRevisionValue, salesRevision: Number(salesRevision || 0), dateKey, orderDays: days, orderDaysAt: numericFieldAt(orderDaysAt) || undefined, zoneOrder: sanitizeZoneOrder(zoneOrder, entries), entries: sanitizeEntries(entries), inventoryByItemKey: inventoryByItemKeyForPayload(), overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), sfaAnalysisHistory: sfaLedgerPointer(ledger), sfaOrderLedger: ledger, sfaActualHistory: sfaActualHistoryPointer(ledger), aiUsageEvidence: buildAiUsageEvidenceSummary(now, ledger), aiUsageAdvisory: sanitizeAiUsageAdvisory(), aiUsageAccepted: sanitizeAiUsageAccepted(), sfaAnalysisReadModel: buildSfaAnalysisReadModel(lastSfaCompareData), dailySales, dailySalesAt: Array.isArray(dailySalesAt) ? dailySalesAt : [], baseSales: getBaseSales(), baseSalesAt: numericFieldAt(baseSalesAt) || undefined, dailyUsageVersion: DAILY_USAGE_STORAGE_VERSION, salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   if (activeSyncResetMarker.id) payload.syncReset = { ...activeSyncResetMarker, scope: 'current_inventory' };
   const commitId = `${now}-${revision}-${++confirmedSaveSequence}`;
   return { commitId, revision, inventoryRevision: inventoryRevisionValue, dateKey, reason, createdAt: now, body: JSON.stringify(payload), entryZonePatches: entryZonePatchesForCommit() };
