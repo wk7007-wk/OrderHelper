@@ -164,8 +164,10 @@
   .grid-sort-control { display: inline-flex; align-items: center; gap: 3px; padding: 2px; border: 1px solid #315a8d; border-radius: 8px; background: rgba(8, 14, 24, 0.42); }
   .top .grid-sort-control button { padding: 5px 9px; border-radius: 5px; background: transparent; color: #9fb2ca; }
   .top .grid-sort-control button.active { background: #315a8d; color: #fff; }
-  .ux2-chip { display: none; min-height: 22px; align-items: center; padding: 2px 7px; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: 999px; background: rgba(34, 197, 94, 0.14); color: #bbf7d0; font-size: 10px; font-weight: 900; white-space: nowrap; }
-  .ux2-work-mode .ux2-chip { display: inline-flex; }
+  .app-ver-row { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; min-width: max-content; max-width: none; overflow: visible; white-space: nowrap; }
+  .app-ver-row #appVer { flex: 0 0 auto; overflow: visible; white-space: nowrap; }
+  .ux2-chip { display: none; flex: 0 0 auto; align-items: center; min-height: 22px; min-width: max-content; max-width: none; padding: 2px 8px; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: 999px; background: rgba(34, 197, 94, 0.14); color: #bbf7d0; font-size: 10px; font-weight: 900; letter-spacing: 0; white-space: nowrap; overflow: visible; text-overflow: clip; }
+  body.sfa-sort-mode .ux2-chip:not([hidden]) { display: inline-flex; }
   .ux2-work-sales { white-space: nowrap; font-weight: 800; color: #dbeafe; }
   .ux2-work-sales[hidden] { display: none !important; }
   .ux2-work-mode .ux2-work-sales { display: inline-flex; }
@@ -181,6 +183,8 @@
   .ux2-work-mode #cycleHint { display: none !important; }
   .ux2-work-mode .top { gap: 8px; padding-top: 7px; padding-bottom: 7px; }
   .ux2-work-mode #saveState, .ux2-work-mode #lastSaved { white-space: nowrap; }
+  body.sfa-sort-mode.ux2-work-mode .app-ver-row,
+  body.sfa-sort-mode.ux2-work-mode .app-ver-row #appVer { display: inline-flex !important; overflow: visible; min-width: max-content; }
   @media (min-width: 601px) and (max-width: 760px) {
     .ux2-work-mode .table-wrap { overflow-x: hidden; padding: 4px 6px 8px; }
     .ux2-work-mode table, .ux2-work-mode tbody { display: block; width: 100%; min-width: 0; }
@@ -396,6 +400,7 @@
     .top #sfaStatus, .top #saveState { width: 100%; justify-content: center; }
     .top #lastSaved { align-self: center; color: #aebbd0; }
     .top #appVer { justify-self: end; align-self: center; color: #aebbd0; }
+    .top .app-ver-row { grid-column: 1 / -1; justify-self: start; overflow: visible; min-width: max-content; }
     .status-pill { min-height: 36px; padding: 6px 10px; font-size: 12px; }
     .sales-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 10px; font-size: 13px; }
     .sales-row > .meta:first-child { align-self: center; color: #c5cfdd; font-size: 12px; font-weight: 800; }
@@ -668,8 +673,10 @@
   <button class="primary" id="phoneOverwriteBtn" type="button" onclick="forcePhoneCurrentOverRemote('button')" hidden>이 폰 내용으로 PC 덮어쓰기</button>
   <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
-  <span class="meta" id="appVer"></span>
-  <span class="ux2-chip" id="ux2Chip" aria-label="UX2 임시 수신">CLI-OK-0826UX2</span>
+  <span class="app-ver-row" id="appVerRow">
+    <span class="meta" id="appVer"></span>
+    <span class="ux2-chip" id="ux2Chip" hidden aria-label="CLI 임시 수신">CLI-OK-0831B</span>
+  </span>
 </div>
 <button type="button" id="browserDiag" class="browser-diag" onclick="toggleBrowserDiag()" aria-expanded="false">브라우저 상태 확인 중</button>
 <pre id="browserDiagDetail" class="browser-diag-detail hidden"></pre>
@@ -779,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0831.0617';
+const APP_VERSION = '0831.0636';
 const FACTORY_STAFF_POLL_MS = 2000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -891,7 +898,7 @@ const MUST_HAVE_ITEMS = Object.freeze([
 // (신)올리브오일 일사용 L은 소비량이 아니라 최대 교체량. 그 이상 쓰지 않음.
 // 최근/3개월 혼합·예상매출 가중·화 3.5 선입고·냉장고 매출스케일을 적용하지 않는다.
 const OIL_REPLACEMENT_ITEMS = Object.freeze(['(신)올리브오일']);
-const ALWAYS_HIDDEN_ITEMS = Object.freeze(['종이,쿠킹호일(25cm*50m)']);
+const ALWAYS_HIDDEN_ITEMS = Object.freeze([]);
 const ONE_ENOUGH_ITEMS = Object.freeze([
   '레몬보이',
   '산가측정페이퍼',
@@ -9379,8 +9386,9 @@ function sfaDisplayNameForItem(item, resolvedRow = null) {
 function updateUx2WorkMode() {
   const active = isUx2WorkMode();
   document.body.classList.toggle('ux2-work-mode', active);
+  document.body.classList.toggle('sfa-sort-mode', gridSortMode === 'sfa');
   const chip = document.getElementById('ux2Chip');
-  if (chip) chip.hidden = !(active && gridSortMode === 'sfa');
+  if (chip) chip.hidden = gridSortMode !== 'sfa';
   const summary = document.getElementById('orderAmountSummary');
   if (active && summary) {
     const count = orderItemList().filter(item => calcG(item, currentOrderDaysValue()) > 0).length;
