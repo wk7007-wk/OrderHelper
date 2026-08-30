@@ -777,7 +777,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0831.0311';
+const APP_VERSION = '0831.0331';
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
   if (!v) {
@@ -2461,7 +2461,70 @@ function isFilledStaffNumber(value) {
   return Number.isFinite(Number(value));
 }
 
-function preserveFilledStaffFields(remote, local) {
+let sessionDirtyStaffFields = Object.create(null);
+
+function staffOverrideKey(name, field) {
+  return String(field || '') + ':' + String(name || '');
+}
+
+function staffSalesKey(idx) {
+  return 'dailySales:' + String(idx);
+}
+
+const STAFF_BASE_KEY = 'baseSales';
+
+function markStaffFieldDirty(key) {
+  if (key) sessionDirtyStaffFields[key] = true;
+}
+
+function clearSessionDirtyStaffFields() {
+  sessionDirtyStaffFields = Object.create(null);
+}
+
+function isMasterDailyDefaultValue(name, value) {
+  const item = orderItemByName(name);
+  if (!item || !isFilledStaffNumber(value) || !isFilledStaffNumber(item.daily)) return false;
+  return Number(value) === Number(item.daily);
+}
+
+function focusedStaffFieldKey() {
+  try {
+    const el = document.activeElement;
+    if (!el || typeof el.matches !== 'function') return '';
+    if (el.id === 'baseSalesInput' || el.matches('#baseSalesInput')) return STAFF_BASE_KEY;
+    if (el.matches('#salesInputs input.sales, input.sales') && el.dataset && el.dataset.idx != null && el.dataset.idx !== '') {
+      return staffSalesKey(el.dataset.idx);
+    }
+    if (el.matches('input.cell[data-field="l"], input.cell[data-field="k"]')) {
+      const field = el.dataset.field;
+      const name = canonicalItemName(itemNameFromKey(el.dataset.itemKey) || '');
+      if ((field === 'l' || field === 'k') && name) return staffOverrideKey(name, field);
+    }
+  } catch (_) {}
+  return '';
+}
+
+function staffFieldSkipSet() {
+  const skip = Object.assign(Object.create(null), sessionDirtyStaffFields);
+  const focused = focusedStaffFieldKey();
+  if (focused) skip[focused] = true;
+  return skip;
+}
+
+function isStaffFieldSkipped(skip, key) {
+  return Boolean(skip && key && skip[key]);
+}
+
+function shouldKeepLocalStaffOverride(name, field, localVal, remoteVal, skip) {
+  if (!isFilledStaffNumber(remoteVal)) return true;
+  const key = staffOverrideKey(name, field);
+  if (!isStaffFieldSkipped(skip, key)) return false;
+  if (field === 'l' && isMasterDailyDefaultValue(name, localVal) && Number(localVal) !== Number(remoteVal)) return false;
+  return true;
+}
+
+function preserveFilledStaffFields(remote, local, skipKeys) {
+  const skip = skipKeys || staffFieldSkipSet();
   const remotePayload = remote && typeof remote === 'object' && !Array.isArray(remote) ? remote : {};
   const localPayload = local && typeof local === 'object' && !Array.isArray(local) ? { ...local } : {};
   const remoteOverrides = remotePayload.overrides && typeof remotePayload.overrides === 'object' && !Array.isArray(remotePayload.overrides)
@@ -2470,39 +2533,40 @@ function preserveFilledStaffFields(remote, local) {
   const localOverrides = localPayload.overrides && typeof localPayload.overrides === 'object' && !Array.isArray(localPayload.overrides)
     ? { ...localPayload.overrides }
     : {};
-  Object.keys(remoteOverrides).forEach(name => {
-    const remoteRow = remoteOverrides[name];
+  Object.keys(remoteOverrides).forEach(rawName => {
+    const remoteRow = remoteOverrides[rawName];
     if (!remoteRow || typeof remoteRow !== 'object' || Array.isArray(remoteRow)) return;
-    const existing = localOverrides[name];
+    const name = canonicalItemName(rawName) || rawName;
+    const existing = localOverrides[name] || localOverrides[rawName];
     const localRow = existing && typeof existing === 'object' && !Array.isArray(existing) ? { ...existing } : {};
     let changed = false;
     ['l', 'k'].forEach(field => {
-      if (!isFilledStaffNumber(localRow[field]) && isFilledStaffNumber(remoteRow[field])) {
-        localRow[field] = Number(remoteRow[field]);
+      if (shouldKeepLocalStaffOverride(name, field, localRow[field], remoteRow[field], skip)) return;
+      const nextVal = Number(remoteRow[field]);
+      if (localRow[field] !== nextVal) {
+        localRow[field] = nextVal;
         changed = true;
       }
     });
-    if (changed) localOverrides[name] = localRow;
+    if (changed) {
+      localOverrides[name] = localRow;
+      if (rawName !== name) delete localOverrides[rawName];
+    }
   });
   localPayload.overrides = localOverrides;
 
   const remoteSales = Array.isArray(remotePayload.dailySales) ? remotePayload.dailySales : [];
   const localSales = Array.isArray(localPayload.dailySales) ? localPayload.dailySales.slice() : [];
-  const localSalesWereEmpty = !localSales.some(isFilledStaffNumber);
-  const salesLen = Math.max(remoteSales.length, localSales.length);
   const nextSales = localSales.slice();
-  for (let i = 0; i < salesLen; i++) {
-    if (!isFilledStaffNumber(nextSales[i]) && isFilledStaffNumber(remoteSales[i])) {
-      nextSales[i] = Number(remoteSales[i]);
-    }
+  for (let i = 0; i < remoteSales.length; i++) {
+    if (!isFilledStaffNumber(remoteSales[i])) continue;
+    if (isStaffFieldSkipped(skip, staffSalesKey(i))) continue;
+    nextSales[i] = Number(remoteSales[i]);
   }
   localPayload.dailySales = nextSales;
 
-  const localBase = localPayload.baseSales;
   const remoteBase = remotePayload.baseSales;
-  const localBaseUnfilled = !isFilledStaffNumber(localBase) || Number(localBase) <= 0
-    || (localSalesWereEmpty && Number(localBase) === Number(DEFAULT_BASE_SALES));
-  if (localBaseUnfilled && isFilledStaffNumber(remoteBase) && Number(remoteBase) > 0) {
+  if (isFilledStaffNumber(remoteBase) && Number(remoteBase) > 0 && !isStaffFieldSkipped(skip, STAFF_BASE_KEY)) {
     localPayload.baseSales = Number(remoteBase);
   }
   return localPayload;
@@ -2525,8 +2589,9 @@ function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, n
     historyRemote,
     mergeFirebasePayloadLedger(currentRemote, localWins)
   );
-  merged = preserveFilledStaffFields(currentRemote, merged);
-  merged = preserveFilledStaffFields(historyRemote, merged);
+  const staffSkip = staffFieldSkipSet();
+  merged = preserveFilledStaffFields(historyRemote, merged, staffSkip);
+  merged = preserveFilledStaffFields(currentRemote, merged, staffSkip);
   return merged;
 }
 
@@ -4961,6 +5026,7 @@ function handleOutputCellInput(target) {
     scheduleDeferredInputWork({ names: [name], recomputeUsage: true, draftScope: 'entries' });
   } else if (field === 'k' || field === 'l') {
     setOverrideValue(name, field, value);
+    markStaffFieldDirty(staffOverrideKey(canonicalItemName(name) || name, field));
     scheduleDeferredInputWork({ names: [name], draftScope: 'overrides' });
   } else {
     return false;
@@ -8990,6 +9056,7 @@ function bindCellInputs() {
         if (num === null) delete overrides[n][f];
         else overrides[n][f] = num;
         if (Object.keys(overrides[n]).length === 0) delete overrides[n];
+        markStaffFieldDirty(staffOverrideKey(canonicalItemName(n) || n, f));
         scheduleDeferredInputWork({ names: [n], updateBadge: true, draftScope: 'overrides' });
       }
     });
@@ -9408,6 +9475,7 @@ function bindBaseSalesInput() {
     const v = e.target.value;
     const n = v === '' ? null : parseFloat(v);
     baseSales = Number.isFinite(n) && n > 0 ? n : null;
+    markStaffFieldDirty(STAFF_BASE_KEY);
     scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'base' });
   });
   inp.addEventListener('blur', flushSalesAutoSave);
@@ -9445,7 +9513,9 @@ function renderSalesInputs() {
     inp.addEventListener('input', e => {
       const v = e.target.value;
       const num = v === '' ? null : parseFloat(v);
-      dailySales[parseInt(e.target.dataset.idx)] = num;
+      const idx = parseInt(e.target.dataset.idx);
+      dailySales[idx] = num;
+      markStaffFieldDirty(staffSalesKey(idx));
       scheduleDeferredInputWork({ allNames: true, updateSales: true, draftScope: 'sales' });
     });
     inp.addEventListener('blur', flushSalesAutoSave);
@@ -9798,6 +9868,7 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
     }
     if (!nextQueue.active && saveMatchesLatestState) {
       localDirty = false;
+      clearSessionDirtyStaffFields();
       localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
     } else {
       localDirty = true;
@@ -10084,7 +10155,7 @@ function shouldApplyIncomingCurrent(data) {
 
 function applyIncomingStaffFieldsIfEmpty(remote) {
   if (!remote || typeof remote !== 'object') return false;
-  const preserved = preserveFilledStaffFields(remote, { overrides, dailySales, baseSales });
+  const preserved = preserveFilledStaffFields(remote, { overrides, dailySales, baseSales }, staffFieldSkipSet());
   const nextOverrides = preserved.overrides && typeof preserved.overrides === 'object' ? preserved.overrides : overrides;
   const nextSales = Array.isArray(preserved.dailySales) ? preserved.dailySales : dailySales;
   const nextBase = preserved.baseSales;
@@ -10106,7 +10177,7 @@ function applyIncomingStaffFieldsIfEmpty(remote) {
   } else {
     pendingStaffSalesRender = true;
   }
-  render();
+  renderPreservingGridFocus();
   return true;
 }
 
