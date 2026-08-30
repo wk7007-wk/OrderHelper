@@ -786,8 +786,8 @@
 </div>
 
 <script>
-const APP_VERSION = '0831.0636';
-const FACTORY_STAFF_POLL_MS = 2000;
+const APP_VERSION = '0831.0644';
+const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
   if (!v) {
@@ -816,7 +816,8 @@ function factoryReadFailure(status, error) {
     ok: false,
     status: Number(status) || 0,
     statusText: err,
-    json: async () => { throw new Error(err); }
+    json: async () => { throw new Error(err); },
+    text: async () => err
   };
 }
 async function parseFactoryOrderDeskBody(res) {
@@ -8722,7 +8723,11 @@ function toggleBrowserDiag() {
 }
 
 function noteFactoryEnvelope(remote) {
-  const env = factoryEnvelopeFromRemote(remote);
+  const env = factoryEnvelopeForWriteMerge(remote);
+  if (!env.ok) {
+    noteFactoryReadFailure(env.error || 'empty_current');
+    return;
+  }
   const cur = env.current || {};
   const ents = Array.isArray(cur.entries) ? cur.entries : [];
   lastBrowserFactory = {
@@ -10421,20 +10426,48 @@ function factoryEnvelopeFromRemote(remote) {
   return { current: currentRemote, history: historyRemote };
 }
 
+function factoryEnvelopeForWriteMerge(remote) {
+  if (!remote || typeof remote !== 'object') {
+    return { ok: false, error: 'no_response', current: null, history: {} };
+  }
+  if (remote.schema === 'factory_log_harvest/v1') {
+    return { ok: false, error: 'harvest', current: null, history: {} };
+  }
+  const currentRemote = remote.current && typeof remote.current === 'object' && !Array.isArray(remote.current)
+    ? remote.current
+    : (Array.isArray(remote.entries) ? remote : null);
+  const historyRemote = remote.history && typeof remote.history === 'object' && !Array.isArray(remote.history)
+    ? remote.history
+    : {};
+  if (!currentRemote || typeof currentRemote !== 'object' || Array.isArray(currentRemote) || !Object.keys(currentRemote).length) {
+    return { ok: false, error: 'empty_current', current: null, history: historyRemote };
+  }
+  return { ok: true, error: '', current: currentRemote, history: historyRemote };
+}
+
 async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 3) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const localPayload = JSON.parse(commit.body);
-  let currentRemote = {};
+  let currentRemote = null;
   let historyRemote = {};
   try {
     const read = await fetch(`${FACTORY_ORDER_URL}?_=${Date.now()}`, { signal: controller.signal });
-    if (read.ok) {
-      const env = factoryEnvelopeFromRemote(await read.json());
-      currentRemote = env.current;
-      historyRemote = env.history;
-    }
-  } catch (_) {}
+    if (!read || !read.ok) throw new Error('http_' + ((read && read.status) || 0));
+    const parsed = await parseFactoryOrderDeskBody(read);
+    if (!parsed.obj) throw new Error(parsed.error || 'json');
+    const env = factoryEnvelopeForWriteMerge(parsed.obj);
+    if (!env.ok) throw new Error(env.error || 'empty_current');
+    currentRemote = env.current;
+    historyRemote = env.history;
+  } catch (e) {
+    lastBrowserPut = { ok: false, at: Date.now(), error: String(e && e.message || 'fetch_failed'), trigger: 'get' };
+    noteFactoryReadFailure(e && e.message);
+    clearTimeout(timer);
+    controller.abort();
+    const fail = factoryReadFailure(0, e && e.message);
+    return { currentResponse: fail, historyResponse: fail, payload: localPayload, body: '', attempts: 0 };
+  }
   const basePayload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now(), {
     untypedLocalOverridePolicy: 'remote',
     typedStaffFields: typedStaffFieldSet(commit.typedStaffFields)
@@ -11133,8 +11166,8 @@ function applyFBData(data) {
   return true;
 }
 
-// Firebase 폴링 (2초마다). 입력칸은 시각 비교 last-input-wins 병합만 한다.
-async function autoLoadFromFB(silent) {
+// Firebase 폴링 (3초). GET current 후 칸별 시각 비교만. 문서 revision으로 전체를 막지 않는다.
+async function autoLoadFromFB(silent, pollOnly) {
   if (phoneOverwriteInFlight) return;
   try {
     const res = await fetchOrderDeskRead();
@@ -11144,18 +11177,21 @@ async function autoLoadFromFB(silent) {
       return;
     }
     const envelope = await res.json();
-    factoryOrderEnvelope = envelope && typeof envelope === 'object' ? envelope : {};
-    noteFactoryEnvelope(envelope);
-    const data = envelope?.current && typeof envelope.current === 'object' ? envelope.current : null;
-    if (!data || Object.keys(data).length === 0) {
+    const data = envelope?.current && typeof envelope.current === 'object' && !Array.isArray(envelope.current)
+      ? envelope.current
+      : null;
+    if (!data || !Object.keys(data).length) {
       noteFactoryReadFailure('empty_current');
       return;
     }
-    const resetApplied = applyRemoteSyncResetIfNeeded(data);
+    factoryOrderEnvelope = envelope && typeof envelope === 'object' ? envelope : {};
+    noteFactoryEnvelope(envelope);
+    applyRemoteSyncResetIfNeeded(data);
     applyIncomingStaffFieldsIfEmpty(data);
+    if (pollOnly) return;
     if (!shouldApplyIncomingCurrent(data)) return;
-    if (!resetApplied && (localDirty || hasConfirmedSaveQueue())) return;
-    if (!resetApplied && inputFocused) {
+    if (localDirty || hasConfirmedSaveQueue()) return;
+    if (inputFocused) {
       if (!pendingFBData || Number(data.stateRevision || data.savedAt || 0) >= Number(pendingFBData.stateRevision || pendingFBData.savedAt || 0)) pendingFBData = data;
       return;
     }
@@ -11377,7 +11413,7 @@ function startOrderHelperApp() {
   loadAiUsageAdvisoryLatest(true);
   loadSfaOrderStatus(true);
   window.addEventListener('resize', updateStickyOffsets);
-  // 디바이스 간 동기화: 공장 GET 확인 뒤에 startup 텔레메트리, 이후 2초 폴링
+  // 디바이스 간 동기화: 공장 GET 확인 뒤에 startup 텔레메트리, 이후 3초 폴링(칸별 시각만)
   const afterFactoryGet = () => {
     renderBrowserDiag();
     publishBrowserDiag('startup');
@@ -11390,7 +11426,7 @@ function startOrderHelperApp() {
       afterFactoryGet();
     });
   }
-  setInterval(() => autoLoadFromFB(true), FACTORY_STAFF_POLL_MS);
+  setInterval(() => autoLoadFromFB(true, true), FACTORY_STAFF_POLL_MS);
   setInterval(() => { renderBrowserDiag(); publishBrowserDiag('tick'); }, 20000);
   setInterval(() => loadUsageHistory(true), 300000);
   setInterval(() => loadSfaPriceHistory(true), 300000);
