@@ -31,5 +31,21 @@ assert.match(html, /name === '올리브치킨용배터믹스-파우다'\) return
 assert.match(html, /return fmt\(screenOrderQty\(item, days\), 0\)/);
 assert.match(html, /data-field="stock"/);
 assert.match(html, /mobile-row-toggle/);
+assert.match(html, /const ONE_ENOUGH_ITEMS = Object\.freeze\(/);
+assert.match(html, /한개충분/);
+const oneEnoughBlock = html.match(/const ONE_ENOUGH_ITEMS = Object\.freeze\(\[([\s\S]*?)\]\);/);
+assert.ok(oneEnoughBlock, 'ONE_ENOUGH_ITEMS block');
+assert.match(oneEnoughBlock[1], /'햇반'/);
+assert.match(oneEnoughBlock[1], /'치킨무\(벌크\)'/);
+assert.match(oneEnoughBlock[1], /'스티커\(BBQ스티커T\)'/);
+assert.match(oneEnoughBlock[1], /'포장팩커팅칼\(250EA\/봉\)'/);
+assert.doesNotMatch(oneEnoughBlock[1], /치킨무\(배달용\)/);
+assert.match(html, /ALWAYS_HIDDEN_ITEMS = Object\.freeze\(\['종이,쿠킹호일\(25cm\*50m\)'\]\)/);
+assert.match(html, /function isBulkRepeatedFieldAt\(/);
+assert.match(html, /untypedLocalOverridePolicy: 'remote'/);
+assert.match(html, /function stripBulkRepeatedInputAts\(/);
+assert.match(html, /typedStaffFields: typedStaffFieldSet\(commit\.typedStaffFields\)/);
+assert.doesNotMatch(html, /CLI-OK-0831A/);
+assert.match(html, /target\.stock = Number\.isFinite\(num\) \? num : null;/);
 
 console.log('orderhelper UX2 static checks: pass');

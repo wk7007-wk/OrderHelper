@@ -236,6 +236,8 @@
   .need-output-value { display: inline-flex; width: 100%; min-height: 28px; align-items: center; justify-content: center; }
   .output-order-value { display: inline-flex; min-height: 28px; align-items: center; }
   .order-cell { display: flex; width: 100%; box-sizing: border-box; align-items: center; align-content: center; justify-content: flex-start; gap: 5px; flex-wrap: wrap; white-space: normal; }
+  .one-enough-mark { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(52, 211, 153, 0.42); background: rgba(6, 95, 70, 0.38); color: #a7f3d0; font-size: 10px; font-weight: 800; line-height: 1.2; vertical-align: middle; }
+  .ux2-work-mode #tbody .one-enough-mark { display: inline-flex !important; }
   .order-analysis { display: inline-flex; align-items: center; min-height: 18px; padding: 1px 6px; border-radius: 999px; border: 1px solid rgba(250, 204, 21, 0.34); background: rgba(234, 179, 8, 0.12); color: #fde68a; font-size: 10px; font-weight: 700; line-height: 1.2; vertical-align: middle; }
   .order-analysis.unlinked { border-color: rgba(148, 163, 184, 0.38); background: rgba(100, 116, 139, 0.12); color: #cbd5e1; }
   .order-analysis.empty { display: none; }
@@ -777,7 +779,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0831.0444';
+const APP_VERSION = '0831.0617';
 const FACTORY_STAFF_POLL_MS = 2000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -889,6 +891,33 @@ const MUST_HAVE_ITEMS = Object.freeze([
 // (신)올리브오일 일사용 L은 소비량이 아니라 최대 교체량. 그 이상 쓰지 않음.
 // 최근/3개월 혼합·예상매출 가중·화 3.5 선입고·냉장고 매출스케일을 적용하지 않는다.
 const OIL_REPLACEMENT_ITEMS = Object.freeze(['(신)올리브오일']);
+const ALWAYS_HIDDEN_ITEMS = Object.freeze(['종이,쿠킹호일(25cm*50m)']);
+const ONE_ENOUGH_ITEMS = Object.freeze([
+  '레몬보이',
+  '산가측정페이퍼',
+  '블랙페퍼시즈닝(15g)',
+  'BBQ블랙페퍼시즈닝(벌크)',
+  '배달소스-순살크래커소스',
+  '볼케이노핫소스',
+  '(신)롤백(500매)',
+  '햇반',
+  '알루미늄캔(뚜껑포함)',
+  '치킨무(벌크)',
+  '물티슈(500)',
+  '일회용 케찹',
+  '냉동-치즈스틱',
+  '스티커(BBQ스티커T)',
+  '포장팩커팅칼(250EA/봉)',
+  '내프킨,냅킨',
+  '종이쇼핑백',
+  '안신스티커,BBQ테이프(N)',
+  '직사각용기1(190,감자)',
+  '직사각용기2(230,치즈스틱)',
+  'BBQ직사각용기2호',
+  '치킨간지',
+  '치플레소스',
+  '여과지필터(320*535)(14)',
+]);
 
 // Static 1-order-unit KRW defaults from SFA 2026-06-01..08-22 amount/qty.
 // Live excel / sfaPriceHistory win; these fill 오늘 발주 예상 총액 when evidence is missing.
@@ -2397,7 +2426,7 @@ function mergeFirebaseSalesState(mergedPayload, remotePayload, localPayload) {
   return merged;
 }
 
-function mergeFirebasePayloadLedger(remotePayload, localPayload) {
+function mergeFirebasePayloadLedger(remotePayload, localPayload, options) {
   const localLedger = sfaLedgerFromPayload(localPayload) || sanitizeSfaAnalysisHistory({ records: [] });
   const remoteLedger = sfaLedgerFromPayload(remotePayload) || sanitizeSfaAnalysisHistory({ records: [] });
   const ledger = dedupeSfaOrderLedgerSources(mergeSfaAnalysisHistories(remoteLedger, localLedger));
@@ -2414,7 +2443,7 @@ function mergeFirebasePayloadLedger(remotePayload, localPayload) {
   if (Object.prototype.hasOwnProperty.call(merged, 'aiUsageEvidence')) {
     merged.aiUsageEvidence = buildAiUsageEvidenceSummary(merged.savedAt || Date.now(), ledger);
   }
-  const timed = mergeLastInputFieldPayload(remote, local);
+  const timed = mergeLastInputFieldPayload(remote, local, null, options);
   merged.entries = timed.entries;
   merged.overrides = timed.overrides;
   merged.dailySales = timed.dailySales;
@@ -2425,6 +2454,7 @@ function mergeFirebasePayloadLedger(remotePayload, localPayload) {
   if (timed.orderDays != null && timed.orderDays !== '') merged.orderDays = timed.orderDays;
   if (timed.orderDaysAt) merged.orderDaysAt = timed.orderDaysAt;
   else delete merged.orderDaysAt;
+  merged.inventoryByItemKey = inventoryByItemKeyForPayload(merged.entries);
   delete merged.priorSavedAt;
   return merged;
 }
@@ -2494,8 +2524,9 @@ function buildPhoneWinsPayload(currentRemote, historyRemote, localPayload, now =
       previousRemoteRevision: maxFirebasePayloadRevision(currentRemote, historyRemote)
     }
   };
-  let merged = mergeFirebasePayloadLedger(currentRemote, forcedLocal);
-  merged = mergeFirebasePayloadLedger(historyRemote, merged);
+  const phoneOpts = { untypedLocalOverridePolicy: 'local', forceLocalInputFields: true };
+  let merged = mergeFirebasePayloadLedger(currentRemote, forcedLocal, phoneOpts);
+  merged = mergeFirebasePayloadLedger(historyRemote, merged, phoneOpts);
   return merged;
 }
 
@@ -2523,6 +2554,34 @@ function markStaffFieldDirty(key) {
 
 function clearSessionDirtyStaffFields() {
   sessionDirtyStaffFields = Object.create(null);
+}
+
+function typedStaffFieldSet(source) {
+  const out = new Set();
+  if (!source) return out;
+  if (typeof source.forEach === 'function' && typeof source.has === 'function' && !Array.isArray(source)) {
+    source.forEach(key => { if (key) out.add(String(key)); });
+    return out;
+  }
+  if (Array.isArray(source)) {
+    source.forEach(key => { if (key) out.add(String(key)); });
+    return out;
+  }
+  if (typeof source === 'object') {
+    Object.keys(source).forEach(key => { if (source[key]) out.add(String(key)); });
+  }
+  return out;
+}
+
+function sessionTypedStaffFieldSet() {
+  return typedStaffFieldSet(sessionDirtyStaffFields);
+}
+
+function typedStaffFieldIsSet(typed, key) {
+  if (!key) return false;
+  if (typed && typeof typed.has === 'function') return typed.has(key);
+  if (typed && typeof typed === 'object') return Boolean(typed[key]);
+  return false;
 }
 
 function numericFieldAt(value) {
@@ -2556,9 +2615,10 @@ function entryHasZoneValue(row) {
   return String(row.zone || '') !== '';
 }
 
-function overrideHasUserField(name, row, field) {
+function overrideHasUserField(name, row, field, bulkCounts) {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
-  if (numericFieldAt(row[field + 'At']) > 0) return true;
+  const at = numericFieldAt(row[field + 'At']);
+  if (at && !isBulkRepeatedFieldAt(at, bulkCounts)) return true;
   if (!Object.prototype.hasOwnProperty.call(row, field)) return false;
   if (field === 'l' && isMasterDailyDefaultValue(name, row[field])) return false;
   const value = row[field];
@@ -2605,26 +2665,58 @@ function sameTextInput(a, b) {
   return String(a || '') === String(b || '');
 }
 
-function fieldTimeWithFallback(hasValue, explicitAt, fallbackAt) {
+function countNumericAtRepeats(values) {
+  const counts = Object.create(null);
+  (Array.isArray(values) ? values : []).forEach(value => {
+    const at = numericFieldAt(value);
+    if (!at) return;
+    counts[at] = (counts[at] || 0) + 1;
+  });
+  return counts;
+}
+
+function isBulkRepeatedFieldAt(at, counts) {
+  const n = numericFieldAt(at);
+  if (!n) return false;
+  return Number(counts && counts[n] || 0) >= 2;
+}
+
+function overrideFieldAtCounts(source, field) {
+  const rows = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+  return countNumericAtRepeats(Object.keys(rows).map(name => rows[name] && rows[name][field + 'At']));
+}
+
+function entryFieldAtCounts(rows, fieldAt) {
+  return countNumericAtRepeats((Array.isArray(rows) ? rows : []).map(row => row && row[fieldAt]));
+}
+
+function fieldTimeWithFallback(hasValue, explicitAt, fallbackAt, bulkCounts) {
   const at = numericFieldAt(explicitAt);
-  if (at) return { time: at, explicit: true };
+  if (at && !isBulkRepeatedFieldAt(at, bulkCounts)) return { time: at, explicit: true };
   if (!hasValue) return { time: 0, explicit: false };
   return { time: numericFieldAt(fallbackAt) || 0, explicit: false };
 }
 
-function pickLastInputField(localHas, localVal, localAt, remoteHas, remoteVal, remoteAt, localFallback, remoteFallback) {
-  const localMeta = fieldTimeWithFallback(localHas, localAt, localFallback);
-  const remoteMeta = fieldTimeWithFallback(remoteHas, remoteAt, remoteFallback);
+function pickedFieldAt(explicit, rawAt, bulkCounts) {
+  if (!explicit) return 0;
+  const at = numericFieldAt(rawAt);
+  if (!at || isBulkRepeatedFieldAt(at, bulkCounts)) return 0;
+  return at;
+}
+
+function pickLastInputField(localHas, localVal, localAt, remoteHas, remoteVal, remoteAt, localFallback, remoteFallback, localBulkCounts, remoteBulkCounts) {
+  const localMeta = fieldTimeWithFallback(localHas, localAt, localFallback, localBulkCounts);
+  const remoteMeta = fieldTimeWithFallback(remoteHas, remoteAt, remoteFallback, remoteBulkCounts);
   if (localMeta.explicit !== remoteMeta.explicit) {
     if (remoteMeta.explicit) {
-      return { has: remoteHas, value: remoteVal, at: numericFieldAt(remoteAt), winner: 'remote', time: remoteMeta.time };
+      return { has: remoteHas, value: remoteVal, at: pickedFieldAt(true, remoteAt, remoteBulkCounts), winner: 'remote', time: remoteMeta.time };
     }
-    return { has: localHas, value: localVal, at: numericFieldAt(localAt), winner: 'local', time: localMeta.time };
+    return { has: localHas, value: localVal, at: pickedFieldAt(true, localAt, localBulkCounts), winner: 'local', time: localMeta.time };
   }
   if (remoteMeta.time > localMeta.time) {
-    return { has: remoteHas, value: remoteVal, at: numericFieldAt(remoteAt), winner: 'remote', time: remoteMeta.time };
+    return { has: remoteHas, value: remoteVal, at: pickedFieldAt(remoteMeta.explicit, remoteAt, remoteBulkCounts), winner: 'remote', time: remoteMeta.time };
   }
-  return { has: localHas, value: localVal, at: numericFieldAt(localAt), winner: 'local', time: localMeta.time };
+  return { has: localHas, value: localVal, at: pickedFieldAt(localMeta.explicit, localAt, localBulkCounts), winner: 'local', time: localMeta.time };
 }
 
 function applyPickedOverrideField(row, field, picked) {
@@ -2678,6 +2770,7 @@ function stampOverrideField(name, field) {
     if (current == null || (typeof current === 'number' && !Number.isFinite(current))) delete target[field];
     else target[field] = current;
     target[field + 'At'] = Date.now();
+    markStaffFieldDirty(key);
   });
 }
 
@@ -2794,11 +2887,16 @@ function overrideRowHasField(row, field) {
   return Object.prototype.hasOwnProperty.call(row, field) || numericFieldAt(row[field + 'At']) > 0;
 }
 
-function mergeLastInputEntries(remoteEntries, localEntries, remoteFallback, localFallback, skip) {
+function mergeLastInputEntries(remoteEntries, localEntries, remoteFallback, localFallback, skip, options) {
   const localRows = sanitizeEntries(Array.isArray(localEntries) ? localEntries : []);
   const remoteRows = sanitizeEntries(Array.isArray(remoteEntries) ? remoteEntries : []);
   if (!remoteRows.length) return localRows;
   if (!localRows.length) return remoteRows;
+  const forceLocal = Boolean(options && options.forceLocalInputFields);
+  const localStockCounts = entryFieldAtCounts(localRows, 'stockAt');
+  const remoteStockCounts = entryFieldAtCounts(remoteRows, 'stockAt');
+  const localZoneCounts = entryFieldAtCounts(localRows, 'zoneAt');
+  const remoteZoneCounts = entryFieldAtCounts(remoteRows, 'zoneAt');
   const localByKey = new Map();
   localRows.forEach(row => localByKey.set(String(row.entryKey || row.id), row));
   const remoteByKey = new Map();
@@ -2809,14 +2907,24 @@ function mergeLastInputEntries(remoteEntries, localEntries, remoteFallback, loca
     const localRow = localByKey.get(key);
     const remoteRow = remoteByKey.get(key);
     if (localRow && !remoteRow) {
-      out.push({ ...localRow });
+      const keep = { ...localRow };
+      if (isBulkRepeatedFieldAt(keep.stockAt, localStockCounts)) delete keep.stockAt;
+      if (isBulkRepeatedFieldAt(keep.zoneAt, localZoneCounts)) delete keep.zoneAt;
+      out.push(keep);
       return;
     }
     if (!localRow && remoteRow) {
-      out.push({ ...remoteRow });
+      const keep = { ...remoteRow };
+      if (isBulkRepeatedFieldAt(keep.stockAt, remoteStockCounts)) delete keep.stockAt;
+      if (isBulkRepeatedFieldAt(keep.zoneAt, remoteZoneCounts)) delete keep.zoneAt;
+      out.push(keep);
       return;
     }
     const next = { ...localRow };
+    if (forceLocal) {
+      out.push(next);
+      return;
+    }
     if (!isStaffFieldSkipped(skip, 'stock:' + key)) {
       const picked = pickLastInputField(
         entryHasStockValue(localRow),
@@ -2826,7 +2934,9 @@ function mergeLastInputEntries(remoteEntries, localEntries, remoteFallback, loca
         remoteRow.stock,
         remoteRow.stockAt,
         localFallback,
-        remoteFallback
+        remoteFallback,
+        localStockCounts,
+        remoteStockCounts
       );
       next.stock = picked.has ? picked.value : null;
       if (picked.at) next.stockAt = picked.at;
@@ -2841,7 +2951,9 @@ function mergeLastInputEntries(remoteEntries, localEntries, remoteFallback, loca
         remoteRow.zone,
         remoteRow.zoneAt,
         localFallback,
-        remoteFallback
+        remoteFallback,
+        localZoneCounts,
+        remoteZoneCounts
       );
       next.zone = picked.has ? String(picked.value || '') : String(localRow.zone || '');
       if (picked.at) next.zoneAt = picked.at;
@@ -2852,9 +2964,16 @@ function mergeLastInputEntries(remoteEntries, localEntries, remoteFallback, loca
   return sanitizeEntries(out);
 }
 
-function mergeLastInputOverrides(remoteOverrides, localOverrides, remoteFallback, localFallback, skip) {
+function mergeLastInputOverrides(remoteOverrides, localOverrides, remoteFallback, localFallback, skip, options) {
   const remoteSrc = remoteOverrides && typeof remoteOverrides === 'object' && !Array.isArray(remoteOverrides) ? remoteOverrides : {};
   const localSrc = localOverrides && typeof localOverrides === 'object' && !Array.isArray(localOverrides) ? localOverrides : {};
+  const typed = typedStaffFieldSet(options && options.typedStaffFields);
+  const untypedPolicy = (options && options.untypedLocalOverridePolicy) || 'pick';
+  const forceLocal = Boolean(options && options.forceLocalInputFields);
+  const localLCounts = overrideFieldAtCounts(localSrc, 'l');
+  const localKCounts = overrideFieldAtCounts(localSrc, 'k');
+  const remoteLCounts = overrideFieldAtCounts(remoteSrc, 'l');
+  const remoteKCounts = overrideFieldAtCounts(remoteSrc, 'k');
   const names = new Set();
   Object.keys(localSrc).forEach(name => names.add(canonicalItemName(name) || name));
   Object.keys(remoteSrc).forEach(name => names.add(canonicalItemName(name) || name));
@@ -2862,20 +2981,42 @@ function mergeLastInputOverrides(remoteOverrides, localOverrides, remoteFallback
   names.forEach(name => {
     const localRow = localSrc[name] && typeof localSrc[name] === 'object' && !Array.isArray(localSrc[name]) ? { ...localSrc[name] } : {};
     const remoteRow = remoteSrc[name] && typeof remoteSrc[name] === 'object' && !Array.isArray(remoteSrc[name])
-      ? remoteSrc[name]
+      ? { ...remoteSrc[name] }
       : {};
     const next = { ...localRow };
     ['l', 'k'].forEach(field => {
       if (isStaffFieldSkipped(skip, staffOverrideKey(name, field))) return;
+      const localCounts = field === 'l' ? localLCounts : localKCounts;
+      const remoteCounts = field === 'l' ? remoteLCounts : remoteKCounts;
+      const localTyped = typedStaffFieldIsSet(typed, staffOverrideKey(name, field));
+      if (forceLocal) {
+        if (isBulkRepeatedFieldAt(next[field + 'At'], localCounts)) delete next[field + 'At'];
+        return;
+      }
+      if (untypedPolicy === 'remote' && !localTyped) {
+        if (Object.prototype.hasOwnProperty.call(remoteRow, field) || numericFieldAt(remoteRow[field + 'At']) > 0) {
+          const remoteAt = pickedFieldAt(!isBulkRepeatedFieldAt(remoteRow[field + 'At'], remoteCounts), remoteRow[field + 'At'], remoteCounts);
+          applyPickedOverrideField(next, field, {
+            has: Object.prototype.hasOwnProperty.call(remoteRow, field) || remoteAt > 0,
+            value: Object.prototype.hasOwnProperty.call(remoteRow, field) ? remoteRow[field] : null,
+            at: remoteAt
+          });
+        } else if (isBulkRepeatedFieldAt(next[field + 'At'], localCounts)) {
+          delete next[field + 'At'];
+        }
+        return;
+      }
       const picked = pickLastInputField(
-        overrideHasUserField(name, localRow, field),
+        overrideHasUserField(name, localRow, field, localCounts),
         Object.prototype.hasOwnProperty.call(localRow, field) ? localRow[field] : null,
         localRow[field + 'At'],
-        overrideHasUserField(name, remoteRow, field),
+        overrideHasUserField(name, remoteRow, field, remoteCounts),
         Object.prototype.hasOwnProperty.call(remoteRow, field) ? remoteRow[field] : null,
         remoteRow[field + 'At'],
         localFallback,
-        remoteFallback
+        remoteFallback,
+        localCounts,
+        remoteCounts
       );
       applyPickedOverrideField(next, field, picked);
     });
@@ -2920,8 +3061,9 @@ function mergeLastInputDailySales(remoteSales, remoteAt, localSales, localAt, re
   return { dailySales: nextSales, dailySalesAt: nextAt };
 }
 
-function mergeLastInputFieldPayload(remote, local, skipKeys) {
+function mergeLastInputFieldPayload(remote, local, skipKeys, options) {
   const skip = skipKeys || null;
+  const mergeOpts = options && typeof options === 'object' ? options : {};
   const remotePayload = remote && typeof remote === 'object' && !Array.isArray(remote) ? remote : {};
   const localPayload = local && typeof local === 'object' && !Array.isArray(local) ? { ...local } : {};
   const remoteFallback = payloadFieldFallback(remotePayload);
@@ -2931,14 +3073,16 @@ function mergeLastInputFieldPayload(remote, local, skipKeys) {
     localPayload.entries,
     remoteFallback,
     localFallback,
-    skip
+    skip,
+    mergeOpts
   );
   localPayload.overrides = mergeLastInputOverrides(
     remotePayload.overrides,
     localPayload.overrides,
     remoteFallback,
     localFallback,
-    skip
+    skip,
+    mergeOpts
   );
   const salesMerged = mergeLastInputDailySales(
     remotePayload.dailySales,
@@ -2986,15 +3130,21 @@ function mergeLastInputFieldPayload(remote, local, skipKeys) {
       else delete localPayload.orderDaysAt;
     }
   }
+  localPayload.inventoryByItemKey = inventoryByItemKeyForPayload(localPayload.entries);
   return localPayload;
 }
 
-function preserveFilledStaffFields(remote, local, skipKeys) {
-  return mergeLastInputFieldPayload(remote, local, skipKeys);
+function preserveFilledStaffFields(remote, local, skipKeys, options) {
+  return mergeLastInputFieldPayload(remote, local, skipKeys, options);
 }
 
-function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, now = Date.now()) {
+function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, now = Date.now(), options) {
   const local = localPayload && typeof localPayload === 'object' ? localPayload : {};
+  const mergeOpts = {
+    untypedLocalOverridePolicy: 'remote',
+    typedStaffFields: typedStaffFieldSet(options && options.typedStaffFields),
+    ...(options && typeof options === 'object' ? options : {})
+  };
   const revision = Math.max(
     maxFirebasePayloadRevision(currentRemote, historyRemote, local),
     Number(now) || Date.now()
@@ -3010,9 +3160,15 @@ function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, n
   };
   let merged = mergeFirebasePayloadLedger(
     historyRemote,
-    mergeFirebasePayloadLedger(currentRemote, localWins)
+    mergeFirebasePayloadLedger(currentRemote, localWins, mergeOpts),
+    mergeOpts
   );
-  const timed = mergeLastInputFieldPayload(currentRemote, mergeLastInputFieldPayload(historyRemote, localWins));
+  const timed = mergeLastInputFieldPayload(
+    currentRemote,
+    mergeLastInputFieldPayload(historyRemote, localWins, null, mergeOpts),
+    null,
+    mergeOpts
+  );
   merged.entries = timed.entries;
   merged.overrides = timed.overrides;
   merged.dailySales = timed.dailySales;
@@ -3023,6 +3179,7 @@ function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, n
   if (timed.orderDays != null && timed.orderDays !== '') merged.orderDays = timed.orderDays;
   if (timed.orderDaysAt) merged.orderDaysAt = timed.orderDaysAt;
   else delete merged.orderDaysAt;
+  merged.inventoryByItemKey = inventoryByItemKeyForPayload(merged.entries);
   delete merged.priorSavedAt;
   return merged;
 }
@@ -3042,8 +3199,9 @@ async function putPhoneWinsTargets(localPayload, resolutionId, timeoutMs = SAVE_
 function mergeConfirmedEntryZonePatchPayload(currentRemote, historyRemote, localPayload, patches) {
   const cleanPatches = sanitizeEntryZonePatches(patches);
   if (!cleanPatches.length) return null;
-  const firstMerge = mergeFirebasePayloadLedger(currentRemote, localPayload);
-  const merged = mergeFirebasePayloadLedger(historyRemote, firstMerge);
+  const zoneOpts = { untypedLocalOverridePolicy: 'remote', typedStaffFields: sessionTypedStaffFieldSet() };
+  const firstMerge = mergeFirebasePayloadLedger(currentRemote, localPayload, zoneOpts);
+  const merged = mergeFirebasePayloadLedger(historyRemote, firstMerge, zoneOpts);
   const patched = mergeEntryZonePatchesIntoEntries(merged.entries || [], localPayload?.entries || [], cleanPatches);
   if (!patched.changed) return null;
   const now = Date.now();
@@ -3070,7 +3228,10 @@ async function putFirebasePayloadWithLedgerCas(url, localPayload, maxAttempts = 
     const etag = readResponse.headers?.get?.('ETag') || readResponse.headers?.get?.('etag');
     if (!etag) throw new Error('Firebase CAS read missing ETag');
     const remotePayload = await readResponse.json();
-    lastPayload = mergeFirebasePayloadLedger(remotePayload, localPayload);
+    lastPayload = mergeFirebasePayloadLedger(remotePayload, localPayload, {
+      untypedLocalOverridePolicy: 'remote',
+      typedStaffFields: sessionTypedStaffFieldSet()
+    });
     if (firebasePayloadIsNewer(remotePayload, localPayload)) {
       return { response: null, payload: lastPayload, attempts: attempt, conflict: true };
     }
@@ -3885,7 +4046,18 @@ function todayKST() {
   const k = new Date(Date.now() + 9 * 3600000);
   return k.toISOString().slice(0, 10);
 }
+function isAlwaysHiddenItem(name) {
+  const itemName = canonicalItemName(name) || String(name || '');
+  return Boolean(itemName) && ALWAYS_HIDDEN_ITEMS.includes(itemName);
+}
+
+function isOneEnoughItem(item) {
+  const name = canonicalItemName(typeof item === 'string' ? item : (item && item.name)) || '';
+  return Boolean(name) && ONE_ENOUGH_ITEMS.includes(name);
+}
+
 function isItemHidden(name) {
+  if (isAlwaysHiddenItem(name)) return true;
   const u = overrides[name]?.hideUntil;
   if (!u) return false;
   return todayKST() < u;
@@ -4081,13 +4253,12 @@ function setOutputStockTotal(name, value) {
 
 function setOutputStockTotalByItemKey(itemKey, value) {
   const sameEntries = entries.filter(entry => (entry.itemKey || itemKeyForName(entry.name)) === itemKey);
-  if (sameEntries.length === 0) return;
+  if (sameEntries.length === 0) return null;
   const num = value === '' ? null : parseFloat(value);
-  sameEntries.forEach((entry, idx) => {
-    if (idx === 0) entry.stock = Number.isFinite(num) ? num : null;
-    else entry.stock = null;
-  });
+  const target = sameEntries[0];
+  target.stock = Number.isFinite(num) ? num : null;
   markInventoryMutation();
+  return target;
 }
 
 function cleanActualOrders(source = actualOrders) {
@@ -4443,14 +4614,12 @@ function screenOrderPackSize(item) {
 }
 
 function screenOrderQty(item, days) {
+  if (isAlwaysHiddenItem(item?.name)) return 0;
+  const stockInfo = stockAggregateByItemKey(itemKeyForName(item.name));
+  if (isOneEnoughItem(item) && stockInfo.hasValue && Number(stockInfo.total) >= 1) return 0;
+  if (isOneEnoughItem(item) && stockInfo.hasValue && Number(stockInfo.total) < 1) return 1;
   const qty = Number(outputOrderQty(item, days));
   if (!Number.isFinite(qty) || qty <= 0) return 0;
-  const stock = totalStock(item.name);
-  const limitedNames = new Set([
-    '레몬보이', '산가측정페이퍼', '블랙페퍼시즈닝(15g)', 'BBQ블랙페퍼시즈닝(벌크)',
-    '배달소스-순살크래커소스', '볼케이노핫소스', 'B볼케이노핫소스', '(신)롤백(500매)'
-  ]);
-  if (limitedNames.has(item.name) && (stock > 1 || qty === 1)) return 0;
   if (item.name === '트레이(소)' && ![0, 6].includes(kstGetDay())) return 2;
   if (item.name === '비닐-BBQ비닐봉투(소)' && qty < 2) return 2;
   const pack = screenOrderPackSize(item);
@@ -5456,7 +5625,7 @@ function updateOutputOrderForName(name, resolvedRowsByItemKey = null) {
       ? ''
       : matchNeeded
       ? 'match-needed'
-      : Number(outputOrderQty(item, days)) > 0
+      : Number(screenOrderQty(item, days)) > 0
       ? 'order-needed'
       : 'order-none';
     rows.forEach(row => applySfaOrderRowState(row, state));
@@ -5470,10 +5639,8 @@ function handleOutputCellInput(target, stamp = false) {
   if (!itemKey || !name || !field) return false;
   const value = target.value;
   if (field === 'stock') {
-    setOutputStockTotalByItemKey(itemKey, value);
-    if (stamp) {
-      entries.filter(entry => (entry.itemKey || itemKeyForName(entry.name)) === itemKey).forEach(stampEntryStock);
-    }
+    const target = setOutputStockTotalByItemKey(itemKey, value);
+    if (stamp && target) stampEntryStock(target);
     scheduleDeferredInputWork({ names: [name], recomputeUsage: true, draftScope: 'entries' });
   } else if (field === 'k' || field === 'l') {
     setOverrideValue(name, field, value, stamp);
@@ -9099,7 +9266,7 @@ function buildSfaWorkSortContext(days = currentOrderDaysValue(), aliasRows = nul
   return {
     days: safeDays,
     aliasRowsByName: new Map(rows.map(row => [canonicalItemName(row.aliasName), row])),
-    orderQtyByItemKey: new Map(orderItemList().map(item => [itemKeyForName(item.name), outputOrderQty(item, safeDays)]))
+    orderQtyByItemKey: new Map(orderItemList().map(item => [itemKeyForName(item.name), screenOrderQty(item, safeDays)]))
   };
 }
 
@@ -9112,7 +9279,7 @@ function sfaWorkRowPriority(row, context = null) {
   const cachedQty = context?.orderQtyByItemKey?.get?.(itemKey);
   const qty = Number.isFinite(Number(cachedQty))
     ? Number(cachedQty)
-    : outputOrderQty(row.item, context?.days || currentOrderDaysValue());
+    : screenOrderQty(row.item, context?.days || currentOrderDaysValue());
   return Number(qty) > 0 ? 1 : 2;
 }
 
@@ -9125,7 +9292,7 @@ function sfaOrderRowState(item, hidden = false, context = null) {
   const cachedQty = context?.orderQtyByItemKey?.get?.(itemKey);
   const qty = Number.isFinite(Number(cachedQty))
     ? Number(cachedQty)
-    : outputOrderQty(item, context?.days || currentOrderDaysValue());
+    : screenOrderQty(item, context?.days || currentOrderDaysValue());
   return Number(qty) > 0 ? 'order-needed' : 'order-none';
 }
 
@@ -9753,6 +9920,7 @@ function render(options = {}) {
 
     const resolvedOrderRow = resolvedOrderRowsByItemKey.get(itemKeyForName(item.name)) || null;
     const nameDisplay = sfaDisplayNameForItem(item, resolvedOrderRow);
+    const oneEnoughMark = isOneEnoughItem(item) ? '<span class="one-enough-mark">한개충분</span>' : '';
     const safeEntryId = escapeHtml(ent.id);
     const safeEntryKey = escapeHtml(ent.entryKey || ent.id);
     const safeItemKey = escapeHtml(ent.itemKey || itemKeyForName(item.name));
@@ -9780,7 +9948,7 @@ function render(options = {}) {
 
     tr.innerHTML = `
       <td data-column="zone"><input class="cell zone" type="text" list="zoneOptions" autocomplete="off" tabindex="-1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="zone" value="${escapeHtml(ent.zone || '')}" aria-label="${escapeHtml(`${item.name} 구역`)}"></td>
-      <td class="name" data-column="name" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}</div>${inlineAliasControls}${inlineSiteControls}</td>
+      <td class="name" data-column="name" data-item-key="${escapeHtml(itemKeyForName(item.name))}" data-item-name="${escapeHtml(item.name)}"><div class="item-title">${escapeHtml(nameDisplay)}${oneEnoughMark}</div>${inlineAliasControls}${inlineSiteControls}</td>
       <td data-column="stock"><input class="cell" type="number" inputmode="decimal" enterkeyhint="next" step="0.1" data-id="${safeEntryId}" data-entry-key="${safeEntryKey}" data-item-key="${safeItemKey}" data-field="stock" value="${escapeHtml(ent.stock == null ? '' : ent.stock)}" aria-label="${escapeHtml(`${item.name} 재고`)}"></td>
       ${needCell}
       ${orderCell}
@@ -10084,6 +10252,7 @@ function sanitizeConfirmedCommit(source) {
   } catch {
     return null;
   }
+  const typedStaffFields = Array.from(typedStaffFieldSet(source.typedStaffFields)).slice(0, 400);
   return {
     commitId: commitId.slice(0, 180),
     revision,
@@ -10092,7 +10261,8 @@ function sanitizeConfirmedCommit(source) {
     reason: String(source.reason || 'enter').slice(0, 40),
     createdAt: Number(source.createdAt || 0),
     body,
-    entryZonePatches: sanitizeEntryZonePatches(source.entryZonePatches || [])
+    entryZonePatches: sanitizeEntryZonePatches(source.entryZonePatches || []),
+    typedStaffFields
   };
 }
 
@@ -10219,7 +10389,17 @@ function buildConfirmedSaveCommit(reason = 'enter') {
   const payload = { savedAt: now, priorSavedAt: priorSavedAt || undefined, stateRevision: revision, inventoryRevision: inventoryRevisionValue, salesRevision: Number(salesRevision || 0), dateKey, orderDays: days, orderDaysAt: numericFieldAt(orderDaysAt) || undefined, zoneOrder: sanitizeZoneOrder(zoneOrder, entries), entries: sanitizeEntries(entries), inventoryByItemKey: inventoryByItemKeyForPayload(), overrides, outputOrder, actualOrders, orderSiteMappings, orderAliasMappings, orderAliasMappingDrafts, effectiveOrderAliasMappings, orderUnitCorrections, orderManualItems: orderManualItemsForPayload(), sfaAnalysisHistory: sfaLedgerPointer(ledger), sfaOrderLedger: ledger, sfaActualHistory: sfaActualHistoryPointer(ledger), aiUsageEvidence: buildAiUsageEvidenceSummary(now, ledger), aiUsageAdvisory: sanitizeAiUsageAdvisory(), aiUsageAccepted: sanitizeAiUsageAccepted(), sfaAnalysisReadModel: buildSfaAnalysisReadModel(lastSfaCompareData), dailySales, dailySalesAt: Array.isArray(dailySalesAt) ? dailySalesAt : [], baseSales: getBaseSales(), baseSalesAt: numericFieldAt(baseSalesAt) || undefined, dailyUsageVersion: DAILY_USAGE_STORAGE_VERSION, salesWeights, calc, debugLogs: debugLogs.slice(0, DEBUG_LOG_LIMIT) };
   if (activeSyncResetMarker.id) payload.syncReset = { ...activeSyncResetMarker, scope: 'current_inventory' };
   const commitId = `${now}-${revision}-${++confirmedSaveSequence}`;
-  return { commitId, revision, inventoryRevision: inventoryRevisionValue, dateKey, reason, createdAt: now, body: JSON.stringify(payload), entryZonePatches: entryZonePatchesForCommit() };
+  return {
+    commitId,
+    revision,
+    inventoryRevision: inventoryRevisionValue,
+    dateKey,
+    reason,
+    createdAt: now,
+    body: JSON.stringify(payload),
+    entryZonePatches: entryZonePatchesForCommit(),
+    typedStaffFields: Array.from(sessionTypedStaffFieldSet())
+  };
 }
 
 function factoryEnvelopeFromRemote(remote) {
@@ -10247,7 +10427,10 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
       historyRemote = env.history;
     }
   } catch (_) {}
-  const basePayload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now());
+  const basePayload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now(), {
+    untypedLocalOverridePolicy: 'remote',
+    typedStaffFields: typedStaffFieldSet(commit.typedStaffFields)
+  });
   const shots = Math.max(1, Math.min(3, Number(maxAttempts) || 3));
   const putMax = 1800000;
   let response = null;
@@ -10783,7 +10966,10 @@ function applyIncomingStaffFieldsIfEmpty(remote) {
     baseSalesAt,
     orderDays: currentOrderDaysValue(),
     orderDaysAt
-  }, skip);
+  }, skip, {
+    untypedLocalOverridePolicy: 'remote',
+    typedStaffFields: sessionTypedStaffFieldSet()
+  });
   const nextOverrides = preserved.overrides && typeof preserved.overrides === 'object' ? preserved.overrides : overrides;
   const nextSales = Array.isArray(preserved.dailySales) ? preserved.dailySales : dailySales;
   const nextSalesAt = Array.isArray(preserved.dailySalesAt) ? preserved.dailySalesAt : dailySalesAt;
@@ -11122,12 +11308,31 @@ try {
   }
 } catch {}
 
+function stripBulkRepeatedInputAts() {
+  const localLCounts = overrideFieldAtCounts(overrides, 'l');
+  const localKCounts = overrideFieldAtCounts(overrides, 'k');
+  Object.keys(overrides || {}).forEach(name => {
+    const row = overrides[name];
+    if (!row || typeof row !== 'object') return;
+    if (isBulkRepeatedFieldAt(row.lAt, localLCounts)) delete row.lAt;
+    if (isBulkRepeatedFieldAt(row.kAt, localKCounts)) delete row.kAt;
+  });
+  const stockCounts = entryFieldAtCounts(entries, 'stockAt');
+  const zoneCounts = entryFieldAtCounts(entries, 'zoneAt');
+  (Array.isArray(entries) ? entries : []).forEach(row => {
+    if (!row) return;
+    if (isBulkRepeatedFieldAt(row.stockAt, stockCounts)) delete row.stockAt;
+    if (isBulkRepeatedFieldAt(row.zoneAt, zoneCounts)) delete row.zoneAt;
+  });
+}
+
 function startOrderHelperApp() {
   if (orderHelperStarted) return;
   orderHelperStarted = true;
   // 마이그레이션: MASTER 에서 사라진 이름의 entry/overrides 정리 + 구 품목명 갱신
   migrateRuntimeItemNames();
   overrides = applyDailyUsageCalibration(overrides);
+  stripBulkRepeatedInputAts();
   actualOrders = cleanActualOrders();
 
   // 기본/사용자 항목 목록에는 있는데 entries에 없는 품목 보충
