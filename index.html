@@ -662,6 +662,7 @@
   <span class="status-pill idle" id="sfaStatus">엑셀 대기</span>
   <span class="status-pill registration" id="registrationAccessStatus" hidden>임시 접속</span>
   <button class="primary" onclick="flushAutoSave('manual')">저장</button>
+  <button class="primary" id="factoryForceSendBtn" type="button" onclick="forceSendToFactory()">공장으로 보내기</button>
   <button class="primary" id="phoneOverwriteBtn" type="button" onclick="forcePhoneCurrentOverRemote('button')" hidden>이 폰 내용으로 PC 덮어쓰기</button>
   <span class="status-pill idle" id="saveState">동기화됨</span>
   <span class="meta" id="lastSaved"></span>
@@ -776,7 +777,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0828.0235';
+const APP_VERSION = '0831.0208';
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
   if (!v) {
@@ -799,7 +800,6 @@ const APP_VERSION = '0828.0235';
 })();
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const FACTORY_BROWSER_URL = 'https://218.147.118.71/orderhelper_browser.json';
-const GIST_ORDER_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
 async function fetchOrderDeskRead() {
   const empty = { ok: true, json: async () => ({ current: {}, history: {} }) };
   const asRes = async (res) => {
@@ -815,11 +815,6 @@ async function fetchOrderDeskRead() {
   };
   try {
     const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
-    const ok = await asRes(res);
-    if (ok) return ok;
-  } catch (_) {}
-  try {
-    const res = await fetch(`${GIST_ORDER_URL}?_=` + Date.now());
     const ok = await asRes(res);
     if (ok) return ok;
   } catch (_) {}
@@ -1805,6 +1800,7 @@ let pendingEntryZonePatches = new Map();
 let activeSyncResetMarker = { id: '', resetAt: 0 };
 let syncResetGeneration = 0;
 let phoneOverwriteInFlight = false;
+let forceSendInFlight = false;
 const phoneLocalSnapshotPresentAtBoot = (() => {
   try {
     const storedEntries = JSON.parse(localStorage.getItem('bbq_entries') || 'null');
@@ -8035,6 +8031,7 @@ function saveReasonLabel(reason) {
   if (reason === 'aliasMapping') return '별명매칭 저장';
   if (reason === 'unitCorrection') return '단위보정 저장';
   if (reason === 'sfaAnalysis') return '엑셀요청 전 저장';
+  if (reason === 'factoryForce') return '공장보내기';
   return '자동저장';
 }
 
@@ -8052,6 +8049,7 @@ function lastSavedLabel(reason) {
   if (reason === 'aliasMapping') return '별명매칭';
   if (reason === 'unitCorrection') return '단위보정';
   if (reason === 'sfaAnalysis') return '엑셀요청 전 저장';
+  if (reason === 'factoryForce') return '공장보내기';
   return '자동저장';
 }
 
@@ -9873,6 +9871,75 @@ async function forcePhoneCurrentOverRemote(trigger = 'button') {
   } finally {
     phoneOverwriteInFlight = false;
     if (phoneOverwriteBtn) phoneOverwriteBtn.disabled = false;
+  }
+}
+
+function commitVisibleStockCells() {
+  document.querySelectorAll('input.cell[data-field="stock"]').forEach(inp => {
+    const row = inp.closest('tr');
+    if (row && row.classList.contains('row-hidden')) return;
+    const ent = entries.find(x => x.id === inp.dataset.id);
+    if (!ent) return;
+    const v = inp.value;
+    const stock = v === '' ? null : Number(v);
+    const next = stock == null || !Number.isFinite(stock) ? null : stock;
+    if (ent.stock !== next) {
+      ent.stock = next;
+      markInventoryMutation();
+    }
+  });
+  try { localStorage.setItem('bbq_entries', JSON.stringify(entries)); } catch (_) {}
+}
+
+async function forceSendToFactory() {
+  if (forceSendInFlight) return false;
+  forceSendInFlight = true;
+  const btn = document.getElementById('factoryForceSendBtn');
+  if (btn) btn.disabled = true;
+  renderSaveState('송신 중', 'saving');
+  try {
+    flushDeferredInputWork();
+    commitVisibleStockCells();
+    flushDeferredInputWork();
+    renderZoneOptions(entries);
+    const commit = buildConfirmedSaveCommit('factoryForce');
+    lastMemoryCommit = commit;
+    const result = await putConfirmedSaveTargets(commit, SAVE_REQUEST_TIMEOUT_MS, 1);
+    const payload = result && result.payload;
+    if (!result || !result.currentResponse || !result.currentResponse.ok || !payload) {
+      lastBrowserPut = { ok: false, at: Date.now(), error: String(result && result.currentResponse && result.currentResponse.status || ''), trigger: '보내기' };
+      renderSaveState('송신실패', 'error');
+      renderBrowserDiag();
+      publishBrowserDiag('보내기');
+      return false;
+    }
+    lastBrowserPut = { ok: true, at: Date.now(), error: '', trigger: '보내기' };
+    writeConfirmedSaveQueue(emptyConfirmedSaveQueue());
+    pendingSave = false;
+    pendingSaveReason = 'factoryForce';
+    applyMergedSalesPayloadIfNewer(payload);
+    localStorage.setItem('bbq_savedAt', String(payload.savedAt));
+    stateRevision = Math.max(stateRevision, Number(payload.stateRevision || 0));
+    inventoryRevision = Math.max(inventoryRevision, Number(payload.inventoryRevision || 0));
+    localStorage.setItem(STATE_REVISION_STORAGE_KEY, String(stateRevision));
+    localStorage.setItem(INVENTORY_REVISION_STORAGE_KEY, String(inventoryRevision));
+    localStorage.removeItem(PENDING_SYNC_REVISION_STORAGE_KEY);
+    localDirty = false;
+    const lastSavedEl = document.getElementById('lastSaved');
+    if (lastSavedEl) lastSavedEl.textContent = '송신OK ' + new Date(payload.savedAt).toLocaleTimeString('ko-KR');
+    renderSaveState('송신OK', 'saved');
+    renderBrowserDiag();
+    publishBrowserDiag('보내기');
+    return true;
+  } catch (error) {
+    lastBrowserPut = { ok: false, at: Date.now(), error: String(error && error.name || error), trigger: '보내기' };
+    renderSaveState('송신실패', 'error');
+    renderBrowserDiag();
+    publishBrowserDiag('보내기');
+    return false;
+  } finally {
+    forceSendInFlight = false;
+    if (btn) btn.disabled = false;
   }
 }
 
