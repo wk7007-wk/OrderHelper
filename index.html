@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0831.0644';
+const APP_VERSION = '0831.0703';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -837,10 +837,48 @@ async function parseFactoryOrderDeskBody(res) {
   }
   return { obj: null, error: 'json' };
 }
-async function fetchOrderDeskRead() {
+let lastFactoryOrderEtag = '';
+let factoryIfNoneMatchBlocked = false;
+let lastPollKey = '';
+function factoryPollKey(data) {
+  if (!data || typeof data !== 'object') return '';
+  return String(Number(data.savedAt || 0)) + '|' + String(Number(data.stateRevision || 0)) + '|' + String(Number(data.inventoryRevision || 0));
+}
+function rememberFactoryPollKey(data) {
+  const key = factoryPollKey(data);
+  if (key) lastPollKey = key;
+  return key;
+}
+function captureFactoryOrderEtag(res) {
   try {
-    const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
+    lastFactoryOrderEtag = (res && res.headers && (res.headers.get('ETag') || res.headers.get('etag'))) || '';
+  } catch (_) {
+    lastFactoryOrderEtag = '';
+  }
+}
+async function fetchOrderDeskRead() {
+  const attempt = async (useMatch) => {
+    const headers = {};
+    if (useMatch && lastFactoryOrderEtag && !factoryIfNoneMatchBlocked) headers['If-None-Match'] = lastFactoryOrderEtag;
+    return fetch(FACTORY_ORDER_URL, { cache: 'no-cache', headers });
+  };
+  try {
+    let res = null;
+    try {
+      res = await attempt(true);
+    } catch (e) {
+      if (lastFactoryOrderEtag && !factoryIfNoneMatchBlocked) {
+        factoryIfNoneMatchBlocked = true;
+        res = await attempt(false);
+      } else {
+        throw e;
+      }
+    }
+    if (res && res.status === 304) {
+      return { ok: true, status: 304, notModified: true, json: async () => null };
+    }
     if (!res || !res.ok) return factoryReadFailure(res && res.status, 'http_' + ((res && res.status) || 0));
+    captureFactoryOrderEtag(res);
     const parsed = await parseFactoryOrderDeskBody(res);
     if (!parsed.obj) return factoryReadFailure(res.status, parsed.error || 'json');
     const obj = parsed.obj;
@@ -849,7 +887,7 @@ async function fetchOrderDeskRead() {
     if (!current || typeof current !== 'object' || Array.isArray(current) || !Object.keys(current).length) {
       return factoryReadFailure(res.status, 'empty_current');
     }
-    return { ok: true, status: res.status || 200, json: async () => obj };
+    return { ok: true, status: res.status || 200, notModified: false, json: async () => obj };
   } catch (e) {
     return factoryReadFailure(0, e && e.message);
   }
@@ -3146,6 +3184,35 @@ function preserveFilledStaffFields(remote, local, skipKeys, options) {
   return mergeLastInputFieldPayload(remote, local, skipKeys, options);
 }
 
+function keepRemoteUntypedOverrideLk(mergedOverrides, remoteOverrides, typed) {
+  const typedSet = typedStaffFieldSet(typed);
+  const remoteSrc = remoteOverrides && typeof remoteOverrides === 'object' && !Array.isArray(remoteOverrides)
+    ? remoteOverrides
+    : {};
+  const out = mergedOverrides && typeof mergedOverrides === 'object' && !Array.isArray(mergedOverrides)
+    ? { ...mergedOverrides }
+    : {};
+  Object.keys(remoteSrc).forEach(name => {
+    const remoteRow = remoteSrc[name];
+    if (!remoteRow || typeof remoteRow !== 'object' || Array.isArray(remoteRow)) return;
+    const canon = canonicalItemName(name) || name;
+    const next = out[canon] && typeof out[canon] === 'object' && !Array.isArray(out[canon])
+      ? { ...out[canon] }
+      : {};
+    ['l', 'k'].forEach(field => {
+      if (typedStaffFieldIsSet(typedSet, staffOverrideKey(canon, field))) return;
+      if (Object.prototype.hasOwnProperty.call(remoteRow, field)) next[field] = remoteRow[field];
+      else delete next[field];
+      const at = numericFieldAt(remoteRow[field + 'At']);
+      if (at) next[field + 'At'] = at;
+      else delete next[field + 'At'];
+    });
+    if (Object.keys(next).length) out[canon] = next;
+    else delete out[canon];
+  });
+  return out;
+}
+
 function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, now = Date.now(), options) {
   const local = localPayload && typeof localPayload === 'object' ? localPayload : {};
   const mergeOpts = {
@@ -3178,7 +3245,11 @@ function buildLastWriteWinsPayload(currentRemote, historyRemote, localPayload, n
     mergeOpts
   );
   merged.entries = timed.entries;
-  merged.overrides = timed.overrides;
+  merged.overrides = keepRemoteUntypedOverrideLk(
+    timed.overrides,
+    currentRemote && currentRemote.overrides,
+    mergeOpts.typedStaffFields
+  );
   merged.dailySales = timed.dailySales;
   merged.dailySalesAt = timed.dailySalesAt;
   merged.baseSales = timed.baseSales;
@@ -8506,7 +8577,7 @@ async function loadSfaCompareLatest(silent = true, forceShow = false) {
   try {
     const res = await fetchOrderDeskRead();
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const factory = await res.json();
+    const factory = (res.notModified || res.status === 304) ? (factoryOrderEnvelope || {}) : await res.json();
     const data = factory?.current?.[SFA_COMPARE_PATH] || null;
     if (data) {
       lastSfaCompareData = data;
@@ -10500,6 +10571,8 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
       if (response && response.ok) {
         lastBrowserPut = { ok: true, at: Date.now(), error: '', trigger: 'put' + level };
         noteFactoryEnvelope({ current: sendPayload, history });
+        rememberFactoryPollKey(sendPayload);
+        lastFactoryOrderEtag = '';
         return { currentResponse: response, historyResponse: response, payload: sendPayload, body, attempts: attempt };
       }
       if (response && response.status !== 413 && attempt < shots) continue;
@@ -10881,12 +10954,14 @@ function shouldApplyIncomingCurrent(data) {
 }
 
 function paintStaffSalesInputs(skip) {
+  const active = document.activeElement;
   const baseInp = document.getElementById('baseSalesInput');
-  if (baseInp && !isStaffFieldSkipped(skip, STAFF_BASE_KEY)) {
+  if (baseInp && baseInp !== active && !isStaffFieldSkipped(skip, STAFF_BASE_KEY)) {
     const shown = baseSales != null ? String(baseSales) : '';
     if (baseInp.value !== shown) baseInp.value = shown;
   }
   document.querySelectorAll('#salesInputs input.sales').forEach(inp => {
+    if (inp === active) return;
     const idx = inp.dataset && inp.dataset.idx;
     if (idx == null || idx === '') return;
     if (isStaffFieldSkipped(skip, staffSalesKey(idx))) return;
@@ -10908,7 +10983,9 @@ function paintStaffSalesInputs(skip) {
 }
 
 function paintStaffOverrideInputs(skip) {
+  const active = document.activeElement;
   document.querySelectorAll('input.cell[data-field="l"], input.cell[data-field="k"], input.cell[data-output-field="l"], input.cell[data-output-field="k"]').forEach(inp => {
+    if (inp === active) return;
     const field = inp.dataset.field || inp.dataset.outputField;
     const name = canonicalItemName(itemNameFromKey(inp.dataset.itemKey || inp.dataset.outputKey) || inp.dataset.outputName || '');
     if (!name || (field !== 'l' && field !== 'k')) return;
@@ -10938,7 +11015,9 @@ function paintStaffOverrideInputs(skip) {
 }
 
 function paintEntryInputFields(skip) {
+  const active = document.activeElement;
   document.querySelectorAll('input.cell[data-field="stock"], input.cell[data-field="zone"]').forEach(inp => {
+    if (inp === active) return;
     const ent = entries.find(row => row.id === inp.dataset.id);
     if (!ent) return;
     const field = inp.dataset.field;
@@ -10953,6 +11032,7 @@ function paintEntryInputFields(skip) {
     }
   });
   document.querySelectorAll('input.cell[data-output-field="stock"]').forEach(inp => {
+    if (inp === active) return;
     const itemKey = inp.dataset.outputKey || itemKeyForName(inp.dataset.outputName || '');
     const ent = entries.find(row => (row.itemKey || itemKeyForName(row.name)) === itemKey);
     if (!ent) return;
@@ -10962,7 +11042,7 @@ function paintEntryInputFields(skip) {
     if (inp.value !== text) inp.value = text;
   });
   const sel = document.getElementById('orderDays');
-  if (sel && !isStaffFieldSkipped(skip, ORDER_DAYS_FIELD_KEY)) {
+  if (sel && sel !== active && !isStaffFieldSkipped(skip, ORDER_DAYS_FIELD_KEY)) {
     const days = normalizeOrderDays(currentOrderDaysValue());
     if (days && sel.value !== days) sel.value = days;
   }
@@ -10993,8 +11073,9 @@ function rememberMergedInputCommits(merged, skip) {
   if (!isStaffFieldSkipped(skip, ORDER_DAYS_FIELD_KEY)) rememberCommittedInput(ORDER_DAYS_FIELD_KEY, merged.orderDays);
 }
 
-function applyIncomingStaffFieldsIfEmpty(remote) {
+function applyIncomingStaffFieldsIfEmpty(remote, options) {
   if (!remote || typeof remote !== 'object') return false;
+  const pollOnly = Boolean(options && options.pollOnly);
   const skip = incomingStaffSkipSet();
   const localSaved = Number(localStorage.getItem('bbq_savedAt') || 0);
   const preserved = mergeLastInputFieldPayload(remote, {
@@ -11050,7 +11131,7 @@ function applyIncomingStaffFieldsIfEmpty(remote) {
   paintStaffSalesInputs(skip);
   paintStaffOverrideInputs(skip);
   paintEntryInputFields(skip);
-  if (changed) {
+  if (changed && !pollOnly) {
     if (!inputFocused && !activeGridCellInput()) {
       pendingStaffSalesRender = false;
       renderPreservingGridFocus();
@@ -11166,11 +11247,12 @@ function applyFBData(data) {
   return true;
 }
 
-// Firebase 폴링 (3초). GET current 후 칸별 시각 비교만. 문서 revision으로 전체를 막지 않는다.
+// Firebase 폴링 (3초). 304/동일 pollKey면 병합·표 render 생략. 칸별 시각 비교만.
 async function autoLoadFromFB(silent, pollOnly) {
   if (phoneOverwriteInFlight) return;
   try {
     const res = await fetchOrderDeskRead();
+    if (res && (res.notModified || res.status === 304)) return;
     if (!res.ok) {
       noteFactoryReadFailure(res.statusText || ('HTTP ' + res.status));
       console.warn('[autoLoad] HTTP', res.status, res.statusText);
@@ -11186,8 +11268,11 @@ async function autoLoadFromFB(silent, pollOnly) {
     }
     factoryOrderEnvelope = envelope && typeof envelope === 'object' ? envelope : {};
     noteFactoryEnvelope(envelope);
+    const pollKey = factoryPollKey(data);
+    if (pollOnly && lastPollKey && lastPollKey === pollKey) return;
     applyRemoteSyncResetIfNeeded(data);
-    applyIncomingStaffFieldsIfEmpty(data);
+    applyIncomingStaffFieldsIfEmpty(data, { pollOnly: Boolean(pollOnly) });
+    if (pollKey) lastPollKey = pollKey;
     if (pollOnly) return;
     if (!shouldApplyIncomingCurrent(data)) return;
     if (localDirty || hasConfirmedSaveQueue()) return;
@@ -11196,6 +11281,7 @@ async function autoLoadFromFB(silent, pollOnly) {
       return;
     }
     if (!applyFBData(data)) return;
+    rememberFactoryPollKey(data);
     pushSaveLog('다른 기기 저장 반영', 'sync', data.savedAt);
     if (!silent) toast('동기화 (' + new Date(data.savedAt).toLocaleTimeString('ko-KR') + ')');
   } catch (e) {
