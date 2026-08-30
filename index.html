@@ -777,7 +777,8 @@
 </div>
 
 <script>
-const APP_VERSION = '0831.0331';
+const APP_VERSION = '0831.0409';
+const FACTORY_STAFF_POLL_MS = 2000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
   if (!v) {
@@ -800,25 +801,48 @@ const APP_VERSION = '0831.0331';
 })();
 const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
 const FACTORY_BROWSER_URL = 'https://218.147.118.71/orderhelper_browser.json';
-async function fetchOrderDeskRead() {
-  const empty = { ok: true, json: async () => ({ current: {}, history: {} }) };
-  const asRes = async (res) => {
-    if (!res || !res.ok) return null;
-    const text = await res.clone().text();
-    try {
-      const obj = JSON.parse(text || '{}');
-      if (obj && obj.schema === 'factory_log_harvest/v1') return empty;
-      return res;
-    } catch (_) {
-      return res;
-    }
+function factoryReadFailure(status, error) {
+  const err = String(error || 'fetch_failed');
+  return {
+    ok: false,
+    status: Number(status) || 0,
+    statusText: err,
+    json: async () => { throw new Error(err); }
   };
+}
+async function parseFactoryOrderDeskBody(res) {
+  if (!res) return { obj: null, error: 'no_response' };
+  try {
+    if (typeof res.json === 'function') {
+      const obj = await res.json();
+      if (obj && typeof obj === 'object') return { obj, error: '' };
+      return { obj: null, error: 'json' };
+    }
+    if (typeof res.text === 'function') {
+      const obj = JSON.parse((await res.text()) || '{}');
+      if (obj && typeof obj === 'object') return { obj, error: '' };
+    }
+  } catch (_) {
+    return { obj: null, error: 'json' };
+  }
+  return { obj: null, error: 'json' };
+}
+async function fetchOrderDeskRead() {
   try {
     const res = await fetch(`${FACTORY_ORDER_URL}?_=` + Date.now());
-    const ok = await asRes(res);
-    if (ok) return ok;
-  } catch (_) {}
-  return empty;
+    if (!res || !res.ok) return factoryReadFailure(res && res.status, 'http_' + ((res && res.status) || 0));
+    const parsed = await parseFactoryOrderDeskBody(res);
+    if (!parsed.obj) return factoryReadFailure(res.status, parsed.error || 'json');
+    const obj = parsed.obj;
+    if (obj.schema === 'factory_log_harvest/v1') return factoryReadFailure(res.status, 'harvest');
+    const current = obj.current;
+    if (!current || typeof current !== 'object' || Array.isArray(current) || !Object.keys(current).length) {
+      return factoryReadFailure(res.status, 'empty_current');
+    }
+    return { ok: true, status: res.status || 200, json: async () => obj };
+  } catch (e) {
+    return factoryReadFailure(0, e && e.message);
+  }
 }
 // 0510 보안 강화 — 경로 난독화 (외부 URL 추측 방지). 사용자 영향 0 — 페이지 새로고침 1회만 필요.
 let factoryOrderEnvelope = {};
@@ -2495,13 +2519,20 @@ function focusedStaffFieldKey() {
     if (el.matches('#salesInputs input.sales, input.sales') && el.dataset && el.dataset.idx != null && el.dataset.idx !== '') {
       return staffSalesKey(el.dataset.idx);
     }
-    if (el.matches('input.cell[data-field="l"], input.cell[data-field="k"]')) {
-      const field = el.dataset.field;
-      const name = canonicalItemName(itemNameFromKey(el.dataset.itemKey) || '');
+    if (el.matches('input.cell[data-field="l"], input.cell[data-field="k"], input.cell[data-output-field="l"], input.cell[data-output-field="k"]')) {
+      const field = el.dataset.field || el.dataset.outputField;
+      const name = canonicalItemName(itemNameFromKey(el.dataset.itemKey || el.dataset.outputKey) || el.dataset.outputName || '');
       if ((field === 'l' || field === 'k') && name) return staffOverrideKey(name, field);
     }
   } catch (_) {}
   return '';
+}
+
+function incomingStaffSkipSet() {
+  const skip = Object.create(null);
+  const focused = focusedStaffFieldKey();
+  if (focused) skip[focused] = true;
+  return skip;
 }
 
 function staffFieldSkipSet() {
@@ -2509,6 +2540,26 @@ function staffFieldSkipSet() {
   const focused = focusedStaffFieldKey();
   if (focused) skip[focused] = true;
   return skip;
+}
+
+function factoryCurrentOverrideField(name, field) {
+  try {
+    const cur = (factoryOrderEnvelope && factoryOrderEnvelope.current) || {};
+    const ov = cur.overrides;
+    if (!ov || typeof ov !== 'object' || Array.isArray(ov)) return null;
+    const canon = canonicalItemName(name) || name;
+    const row = ov[canon] || ov[name];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
+    if (!Object.prototype.hasOwnProperty.call(row, field)) return null;
+    if (!isFilledStaffNumber(row[field])) return null;
+    return Number(row[field]);
+  } catch (_) {
+    return null;
+  }
+}
+
+function staffFieldIsFocused(name, field) {
+  return focusedStaffFieldKey() === staffOverrideKey(canonicalItemName(name) || name, field);
 }
 
 function isStaffFieldSkipped(skip, key) {
@@ -3332,6 +3383,10 @@ const ORDER_DAYS_RULE_VERSION = '20260825-tue-3.5-thu-4';
 function newId() { return 'e' + (nextId++); }
 
 function baseDailyUsage(item) {
+  if (!staffFieldIsFocused(item.name, 'l')) {
+    const factoryL = factoryCurrentOverrideField(item.name, 'l');
+    if (isFilledStaffNumber(factoryL)) return factoryL;
+  }
   if (Object.prototype.hasOwnProperty.call(overrides[item.name] || {}, 'l')) return overrides[item.name].l;
   if (Object.prototype.hasOwnProperty.call(aiUsageAccepted, item.name)) return aiUsageAccepted[item.name].suggestedUsage;
   return item.daily || 0;
@@ -3356,7 +3411,8 @@ function applyDailyUsageCalibration(sourceOverrides = overrides, force = false) 
     if (!Object.prototype.hasOwnProperty.call(masterDailyByName, name)) return;
     const row = next[name];
     if (row && Object.prototype.hasOwnProperty.call(row, 'l')) return;
-    next[name] = { ...(row || {}), l: masterDailyByName[name] };
+    const factoryL = factoryCurrentOverrideField(name, 'l');
+    next[name] = { ...(row || {}), l: isFilledStaffNumber(factoryL) ? factoryL : masterDailyByName[name] };
   });
   Object.keys(next).forEach(name => {
     if (!next[name] || !Object.keys(next[name]).length) delete next[name];
@@ -3369,7 +3425,13 @@ function applyDailyUsageCalibration(sourceOverrides = overrides, force = false) 
 function getL(item) {
   return baseDailyUsage(item);
 }
-function getK(item) { return overrides[item.name]?.k ?? (item.buffer || 0); }
+function getK(item) {
+  if (!staffFieldIsFocused(item.name, 'k')) {
+    const factoryK = factoryCurrentOverrideField(item.name, 'k');
+    if (isFilledStaffNumber(factoryK)) return factoryK;
+  }
+  return overrides[item.name]?.k ?? (item.buffer || 0);
+}
 function stockAggregateByItemKey(itemKey) {
   let total = 0;
   let hasValue = false;
@@ -8111,6 +8173,18 @@ function noteFactoryEnvelope(remote) {
   renderBrowserDiag();
 }
 
+function noteFactoryReadFailure(error) {
+  lastBrowserFactory = {
+    ok: false,
+    savedAt: Number(lastBrowserFactory && lastBrowserFactory.savedAt) || 0,
+    entries: Number(lastBrowserFactory && lastBrowserFactory.entries) || 0,
+    stocked: Number(lastBrowserFactory && lastBrowserFactory.stocked) || 0,
+    error: String(error || 'fetch_failed'),
+    at: Date.now()
+  };
+  renderBrowserDiag();
+}
+
 async function publishBrowserDiag(trigger = 'tick') {
   const diag = collectBrowserDiag();
   const packet = {
@@ -10153,44 +10227,102 @@ function shouldApplyIncomingCurrent(data) {
   return incomingSavedAt > localSavedAt;
 }
 
+function paintStaffSalesInputs(skip) {
+  const baseInp = document.getElementById('baseSalesInput');
+  if (baseInp && !isStaffFieldSkipped(skip, STAFF_BASE_KEY)) {
+    const shown = baseSales != null ? String(baseSales) : '';
+    if (baseInp.value !== shown) baseInp.value = shown;
+  }
+  document.querySelectorAll('#salesInputs input.sales').forEach(inp => {
+    const idx = inp.dataset && inp.dataset.idx;
+    if (idx == null || idx === '') return;
+    if (isStaffFieldSkipped(skip, staffSalesKey(idx))) return;
+    const val = dailySales[idx] != null ? String(dailySales[idx]) : '';
+    if (inp.value !== val) inp.value = val;
+  });
+  const workSummary = document.getElementById('ux2WorkSalesSummary');
+  if (workSummary) {
+    const days = currentOrderDaysValue();
+    const cycleStartDay = (kstGetDay() + 1) % 7;
+    const workLabels = [];
+    for (let i = 0; i < days; i++) {
+      const wd = ['일','월','화','수','목','금','토'][(cycleStartDay + i) % 7];
+      workLabels.push(`${wd}${dailySales[i] != null && Number.isFinite(Number(dailySales[i])) ? Number(dailySales[i]) : '-'}`);
+    }
+    workSummary.textContent = `${workLabels.join(' ')} 여유150 · 기준${getBaseSales().toFixed(0)}`;
+    workSummary.hidden = false;
+  }
+}
+
+function paintStaffOverrideInputs(skip) {
+  document.querySelectorAll('input.cell[data-field="l"], input.cell[data-field="k"], input.cell[data-output-field="l"], input.cell[data-output-field="k"]').forEach(inp => {
+    const field = inp.dataset.field || inp.dataset.outputField;
+    const name = canonicalItemName(itemNameFromKey(inp.dataset.itemKey || inp.dataset.outputKey) || inp.dataset.outputName || '');
+    if (!name || (field !== 'l' && field !== 'k')) return;
+    if (isStaffFieldSkipped(skip, staffOverrideKey(name, field))) return;
+    const item = orderItemByName(name);
+    if (!item) return;
+    const raw = field === 'l' ? getL(item) : getK(item);
+    const shown = displayDecimal(raw);
+    if (inp.value !== shown && inp.value !== String(raw)) inp.value = shown;
+  });
+  document.querySelectorAll('#tbody tr[data-item-key]').forEach(tr => {
+    const name = canonicalItemName(itemNameFromKey(tr.dataset.itemKey) || '');
+    const item = name ? orderItemByName(name) : null;
+    if (!item) return;
+    const kCell = tr.querySelector('td.dup-meta[data-column="k"]');
+    if (kCell && !kCell.querySelector('input') && !isStaffFieldSkipped(skip, staffOverrideKey(name, 'k'))) {
+      const shown = displayDecimal(getK(item));
+      if (kCell.textContent !== shown) kCell.textContent = shown;
+    }
+    const lCell = tr.querySelector('td.dup-meta[data-column="l"]');
+    if (lCell && !lCell.querySelector('input') && !isStaffFieldSkipped(skip, staffOverrideKey(name, 'l'))) {
+      const span = lCell.querySelector('span');
+      const shown = displayDecimal(getL(item));
+      if (span && span.childElementCount === 0 && span.textContent !== shown) span.textContent = shown;
+    }
+  });
+}
+
 function applyIncomingStaffFieldsIfEmpty(remote) {
   if (!remote || typeof remote !== 'object') return false;
-  const preserved = preserveFilledStaffFields(remote, { overrides, dailySales, baseSales }, staffFieldSkipSet());
+  const skip = incomingStaffSkipSet();
+  const preserved = preserveFilledStaffFields(remote, { overrides, dailySales, baseSales }, skip);
   const nextOverrides = preserved.overrides && typeof preserved.overrides === 'object' ? preserved.overrides : overrides;
   const nextSales = Array.isArray(preserved.dailySales) ? preserved.dailySales : dailySales;
   const nextBase = preserved.baseSales;
   const overridesChanged = JSON.stringify(nextOverrides) !== JSON.stringify(overrides);
   const salesChanged = JSON.stringify(nextSales) !== JSON.stringify(dailySales);
   const baseChanged = nextBase !== baseSales;
-  if (!overridesChanged && !salesChanged && !baseChanged) return false;
   if (overridesChanged) overrides = nextOverrides;
   if (salesChanged) dailySales = nextSales;
   if (baseChanged && isFilledStaffNumber(nextBase) && Number(nextBase) > 0) baseSales = Number(nextBase);
-  suppressAutoSave = true;
-  saveLocal();
-  suppressAutoSave = false;
-  const salesInputFocused = document.activeElement?.matches?.('#baseSalesInput, #salesInputs input.sales');
-  if (!salesInputFocused) {
-    pendingStaffSalesRender = false;
-    setBaseSalesInputValue();
-    renderSalesInputs();
-  } else {
-    pendingStaffSalesRender = true;
+  if (overridesChanged || salesChanged || baseChanged) {
+    suppressAutoSave = true;
+    saveLocal();
+    suppressAutoSave = false;
   }
-  renderPreservingGridFocus();
-  return true;
+  paintStaffSalesInputs(skip);
+  paintStaffOverrideInputs(skip);
+  if (overridesChanged || salesChanged || baseChanged) {
+    if (!inputFocused && !activeGridCellInput()) {
+      pendingStaffSalesRender = false;
+      renderPreservingGridFocus();
+    } else {
+      pendingStaffSalesRender = Boolean(skip[STAFF_BASE_KEY] || Object.keys(skip).some(key => String(key).indexOf('dailySales:') === 0));
+    }
+  }
+  return overridesChanged || salesChanged || baseChanged;
 }
 
 function applyPendingFBDataIfSafe() {
-  if (!pendingFBData || inputFocused) return false;
-  if (localDirty || deferredInputWork.dirty || saveInFlight || hasConfirmedSaveQueue()) {
-    applyIncomingStaffFieldsIfEmpty(pendingFBData);
-    return false;
-  }
+  if (!pendingFBData) return false;
+  applyIncomingStaffFieldsIfEmpty(pendingFBData);
+  if (inputFocused) return false;
+  if (localDirty || deferredInputWork.dirty || saveInFlight || hasConfirmedSaveQueue()) return false;
   const data = pendingFBData;
   if (!shouldApplyIncomingCurrent(data)) {
     pendingFBData = null;
-    applyIncomingStaffFieldsIfEmpty(data);
     return false;
   }
   pendingFBData = null;
@@ -10296,38 +10428,37 @@ function applyFBData(data) {
   return true;
 }
 
-// Firebase 폴링 (5초마다, 입력 중이면 보류)
+// Firebase 폴링 (2초마다). 일사용/여유/예상매출은 공장 current 원본이며 revision/dirty/전체입력으로 막지 않는다.
 async function autoLoadFromFB(silent) {
   if (phoneOverwriteInFlight) return;
   try {
     const res = await fetchOrderDeskRead();
-    if (!res.ok) { console.warn('[autoLoad] HTTP', res.status); return; }
+    if (!res.ok) {
+      noteFactoryReadFailure(res.statusText || ('HTTP ' + res.status));
+      console.warn('[autoLoad] HTTP', res.status, res.statusText);
+      return;
+    }
     const envelope = await res.json();
     factoryOrderEnvelope = envelope && typeof envelope === 'object' ? envelope : {};
     noteFactoryEnvelope(envelope);
     const data = envelope?.current && typeof envelope.current === 'object' ? envelope.current : null;
-    if (!data || Object.keys(data).length === 0) return;
-    const resetApplied = applyRemoteSyncResetIfNeeded(data);
-    if (!shouldApplyIncomingCurrent(data)) {
-      applyIncomingStaffFieldsIfEmpty(data);
+    if (!data || Object.keys(data).length === 0) {
+      noteFactoryReadFailure('empty_current');
       return;
     }
-    if (!resetApplied && (localDirty || hasConfirmedSaveQueue())) {
-      applyIncomingStaffFieldsIfEmpty(data);
-      return; // reset 표식 없이는 로컬 draft/확정 queue를 보호한다.
-    }
+    const resetApplied = applyRemoteSyncResetIfNeeded(data);
+    applyIncomingStaffFieldsIfEmpty(data);
+    if (!shouldApplyIncomingCurrent(data)) return;
+    if (!resetApplied && (localDirty || hasConfirmedSaveQueue())) return;
     if (!resetApplied && inputFocused) {
       if (!pendingFBData || Number(data.stateRevision || data.savedAt || 0) >= Number(pendingFBData.stateRevision || pendingFBData.savedAt || 0)) pendingFBData = data;
-      applyIncomingStaffFieldsIfEmpty(data);
       return;
     }
-    if (!applyFBData(data)) {
-      applyIncomingStaffFieldsIfEmpty(data);
-      return;
-    }
+    if (!applyFBData(data)) return;
     pushSaveLog('다른 기기 저장 반영', 'sync', data.savedAt);
     if (!silent) toast('동기화 (' + new Date(data.savedAt).toLocaleTimeString('ko-KR') + ')');
   } catch (e) {
+    noteFactoryReadFailure(e && e.message);
     console.error('FB auto-load failed:', e);
   }
 }
@@ -10511,15 +10642,20 @@ function startOrderHelperApp() {
   loadAiUsageAdvisoryLatest(true);
   loadSfaOrderStatus(true);
   window.addEventListener('resize', updateStickyOffsets);
-  // 디바이스 간 동기화: 페이지 열 때마다 + 5초 간격 폴링
+  // 디바이스 간 동기화: 공장 GET 확인 뒤에 startup 텔레메트리, 이후 2초 폴링
+  const afterFactoryGet = () => {
+    renderBrowserDiag();
+    publishBrowserDiag('startup');
+  };
   if (consumePhoneOverwriteRequest()) {
-    forcePhoneCurrentOverRemote('query');
+    Promise.resolve(forcePhoneCurrentOverRemote('query')).then(afterFactoryGet);
   } else {
-    autoLoadFromFB(true).then(() => retryConfirmedRemotePending('startup'));
+    autoLoadFromFB(true).then(() => {
+      retryConfirmedRemotePending('startup');
+      afterFactoryGet();
+    });
   }
-  renderBrowserDiag();
-  publishBrowserDiag('startup');
-  setInterval(() => autoLoadFromFB(true), 5000);
+  setInterval(() => autoLoadFromFB(true), FACTORY_STAFF_POLL_MS);
   setInterval(() => { renderBrowserDiag(); publishBrowserDiag('tick'); }, 20000);
   setInterval(() => loadUsageHistory(true), 300000);
   setInterval(() => loadSfaPriceHistory(true), 300000);
