@@ -661,7 +661,7 @@
   </div>
   <span class="grid-sort-control" role="group" aria-label="표 정렬">
     <button id="sortInputBtn" class="active" type="button" onclick="setGridSortMode('input')">구역 입력순</button>
-    <button id="sortSfaBtn" type="button" onclick="setGridSortMode('sfa')" title="최초 SFA 생성 순서">SFA 발주순</button>
+    <button id="sortSfaBtn" type="button" onclick="setGridSortMode('sfa')" title="SFA 즐겨찾기 순서">SFA 발주순</button>
   </span>
   <button id="sfaAnalyzeBtn" type="button" onclick="requestSfaOrderAnalysis()">엑셀분석</button>
   <button id="sfaCompareBtn" type="button" onclick="toggleSfaComparePanel()">오차보기</button>
@@ -675,7 +675,7 @@
   <span class="meta" id="lastSaved"></span>
   <span class="app-ver-row" id="appVerRow">
     <span class="meta" id="appVer"></span>
-    <span class="ux2-chip" id="ux2Chip" hidden aria-label="CLI 임시 수신">CLI-OK-0831B</span>
+    <span class="ux2-chip" id="ux2Chip" aria-label="CLI 임시 수신">CLI-OK-0902A</span>
   </span>
 </div>
 <button type="button" id="browserDiag" class="browser-diag" onclick="toggleBrowserDiag()" aria-expanded="false">브라우저 상태 확인 중</button>
@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0831.0703';
+const APP_VERSION = '0902.0648';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -1741,10 +1741,10 @@ const MASTER = [
   {sfaSeq:15.1,name:"냉동-치즈스틱",unit:"개/개",policy:"여유",buffer:1,daily:0.02},
   {sfaSeq:17,name:"냉동-타르타르새우",unit:"봉/봉",policy:"여유",buffer:0.4,daily:0.23},
   {sfaSeq:17.1,name:"냉동-고추튀김",unit:"개/개",policy:"여유",buffer:0.2,daily:0.12},
+  {sfaSeq:17.2,name:"신선육(10호)-뼈한마리",unit:"박/박스",policy:"전부",buffer:0.9,daily:2.4},
   {sfaSeq:18,name:"BBQ싱싱옥수수콘립",unit:"봉/봉",policy:"여유",buffer:0.3,daily:0.27},
   {sfaSeq:18.1,name:"냉동-떡볶이(16개)",unit:"개/박스",policy:"전부",buffer:3,daily:3.44},
   {sfaSeq:18.2,name:"BBQ필크런치플레이크",unit:"개/박스",policy:"",buffer:0,daily:0},
-  {sfaSeq:19,name:"신선육(10호)-뼈한마리",unit:"박/박스",policy:"전부",buffer:0.9,daily:2.4},
   {sfaSeq:20,name:"통다리바베큐,자메이카",unit:"개/개",policy:"전부",buffer:4.1,daily:8.65},
   {sfaSeq:21,name:"신선순살(720g)",unit:"박/박스",policy:"전부",buffer:1,daily:1.92},
   {sfaSeq:22,name:"신선북채(신)-다리",unit:"팩/팩",policy:"전부",buffer:1,daily:2.58},
@@ -1760,8 +1760,8 @@ const MASTER = [
   {sfaSeq:29,name:"볼케이노핫소스",unit:"박스/박스",policy:"여유",buffer:0.9,daily:0.07},
   {sfaSeq:29.1,name:"BBQ필크런치소스",unit:"봉/봉",policy:"",buffer:0,daily:0.30},
   {sfaSeq:29.5,name:"산가측정페이퍼",unit:"",policy:"전부",buffer:1,daily:0.01},
-  {sfaSeq:30,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1.1,daily:1.61},
-  {sfaSeq:30.1,name:"치킨무(벌크)",unit:"팩/박스",policy:"여유",buffer:0.9,daily:0.09},
+  {sfaSeq:30,name:"치킨무(벌크)",unit:"팩/박스",policy:"여유",buffer:0.9,daily:0.09},
+  {sfaSeq:30.1,name:"치킨무(배달용)",unit:"박/박스",policy:"전부",buffer:1.1,daily:1.61},
   {sfaSeq:32,name:"햇반",unit:"박스/박스",policy:"여유",buffer:0.9,daily:0.07},
   {sfaSeq:33,name:"먹태버터맛,매운맛",unit:"봉/봉",policy:"전부",buffer:1.1,daily:0.12},
   {sfaSeq:34,name:"핫앤크리스피마리네이드",unit:"팩/팩",policy:"여유",buffer:0.3,daily:0.37},
@@ -6283,6 +6283,16 @@ function currentOrderDaysValue() {
   return Number.isFinite(fromUi) && fromUi >= 1 && fromUi <= 7 ? fromUi : recommendedDays();
 }
 
+function syncDailySalesToOrderDays(days = currentOrderDaysValue()) {
+  const n = Math.max(0, Math.ceil(Number(days) || 0));
+  if (!Array.isArray(dailySales)) dailySales = [];
+  if (!Array.isArray(dailySalesAt)) dailySalesAt = [];
+  if (dailySales.length > n) dailySales = dailySales.slice(0, n);
+  if (dailySalesAt.length > n) dailySalesAt = dailySalesAt.slice(0, n);
+  while (dailySales.length < n) dailySales.push(null);
+  while (dailySalesAt.length < n) dailySalesAt.push(0);
+}
+
 function currentCalcSnapshot(days = currentOrderDaysValue()) {
   const calc = {};
   orderItemList().forEach(item => {
@@ -9394,6 +9404,10 @@ function applySfaOrderRowState(row, state) {
     : '';
 }
 
+function sfaFavoriteSeq(item) {
+  return Number(item?.sfaSeq) || 9999;
+}
+
 function compareSfaRows(left, right, context = null) {
   const itemDiff = defaultOutputCompare(left.item, right.item);
   if (itemDiff !== 0) return itemDiff;
@@ -9464,7 +9478,7 @@ function updateUx2WorkMode() {
   document.body.classList.toggle('ux2-work-mode', active);
   document.body.classList.toggle('sfa-sort-mode', gridSortMode === 'sfa');
   const chip = document.getElementById('ux2Chip');
-  if (chip) chip.hidden = gridSortMode !== 'sfa';
+  if (chip) chip.hidden = false;
   const summary = document.getElementById('orderAmountSummary');
   if (active && summary) {
     const count = orderItemList().filter(item => calcG(item, currentOrderDaysValue()) > 0).length;
@@ -9490,7 +9504,7 @@ function setGridSortMode(mode) {
 }
 
 function defaultOutputCompare(a, b) {
-  const seqDiff = (a.sfaSeq || 9999) - (b.sfaSeq || 9999);
+  const seqDiff = sfaFavoriteSeq(a) - sfaFavoriteSeq(b);
   if (seqDiff !== 0) return seqDiff;
   return (a.name || '').localeCompare(b.name || '', 'ko', { numeric: true, sensitivity: 'base' });
 }
@@ -10190,6 +10204,7 @@ function applySalesPayload(data, renderInputs = false) {
   if (Object.prototype.hasOwnProperty.call(data, 'dailySalesAt')) {
     dailySalesAt = Array.isArray(data.dailySalesAt) ? data.dailySalesAt.map(numericFieldAt) : [];
   }
+  syncDailySalesToOrderDays(Number(data.orderDays) || currentOrderDaysValue());
   if (Object.prototype.hasOwnProperty.call(data, 'baseSales')) {
     const n = Number(data.baseSales);
     baseSales = Number.isFinite(n) && n > 0 ? n : DEFAULT_BASE_SALES;
@@ -10457,6 +10472,7 @@ function buildConfirmedSaveCommit(reason = 'enter') {
   const inventoryRevisionValue = Number(inventoryRevision || 0);
   const dateKey = kstDateKey(now);
   const days = currentOrderDaysValue();
+  syncDailySalesToOrderDays(days);
   const calc = {};
   orderItemList().forEach(item => {
     const g = calcG(item, days);
