@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0904.0448';
+const APP_VERSION = '0904.0453';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -832,28 +832,54 @@ function factoryJsonUrl(name) {
   const base = (window.__factoryHttpsBase || factoryHttpsBaseFallback()).replace(/\/$/, '');
   return base + '/' + n;
 }
+const FACTORY_MAGIC_HEALTH = 'https://wsl-ubuntu.tail785e65.ts.net/health';
+const FACTORY_MAGIC_BASE = 'https://wsl-ubuntu.tail785e65.ts.net';
 window.__factoryRw = false;
 let FACTORY_ORDER_URL = GIST_DESK_URL;
 let FACTORY_BROWSER_URL = factoryJsonUrl('orderhelper_browser.json');
 window.__factoryReady = null;
+function isFactoryHttpsOrderUrl(url) {
+  const u = String(url || '');
+  return u.indexOf('https://') === 0 && u.indexOf('githubusercontent.com') < 0 && u.indexOf('order_desk.json') >= 0;
+}
+async function forceMagicHttpsFactory() {
+  try {
+    const r = await fetch(FACTORY_MAGIC_HEALTH + '?_=' + Date.now(), { cache: 'no-cache' });
+    if (!r || !r.ok) return false;
+    let ok = true;
+    try {
+      const j = await r.json();
+      ok = !!(j && (j.ok === true || j.status === 'ok' || j.http));
+    } catch (e) { ok = true; }
+    if (!ok) return false;
+    window.__factoryHttpsBase = FACTORY_MAGIC_BASE;
+    window.__factoryRw = true;
+    window.__factorySyncMode = 'magic';
+    FACTORY_ORDER_URL = FACTORY_MAGIC_BASE + '/order_desk.json';
+    FACTORY_BROWSER_URL = FACTORY_MAGIC_BASE + '/orderhelper_browser.json';
+    return true;
+  } catch (e) { return false; }
+}
 async function ensureFactoryHttpsPutReady() {
   try { if (window.__factoryReady) await window.__factoryReady; } catch (e) {}
-  if (window.__factoryRw === true && String(FACTORY_ORDER_URL || '').indexOf('https://') === 0) return true;
+  if (window.__factoryRw === true && isFactoryHttpsOrderUrl(FACTORY_ORDER_URL)) return true;
+  if (await forceMagicHttpsFactory()) return true;
   try { if (typeof window.__factoryRepick === 'function') await window.__factoryRepick(); } catch (e) {}
-  return window.__factoryRw === true && String(FACTORY_ORDER_URL || '').indexOf('https://') === 0;
+  if (window.__factoryRw === true && isFactoryHttpsOrderUrl(FACTORY_ORDER_URL)) return true;
+  return await forceMagicHttpsFactory();
 }
 (function applyFactoryEndpointsSoT() {
   const setRw = (base) => {
     if (!base) return;
     let b = String(base).replace(/\/$/, '');
-    if (isGithubPagesHost() && b.indexOf('http://') === 0) {
+    if (b.indexOf('http://') === 0) {
       try {
         const u = new URL(b);
         if (String(u.hostname || '').endsWith('.ts.net')) b = 'https://' + u.hostname;
-        else return;
-      } catch (e) { return; }
+        else if (isGithubPagesHost()) return;
+      } catch (e) { if (isGithubPagesHost()) return; }
     }
-    if (b.indexOf('https://') !== 0 && isGithubPagesHost()) return;
+    if (isGithubPagesHost() && b.indexOf('https://') !== 0) return;
     window.__factoryHttpsBase = b;
     window.__factoryRw = true;
     FACTORY_ORDER_URL = window.__factoryHttpsBase + '/order_desk.json';
@@ -866,10 +892,12 @@ async function ensureFactoryHttpsPutReady() {
   const probe = async (url) => {
     if (!url) return false;
     try {
-      const r = await fetch(url, { cache: 'no-cache' });
+      const r = await fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now(), { cache: 'no-cache' });
       if (!r.ok) return false;
-      const j = await r.json();
-      return !!(j && (j.ok === true || j.status === 'ok'));
+      try {
+        const j = await r.json();
+        return !!(j && (j.ok === true || j.status === 'ok' || j.http));
+      } catch (e) { return true; }
     } catch (e) { return false; }
   };
   const loadEp = async () => {
@@ -890,31 +918,38 @@ async function ensureFactoryHttpsPutReady() {
     const f = ep && ep.sets && ep.sets.factory;
     const h = ep && ep.health;
     const fb = ep && ep.sets && ep.sets.fallback;
-    const magicHealth = (h && h.factory_magic) || 'https://wsl-ubuntu.tail785e65.ts.net/health';
+    const magicHealth = (h && h.factory_magic) || FACTORY_MAGIC_HEALTH;
     const tsHealth = (h && h.factory) || 'http://wsl-ubuntu.tail785e65.ts.net:2421/health';
     const httpsBase = (f && String(f.pages_base || '').indexOf('https://') === 0 && f.pages_base)
       || (f && f.magic_base)
-      || 'https://wsl-ubuntu.tail785e65.ts.net';
+      || FACTORY_MAGIC_BASE;
     const tsBase = (f && (f.pages_base_http || f.ts_base)) || 'http://wsl-ubuntu.tail785e65.ts.net:2421';
     const gistDesk = (fb && fb.order_desk) || GIST_DESK_URL;
-    if (await probe(magicHealth)) { setRw(httpsBase); return 'magic'; }
+    if (await probe(FACTORY_MAGIC_HEALTH)) { setRw(FACTORY_MAGIC_BASE); return 'magic'; }
+    if (magicHealth !== FACTORY_MAGIC_HEALTH && await probe(magicHealth)) { setRw(httpsBase); return 'magic'; }
     if (!isGithubPagesHost() && await probe(tsHealth)) { setRw(tsBase); return 'ts2421'; }
     setGist(gistDesk);
     return 'gist';
   };
   const run = async () => {
+    if (await forceMagicHttpsFactory()) {
+      window.__factorySyncMode = 'magic';
+      return 'magic';
+    }
     const ep = await loadEp();
     const mode = await pick(ep);
     window.__factorySyncMode = mode;
     if (mode === 'gist') {
       setInterval(async () => {
         if (window.__factoryRw) return;
+        if (await forceMagicHttpsFactory()) return;
         const ep2 = await loadEp();
         await pick(ep2);
-      }, 30000);
+      }, 15000);
     }
   };
   window.__factoryRepick = async () => {
+    if (await forceMagicHttpsFactory()) return 'magic';
     const ep = await loadEp();
     return pick(ep);
   };
@@ -10689,10 +10724,13 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
         }));
       body = JSON.stringify({ current: sendPayload, history });
       if (body.length > putMax && attempt < shots) continue;
-      if (window.__factoryRw === false) {
-        lastBrowserPut = { ok: false, at: Date.now(), error: 'gist_readonly', trigger: 'put_skip' };
-        const fail = factoryReadFailure(0, 'gist_readonly');
-        return { currentResponse: fail, historyResponse: fail, payload: sendPayload, body, attempts: attempt };
+      if (window.__factoryRw === false || !isFactoryHttpsOrderUrl(FACTORY_ORDER_URL)) {
+        const forced = await ensureFactoryHttpsPutReady();
+        if (!forced || window.__factoryRw === false || !isFactoryHttpsOrderUrl(FACTORY_ORDER_URL)) {
+          lastBrowserPut = { ok: false, at: Date.now(), error: 'factory_https_unreachable', trigger: 'put_skip' };
+          const fail = factoryReadFailure(0, 'factory_https_unreachable');
+          return { currentResponse: fail, historyResponse: fail, payload: sendPayload, body, attempts: attempt };
+        }
       }
       response = await fetch(FACTORY_ORDER_URL, {
         method: 'PUT',
