@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0904.0429';
+const APP_VERSION = '0904.0446';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -10668,7 +10668,8 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
       if (body.length > putMax && attempt < shots) continue;
       if (window.__factoryRw === false) {
         lastBrowserPut = { ok: false, at: Date.now(), error: 'gist_readonly', trigger: 'put_skip' };
-        return { currentResponse: null, historyResponse: null, payload: sendPayload, body, attempts: attempt };
+        const fail = factoryReadFailure(0, 'gist_readonly');
+        return { currentResponse: fail, historyResponse: fail, payload: sendPayload, body, attempts: attempt };
       }
       response = await fetch(FACTORY_ORDER_URL, {
         method: 'PUT',
@@ -10747,10 +10748,16 @@ async function sendActiveConfirmedSave(trigger = 'recovery', timeoutMs = SAVE_RE
     if (resetGenerationAtStart !== syncResetGeneration) return false;
     const { currentResponse, historyResponse, payload } = result;
     if (!currentResponse || !currentResponse.ok || !historyResponse || !historyResponse.ok) {
-      const currentText = await currentResponse.text().catch(() => '');
-      const historyText = await historyResponse.text().catch(() => '');
-      console.error('[confirmed-save] HTTP FAIL', currentResponse.status, historyResponse.status, currentText, historyText);
-      scheduleConfirmedSaveRetry(commit, `HTTP ${currentResponse.status}/${historyResponse.status}`);
+      const currentText = currentResponse && typeof currentResponse.text === 'function'
+        ? await currentResponse.text().catch(() => '')
+        : '';
+      const historyText = historyResponse && typeof historyResponse.text === 'function'
+        ? await historyResponse.text().catch(() => '')
+        : '';
+      const cs = currentResponse && currentResponse.status;
+      const hs = historyResponse && historyResponse.status;
+      console.error('[confirmed-save] HTTP FAIL', cs, hs, currentText, historyText);
+      scheduleConfirmedSaveRetry(commit, `HTTP ${cs || 0}/${hs || 0}`);
       return false;
     }
     const freshQueue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
