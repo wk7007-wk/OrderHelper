@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0904.0338';
+const APP_VERSION = '0904.0408';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -808,8 +808,45 @@ const FACTORY_STAFF_POLL_MS = 3000;
     navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); });
   }
 })();
-const FACTORY_ORDER_URL = 'https://218.147.118.71/order_desk.json';
-const FACTORY_BROWSER_URL = 'https://218.147.118.71/orderhelper_browser.json';
+const FACTORY_ENDPOINTS_CANDIDATES = [
+  '/endpoints.json',
+  'https://wsl-ubuntu.tail785e65.ts.net/endpoints.json',
+  'https://wk7007-wk.github.io/bbq-dashboard/updates/endpoints.json'
+];
+function factoryHttpsBaseFallback() {
+  try {
+    if (location && location.hostname && String(location.hostname).endsWith('.ts.net')) return location.origin;
+  } catch (e) {}
+  return 'https://wsl-ubuntu.tail785e65.ts.net';
+}
+function factoryJsonUrl(name) {
+  const base = (window.__factoryHttpsBase || factoryHttpsBaseFallback()).replace(/\/$/, '');
+  return base + '/' + String(name).replace(/^\//, '');
+}
+let FACTORY_ORDER_URL = factoryJsonUrl('order_desk.json');
+let FACTORY_BROWSER_URL = factoryJsonUrl('orderhelper_browser.json');
+(function applyFactoryEndpointsSoT() {
+  const apply = (base) => {
+    if (!base) return;
+    window.__factoryHttpsBase = String(base).replace(/\/$/, '');
+    FACTORY_ORDER_URL = factoryJsonUrl('order_desk.json');
+    FACTORY_BROWSER_URL = factoryJsonUrl('orderhelper_browser.json');
+  };
+  const run = async () => {
+    for (const u of FACTORY_ENDPOINTS_CANDIDATES) {
+      try {
+        const r = await fetch(u, { cache: 'no-cache' });
+        if (!r.ok) continue;
+        const ep = await r.json();
+        const f = ep && ep.sets && ep.sets.factory;
+        const base = (f && (f.pages_base || f.magic_base))
+          || (ep && ep.health && String(ep.health.factory_magic || '').replace(/\/health$/, ''));
+        if (base && /^https:\/\//.test(base)) { apply(base); return; }
+      } catch (e) {}
+    }
+  };
+  run();
+})();
 function factoryReadFailure(status, error) {
   const err = String(error || 'fetch_failed');
   return {
@@ -8665,7 +8702,7 @@ function renderSfaStatus(data) {
 
 async function loadSfaOrderStatus(silent = true) {
   try {
-    const res = await fetch('https://218.147.118.71/monitor_main_pc.json?_=' + Date.now());
+    const res = await fetch(factoryJsonUrl('monitor_main_pc.json') + '?_=' + Date.now());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     renderSfaStatus(data || { state: 'idle' });
@@ -8723,7 +8760,7 @@ async function requestSfaOrderAnalysis() {
     requestedAtKst: new Date(now + 9 * 3600000).toISOString().replace('T', ' ').slice(0, 19)
   };
   try {
-    const res = await fetch('https://218.147.118.71/monitor_main_pc.json', {
+    const res = await fetch(factoryJsonUrl('monitor_main_pc.json'), {
       method: 'PUT',
       body: JSON.stringify(payload)
     });
@@ -8764,7 +8801,7 @@ function collectBrowserDiag() {
   const queue = readConfirmedSaveQueue() || emptyConfirmedSaveQueue();
   const stocked = (entries || []).filter(e => e && e.stock != null && e.stock !== '').length;
   const host = String(location.host || '');
-  const addr = host.indexOf('218.147.118.71') >= 0 ? '공장주소' : (host.indexOf('github.io') >= 0 ? '깃허브주소' : host);
+  const addr = host.indexOf('ts.net') >= 0 ? '공장주소' : (host.indexOf('github.io') >= 0 ? '깃허브주소' : host);
   const queueLabel = confirmedSaveQueueBlocked ? '보관잠금' : (queue.active ? '확정대기' : (queue.queued ? '다음대기' : '큐없음'));
   const factoryLabel = lastBrowserFactory.ok === true
     ? (lastBrowserFactory.entries ? `공장 ${lastBrowserFactory.stocked}칸` : '공장 빈값')

@@ -8,7 +8,11 @@ const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g)).map(m
 
 new Function(scripts);
 
-assert.match(html, /const APP_VERSION = '0904.0338';/);
+assert.match(html, /const APP_VERSION = '0904.0408';/);
+assert.doesNotMatch(html, /218\.147\.118\.71/);
+assert.match(html, /FACTORY_ENDPOINTS_CANDIDATES/);
+assert.match(html, /wsl-ubuntu\.tail785e65\.ts\.net/);
+assert.match(html, /function factoryJsonUrl\(/);
 assert.match(html, /const APP_VERSION = '\d{4}\.\d{4}';/);
 assert.doesNotMatch(html, /scheduleSalesAutoSave/);
 assert.match(html, /addEventListener\('blur', flushSalesAutoSave\)/);
