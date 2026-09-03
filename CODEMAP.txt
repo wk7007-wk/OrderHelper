@@ -1,3 +1,4 @@
+- 2026-09-04: APP_VERSION 0904.0448 ensureFactoryHttpsPutReady before put; Pages http→https MagicDNS host.
 - 2026-09-04: APP_VERSION 0904.0446 gist_readonly put_skip returns factoryReadFailure instead of null (retry TypeError).
 # OrderHelper 코드맵
 # 의도 기준: APP_INTENT.md (BBQ 재고 입력과 발주량 계산 흐름 보호)

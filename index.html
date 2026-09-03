@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0904.0446';
+const APP_VERSION = '0904.0448';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -835,10 +835,26 @@ function factoryJsonUrl(name) {
 window.__factoryRw = false;
 let FACTORY_ORDER_URL = GIST_DESK_URL;
 let FACTORY_BROWSER_URL = factoryJsonUrl('orderhelper_browser.json');
+window.__factoryReady = null;
+async function ensureFactoryHttpsPutReady() {
+  try { if (window.__factoryReady) await window.__factoryReady; } catch (e) {}
+  if (window.__factoryRw === true && String(FACTORY_ORDER_URL || '').indexOf('https://') === 0) return true;
+  try { if (typeof window.__factoryRepick === 'function') await window.__factoryRepick(); } catch (e) {}
+  return window.__factoryRw === true && String(FACTORY_ORDER_URL || '').indexOf('https://') === 0;
+}
 (function applyFactoryEndpointsSoT() {
   const setRw = (base) => {
     if (!base) return;
-    window.__factoryHttpsBase = String(base).replace(/\/$/, '');
+    let b = String(base).replace(/\/$/, '');
+    if (isGithubPagesHost() && b.indexOf('http://') === 0) {
+      try {
+        const u = new URL(b);
+        if (String(u.hostname || '').endsWith('.ts.net')) b = 'https://' + u.hostname;
+        else return;
+      } catch (e) { return; }
+    }
+    if (b.indexOf('https://') !== 0 && isGithubPagesHost()) return;
+    window.__factoryHttpsBase = b;
     window.__factoryRw = true;
     FACTORY_ORDER_URL = window.__factoryHttpsBase + '/order_desk.json';
     FACTORY_BROWSER_URL = window.__factoryHttpsBase + '/orderhelper_browser.json';
@@ -876,10 +892,12 @@ let FACTORY_BROWSER_URL = factoryJsonUrl('orderhelper_browser.json');
     const fb = ep && ep.sets && ep.sets.fallback;
     const magicHealth = (h && h.factory_magic) || 'https://wsl-ubuntu.tail785e65.ts.net/health';
     const tsHealth = (h && h.factory) || 'http://wsl-ubuntu.tail785e65.ts.net:2421/health';
-    const magicBase = (f && f.magic_base) || 'https://wsl-ubuntu.tail785e65.ts.net';
-    const tsBase = (f && (f.pages_base_http || f.pages_base || f.ts_base)) || 'http://wsl-ubuntu.tail785e65.ts.net:2421';
+    const httpsBase = (f && String(f.pages_base || '').indexOf('https://') === 0 && f.pages_base)
+      || (f && f.magic_base)
+      || 'https://wsl-ubuntu.tail785e65.ts.net';
+    const tsBase = (f && (f.pages_base_http || f.ts_base)) || 'http://wsl-ubuntu.tail785e65.ts.net:2421';
     const gistDesk = (fb && fb.order_desk) || GIST_DESK_URL;
-    if (await probe(magicHealth)) { setRw(magicBase); return 'magic'; }
+    if (await probe(magicHealth)) { setRw(httpsBase); return 'magic'; }
     if (!isGithubPagesHost() && await probe(tsHealth)) { setRw(tsBase); return 'ts2421'; }
     setGist(gistDesk);
     return 'gist';
@@ -896,7 +914,11 @@ let FACTORY_BROWSER_URL = factoryJsonUrl('orderhelper_browser.json');
       }, 30000);
     }
   };
-  run();
+  window.__factoryRepick = async () => {
+    const ep = await loadEp();
+    return pick(ep);
+  };
+  window.__factoryReady = run();
 })();
 function factoryReadFailure(status, error) {
   const err = String(error || 'fetch_failed');
@@ -10621,6 +10643,7 @@ function factoryEnvelopeForWriteMerge(remote) {
 }
 
 async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_MS, maxAttempts = 3) {
+  try { await ensureFactoryHttpsPutReady(); } catch (e) {}
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const localPayload = JSON.parse(commit.body);

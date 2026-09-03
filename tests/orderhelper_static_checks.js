@@ -8,7 +8,7 @@ const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g)).map(m
 
 new Function(scripts);
 
-assert.match(html, /const APP_VERSION = '0904.0446';/);
+assert.match(html, /const APP_VERSION = '0904.0448';/);
 assert.match(html, /GIST_DESK_URL/);
 assert.match(html, /gist_readonly/);
 assert.match(html, /isGithubPagesHost/);

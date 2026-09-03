@@ -1,3 +1,4 @@
+- 2026-09-04: APP_VERSION 0904.0448 Pages PUT waits MagicHTTPS ready; rejects http factory base on github.io.
 - 2026-09-04: APP_VERSION 0904.0446 fixes TypeError on 공장보내기 retry when gist_readonly returned null responses.
 # OrderHelper APP_INTENT.md
 
