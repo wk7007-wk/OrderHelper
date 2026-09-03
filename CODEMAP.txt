@@ -1,3 +1,4 @@
+- 2026-09-04: APP_VERSION 0904.0456 put_skip guidance + PHONE_TS_HTTPS.md.
 - 2026-09-04: APP_VERSION 0904.0453 FACTORY_MAGIC_* first; put_skip no longer gist_readonly.
 - 2026-09-04: APP_VERSION 0904.0448 ensureFactoryHttpsPutReady before put; Pages http→https MagicDNS host.
 - 2026-09-04: APP_VERSION 0904.0446 gist_readonly put_skip returns factoryReadFailure instead of null (retry TypeError).
