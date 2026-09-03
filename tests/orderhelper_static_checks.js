@@ -8,7 +8,9 @@ const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g)).map(m
 
 new Function(scripts);
 
-assert.match(html, /const APP_VERSION = '0904.0408';/);
+assert.match(html, /const APP_VERSION = '0904.0419';/);
+assert.match(html, /return '\/' \+ n/);
+assert.match(html, /100\.65\.156\.49:2421/);
 assert.doesNotMatch(html, /218\.147\.118\.71/);
 assert.match(html, /FACTORY_ENDPOINTS_CANDIDATES/);
 assert.match(html, /wsl-ubuntu\.tail785e65\.ts\.net/);

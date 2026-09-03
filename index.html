@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0904.0408';
+const APP_VERSION = '0904.0419';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -815,13 +815,17 @@ const FACTORY_ENDPOINTS_CANDIDATES = [
 ];
 function factoryHttpsBaseFallback() {
   try {
-    if (location && location.hostname && String(location.hostname).endsWith('.ts.net')) return location.origin;
+    if (location && location.origin && !String(location.hostname || '').includes('github.io')) return location.origin;
   } catch (e) {}
-  return 'https://wsl-ubuntu.tail785e65.ts.net';
+  return 'http://100.65.156.49:2421';
 }
 function factoryJsonUrl(name) {
+  const n = String(name).replace(/^\//, '');
+  try {
+    if (location && location.hostname && !String(location.hostname).includes('github.io')) return '/' + n;
+  } catch (e) {}
   const base = (window.__factoryHttpsBase || factoryHttpsBaseFallback()).replace(/\/$/, '');
-  return base + '/' + String(name).replace(/^\//, '');
+  return base + '/' + n;
 }
 let FACTORY_ORDER_URL = factoryJsonUrl('order_desk.json');
 let FACTORY_BROWSER_URL = factoryJsonUrl('orderhelper_browser.json');
