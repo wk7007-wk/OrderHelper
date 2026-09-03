@@ -8,6 +8,7 @@ const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g)).map(m
 
 new Function(scripts);
 
+assert.match(html, /const APP_VERSION = '0904.0338';/);
 assert.match(html, /const APP_VERSION = '\d{4}\.\d{4}';/);
 assert.doesNotMatch(html, /scheduleSalesAutoSave/);
 assert.match(html, /addEventListener\('blur', flushSalesAutoSave\)/);
