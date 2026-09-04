@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0904.0456';
+const APP_VERSION = '0905.0638';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -808,12 +808,12 @@ const FACTORY_STAFF_POLL_MS = 3000;
     navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); });
   }
 })();
-const GIST_DESK_URL = 'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/order_desk.json';
 const FACTORY_ENDPOINTS_CANDIDATES = [
   '/endpoints.json',
+  '/factory_bridge.json',
   'https://wsl-ubuntu.tail785e65.ts.net/endpoints.json',
-  'https://wk7007-wk.github.io/bbq-dashboard/updates/endpoints.json',
-  'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/endpoints.json'
+  'https://wsl-ubuntu.tail785e65.ts.net/factory_bridge.json',
+  'https://wk7007-wk.github.io/bbq-dashboard/updates/endpoints.json'
 ];
 function isGithubPagesHost() {
   try { return String(location.hostname || '').includes('github.io'); } catch (e) { return false; }
@@ -822,7 +822,7 @@ function factoryHttpsBaseFallback() {
   try {
     if (location && location.origin && !isGithubPagesHost()) return location.origin;
   } catch (e) {}
-  return 'https://wsl-ubuntu.tail785e65.ts.net';
+  return '';
 }
 function factoryJsonUrl(name) {
   const n = String(name).replace(/^\//, '');
@@ -832,10 +832,10 @@ function factoryJsonUrl(name) {
   const base = (window.__factoryHttpsBase || factoryHttpsBaseFallback()).replace(/\/$/, '');
   return base + '/' + n;
 }
-const FACTORY_MAGIC_HEALTH = 'https://wsl-ubuntu.tail785e65.ts.net/health';
-const FACTORY_MAGIC_BASE = 'https://wsl-ubuntu.tail785e65.ts.net';
+let FACTORY_MAGIC_HEALTH = '';
+let FACTORY_MAGIC_BASE = '';
 window.__factoryRw = false;
-let FACTORY_ORDER_URL = GIST_DESK_URL;
+let FACTORY_ORDER_URL = '';
 let FACTORY_BROWSER_URL = factoryJsonUrl('orderhelper_browser.json');
 window.__factoryReady = null;
 function isFactoryHttpsOrderUrl(url) {
@@ -844,6 +844,7 @@ function isFactoryHttpsOrderUrl(url) {
 }
 async function forceMagicHttpsFactory() {
   try {
+    if (!FACTORY_MAGIC_HEALTH || !FACTORY_MAGIC_BASE) return false;
     const r = await fetch(FACTORY_MAGIC_HEALTH + '?_=' + Date.now(), { cache: 'no-cache', mode: 'cors' });
     if (!r || !r.ok) {
       window.__factoryLastProbeError = 'health_http_' + ((r && r.status) || 0);
@@ -895,9 +896,9 @@ async function ensureFactoryHttpsPutReady() {
     FACTORY_ORDER_URL = window.__factoryHttpsBase + '/order_desk.json';
     FACTORY_BROWSER_URL = window.__factoryHttpsBase + '/orderhelper_browser.json';
   };
-  const setGist = (desk) => {
+  const setBlocked = () => {
     window.__factoryRw = false;
-    FACTORY_ORDER_URL = desk || GIST_DESK_URL;
+    FACTORY_ORDER_URL = '';
   };
   const probe = async (url) => {
     if (!url) return false;
@@ -927,19 +928,24 @@ async function ensureFactoryHttpsPutReady() {
   const pick = async (ep) => {
     const f = ep && ep.sets && ep.sets.factory;
     const h = ep && ep.health;
-    const fb = ep && ep.sets && ep.sets.fallback;
-    const magicHealth = (h && h.factory_magic) || FACTORY_MAGIC_HEALTH;
-    const tsHealth = (h && h.factory) || 'http://wsl-ubuntu.tail785e65.ts.net:2421/health';
-    const httpsBase = (f && String(f.pages_base || '').indexOf('https://') === 0 && f.pages_base)
-      || (f && f.magic_base)
-      || FACTORY_MAGIC_BASE;
-    const tsBase = (f && (f.pages_base_http || f.ts_base)) || 'http://wsl-ubuntu.tail785e65.ts.net:2421';
-    const gistDesk = (fb && fb.order_desk) || GIST_DESK_URL;
-    if (await probe(FACTORY_MAGIC_HEALTH)) { setRw(FACTORY_MAGIC_BASE); return 'magic'; }
-    if (magicHealth !== FACTORY_MAGIC_HEALTH && await probe(magicHealth)) { setRw(httpsBase); return 'magic'; }
-    if (!isGithubPagesHost() && await probe(tsHealth)) { setRw(tsBase); return 'ts2421'; }
-    setGist(gistDesk);
-    return 'gist';
+    const ip = String((ep && ep.public_ip) || '').trim();
+    const magicHealth = h && h.factory_magic;
+    const magicBase = f && f.magic_base;
+    const tsHealth = h && h.factory;
+    const tsBase = f && f.ts_base;
+    const wanHttps = ip ? ('https://' + ip) : '';
+    FACTORY_MAGIC_HEALTH = magicHealth || '';
+    FACTORY_MAGIC_BASE = magicBase || '';
+    if (await probe(magicHealth)) { setRw(magicBase); return 'magic'; }
+    if (isGithubPagesHost()) {
+      if (wanHttps && await probe(wanHttps + '/health')) { setRw(wanHttps); return 'wan_https'; }
+      setBlocked();
+      return 'blocked';
+    }
+    if (await probe(tsHealth)) { setRw(tsBase); return 'ts2421'; }
+    if (wanHttps && await probe(wanHttps + '/health')) { setRw(wanHttps); return 'wan_https'; }
+    setBlocked();
+    return 'blocked';
   };
   const run = async () => {
     if (await forceMagicHttpsFactory()) {
@@ -949,7 +955,7 @@ async function ensureFactoryHttpsPutReady() {
     const ep = await loadEp();
     const mode = await pick(ep);
     window.__factorySyncMode = mode;
-    if (mode === 'gist') {
+    if (mode === 'blocked') {
       setInterval(async () => {
         if (window.__factoryRw) return;
         if (await forceMagicHttpsFactory()) return;
