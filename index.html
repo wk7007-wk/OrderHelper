@@ -811,9 +811,10 @@ const FACTORY_STAFF_POLL_MS = 3000;
 const FACTORY_ENDPOINTS_CANDIDATES = [
   '/endpoints.json',
   '/factory_bridge.json',
+  'https://gist.githubusercontent.com/wk7007-wk/a67e5de3271d6d0716b276dc6a8391cb/raw/factory_bridge.json',
+  'https://wk7007-wk.github.io/bbq-dashboard/updates/endpoints.json',
   'https://wsl-ubuntu.tail785e65.ts.net/endpoints.json',
-  'https://wsl-ubuntu.tail785e65.ts.net/factory_bridge.json',
-  'https://wk7007-wk.github.io/bbq-dashboard/updates/endpoints.json'
+  'https://wsl-ubuntu.tail785e65.ts.net/factory_bridge.json'
 ];
 function isGithubPagesHost() {
   try { return String(location.hostname || '').includes('github.io'); } catch (e) { return false; }
@@ -926,24 +927,29 @@ async function ensureFactoryHttpsPutReady() {
     return null;
   };
   const pick = async (ep) => {
-    const f = ep && ep.sets && ep.sets.factory;
-    const h = ep && ep.health;
+    const f = (ep && ep.sets && ep.sets.factory) || (ep && ep.factory) || {};
+    const h = (ep && ep.health) || {};
     const ip = String((ep && ep.public_ip) || '').trim();
-    const magicHealth = h && h.factory_magic;
-    const magicBase = f && f.magic_base;
-    const tsHealth = h && h.factory;
-    const tsBase = f && f.ts_base;
-    const wanHttps = ip ? ('https://' + ip) : '';
+    const magicBase = String((f && f.magic_base) || (ep && ep.magic_base) || '').replace(/\/$/, '');
+    const tsBase = String((f && f.ts_base) || (ep && ep.ts_base) || '').replace(/\/$/, '');
+    let wanBase = String((f && f.wan_base) || (ep && ep.wan_base) || '').replace(/\/$/, '');
+    let wanHost = '';
+    const match = wanBase.match(/^https?:\/\/([^/:]+)/i);
+    if (match) wanHost = match[1];
+    if (ip && (!wanBase || wanHost !== ip || wanBase.indexOf('https://') === 0)) {
+      wanBase = 'http://' + ip + ':2421';
+    }
+    const magicHealth = (h && h.factory_magic) || (magicBase ? magicBase + '/health' : '');
+    const tsHealth = (h && h.factory) || (tsBase ? tsBase + '/health' : '');
     FACTORY_MAGIC_HEALTH = magicHealth || '';
     FACTORY_MAGIC_BASE = magicBase || '';
     if (await probe(magicHealth)) { setRw(magicBase); return 'magic'; }
     if (isGithubPagesHost()) {
-      if (wanHttps && await probe(wanHttps + '/health')) { setRw(wanHttps); return 'wan_https'; }
       setBlocked();
       return 'blocked';
     }
     if (await probe(tsHealth)) { setRw(tsBase); return 'ts2421'; }
-    if (wanHttps && await probe(wanHttps + '/health')) { setRw(wanHttps); return 'wan_https'; }
+    if (wanBase && await probe(wanBase + '/health')) { setRw(wanBase); return 'wan_http'; }
     setBlocked();
     return 'blocked';
   };
