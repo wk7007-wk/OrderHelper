@@ -8,7 +8,7 @@ const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g)).map(m
 
 new Function(scripts);
 
-assert.match(html, /const APP_VERSION = '0904.0456';/);
+assert.match(html, /const APP_VERSION = '\d{4}\.\d{4}';/);
 assert.match(html, /GIST_DESK_URL/);
 assert.match(html, /factory_https_unreachable/);
 assert.match(html, /isGithubPagesHost/);
@@ -20,6 +20,9 @@ assert.match(html, /wsl-ubuntu\.tail785e65\.ts\.net:2421/);
 assert.doesNotMatch(html, /100\.65\.156\.49/);
 assert.doesNotMatch(html, /218\.147\.118\.71/);
 assert.match(html, /FACTORY_ENDPOINTS_CANDIDATES/);
+assert.match(html, /github\.io\/bbq-dashboard\/updates\/endpoints\.json/);
+assert.match(html, /reloadBook/);
+assert.match(html, /5 \* 60 \* 1000/);
 assert.match(html, /wsl-ubuntu\.tail785e65\.ts\.net/);
 assert.match(html, /function factoryJsonUrl\(/);
 assert.match(html, /const APP_VERSION = '\d{4}\.\d{4}';/);
