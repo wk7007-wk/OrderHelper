@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0906.2236';
+const APP_VERSION = '0906.2245';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -976,19 +976,24 @@ async function ensureFactoryHttpsPutReady() {
   };
   const run = async () => {
     if (isGithubPagesHost()) {
+      // Bookmark = github.io; UI entry OK but http wan cannot be probed/fetched from https (mixed content).
+      // Always jump to wan_base for same-origin GET sync. stay=1 keeps Pages shell only (no live desk).
       const stay = new URLSearchParams(location.search).get('stay') === '1';
       if (!stay) {
         try {
           const ep0 = await loadEp();
           const f0 = (ep0 && ep0.sets && ep0.sets.factory) || (ep0 && ep0.factory) || {};
-          const wan0 = String(f0.wan_base || '').replace(/\/$/, '');
-          if (wan0 && await probe(wan0 + '/health')) {
-            location.replace(wan0 + '/OrderHelper/' + location.search);
-            return 'wan_jump';
-          }
+          let wan0 = String(f0.wan_base || '').replace(/\/$/, '');
+          if (!wan0) wan0 = 'http://125.176.112.214:2421';
+          if (wan0.indexOf('218.147.118.71') >= 0) wan0 = 'http://125.176.112.214:2421';
+          const q = location.search || '';
+          const join = wan0 + '/OrderHelper/' + (q ? (q.indexOf('?') === 0 ? q : '?' + q) : '');
+          location.replace(join);
+          return 'wan_jump';
         } catch (e) {}
         const jump = new URLSearchParams(location.search);
         jump.set('to', 'orderhelper');
+        jump.set('via', 'wan');
         location.replace('/bbq-dashboard/go.html?' + jump.toString());
         return 'jump';
       }
