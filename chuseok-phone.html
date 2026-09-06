@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>추석 A코스 특정일 발주</title>
+<style>
+:root { color-scheme: dark; --bg:#0e141c; --card:#172433; --line:#2a3d54; --text:#f4f8fd; --muted:#9eb0c3; --accent:#3dd68c; --warn:#ffb020; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; padding:12px 12px 40px; }
+h1 { font-size:1.25rem; margin:8px 0 4px; }
+.meta { color:var(--muted); font-size:.85rem; line-height:1.4; margin:0 0 12px; }
+.tabs { display:flex; gap:8px; position:sticky; top:0; background:var(--bg); padding:8px 0; z-index:2; }
+.tab { flex:1; text-align:center; padding:10px; border-radius:12px; background:var(--card); border:1px solid var(--line); color:var(--text); text-decoration:none; font-weight:700; }
+.tab.on { border-color:var(--accent); color:var(--accent); }
+.panel { display:none; }
+.panel.on { display:block; }
+.summary { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin:0 0 12px; }
+.summary b { color:var(--accent); }
+.cat { margin:14px 0 6px; font-size:.78rem; color:var(--warn); font-weight:700; letter-spacing:.02em; }
+.row { display:flex; align-items:baseline; gap:8px; padding:8px 10px; background:var(--card); border:1px solid var(--line); border-radius:10px; margin:0 0 6px; }
+.q { min-width:1.6rem; font-weight:800; font-size:1.1rem; color:var(--accent); text-align:right; }
+.n { flex:1; font-size:.95rem; }
+.amt { color:var(--muted); font-size:.8rem; white-space:nowrap; }
+.note { display:block; width:100%; color:var(--muted); font-size:.72rem; margin-top:2px; }
+.check { width:1.1rem; height:1.1rem; accent-color:var(--accent); }
+label.row { cursor:pointer; }
+.foot { color:var(--muted); font-size:.75rem; margin-top:16px; line-height:1.45; }
+</style>
+</head>
+<body>
+<h1>추석 A코스 특정일</h1>
+<p class="meta">BBQ SK이천하이닉스점 · 매출250 · 일발주~130만 · v5+단기숨김<br>갱신 2026-09-07 01:15 KST · 사이트 자동투입 아님</p>
+<div class="tabs">
+  <a class="tab on" href="#w1" onclick="show(1);return false;">1차 9/7→9/24</a>
+  <a class="tab" href="#w2" onclick="show(2);return false;">2차 9/9→9/29</a>
+</div>
+<div id="p1" class="panel on">
+  <div class="summary">주문 <b>9/7</b> 10~19시 · 입고 <b>9/24</b><br>수량&gt;0 <b>73</b>품목 · 금액합(단가있는것) <b>3,998,315</b>원<br>부분육 가능 · 소비기한~9/28</div>
+  <div class="cat">10호</div>
+<div class="row"><span class="q">7</span><span class="n">신선육(10호)-뼈한마리</span><span class="amt">868,000</span></div>
+<div class="cat">부분육</div>
+<div class="row"><span class="q">1</span><span class="n">배달소스-순살크래커소스</span><span class="amt">16,720</span></div>
+<div class="row"><span class="q">4</span><span class="n">벌크신선통날개</span><span class="amt">221,200</span></div>
+<div class="row"><span class="q">8</span><span class="n">신선북채(신)-다리</span><span class="amt">414,000</span></div>
+<div class="row"><span class="q">6</span><span class="n">신선순살(720g)</span><span class="amt">210,000</span></div>
+<div class="cat">냉동</div>
+<div class="row"><span class="q">1</span><span class="n">BBQ싱싱옥수수콘립</span><span class="amt">4,180</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ필크런치소스</span><span class="amt">19,140</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-BBQ소떡소떡</span><span class="amt">7,700</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-가지튀김</span><span class="amt">6,600</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-고추튀김</span><span class="amt">16,720</span></div>
+<div class="row"><span class="q">6</span><span class="n">냉동-닭껍데기(국내산)</span><span class="amt">12,300</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-떡볶이(16개)</span><span class="amt">63,360</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-레귤러컷(감자튀김)</span><span class="amt">12,870</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-롱김말이</span><span class="amt">5,940</span></div>
+<div class="row"><span class="q">2</span><span class="n">냉동-멘보샤</span><span class="amt">31,746</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-바사칸윙</span><span class="amt">126,500</span></div>
+<div class="row"><span class="q">3</span><span class="n">냉동-오감볼</span><span class="amt">12,870</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-오징어튀김(오징어다리아님)</span><span class="amt">24,750</span></div>
+<div class="row"><span class="q">2</span><span class="n">냉동-치즈볼-BBQ치즈볼(크림)</span><span class="amt">23,760</span></div>
+<div class="row"><span class="q">2</span><span class="n">냉동-치즈볼-BBQ황금알치즈볼</span><span class="amt">39,600</span></div>
+<div class="row"><span class="q">2</span><span class="n">냉동-치즈볼-더블치즈볼</span><span class="amt">15,840</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-타르타르새우</span><span class="amt">9,900</span></div>
+<div class="cat">일반</div>
+<div class="row"><span class="q">2</span><span class="n">(신)스모크치킨</span><span class="amt">46,750</span></div>
+<div class="row"><span class="q">2</span><span class="n">(신)올리브오일</span><span class="amt">385,000</span></div>
+<div class="row"><span class="q">1</span><span class="n">(신)위생장갑(200매)</span><span class="amt">3,157</span></div>
+<div class="row"><span class="q">1</span><span class="n">(컵소스)BBQ양념치킨소스(배달용)</span><span class="amt">53,900</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ박스패키지(대)</span><span class="amt">42,900</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ박스패키지(소)</span><span class="amt">34,100</span></div>
+<div class="row"><span class="q">2</span><span class="n">BBQ박스패키지(중)</span><span class="amt">81,400</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ버라이어티팩패키지</span><span class="amt">38,500</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ뿜치킹시즈닝(25g)</span><span class="amt">18,150</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ뿜치킹시즈닝(58g)</span><span class="amt">47,850</span></div>
+<div class="row"><span class="q">5</span><span class="n">BBQ양념치킨소스</span><span class="amt">82,500</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ종이봉투(대)</span><span class="amt">4,620</span></div>
+<div class="row"><span class="q">1</span><span class="n">JHP종이봉투(대)or(소)</span><span class="amt">5,692</span></div>
+<div class="row"><span class="q">2</span><span class="n">골든크리스피배터믹스(맵소반죽)</span><span class="amt">23,980</span></div>
+<div class="row"><span class="q">1</span><span class="n">극한갈비소스</span><span class="amt">16,384</span></div>
+<div class="row"><span class="q">1</span><span class="n">땡쇼크소스</span><span class="amt">13,200</span></div>
+<div class="row"><span class="q">1</span><span class="n">맵소디소스</span><span class="amt">16,500</span></div>
+<div class="row"><span class="q">1</span><span class="n">배달소스-(신)비비소스</span><span class="amt">10,230</span></div>
+<div class="row"><span class="q">1</span><span class="n">배달소스-(신)스모크소스</span><span class="amt">3,190</span></div>
+<div class="row"><span class="q">1</span><span class="n">비닐-(신규)BBQ비닐쇼핑백(대)</span><span class="amt">9,570</span></div>
+<div class="row"><span class="q">2</span><span class="n">비닐-(신규)BBQ비닐쇼핑백(중)</span><span class="amt">16,720</span></div>
+<div class="row"><span class="q">1</span><span class="n">비닐-BBQ비닐봉투(소)</span><span class="amt">4,290</span></div>
+<div class="row"><span class="q">1</span><span class="n">빠리배터믹스</span><span class="amt">11,550</span></div>
+<div class="row"><span class="q">1</span><span class="n">소독저(젓가락)</span><span class="amt">11,550</span></div>
+<div class="row"><span class="q">1</span><span class="n">수제맥주 공케그(빈통)</span></div>
+<div class="row"><span class="q">3</span><span class="n">올리브마리네이드(신)</span><span class="amt">47,850</span></div>
+<div class="row"><span class="q">9</span><span class="n">올리브치킨용배터믹스-파우다</span><span class="amt">207,900</span></div>
+<div class="row"><span class="q">5</span><span class="n">치킨무(배달용)</span><span class="amt">121,000</span></div>
+<div class="row"><span class="q">3</span><span class="n">통다리바베큐소스(1kg)</span><span class="amt">23,760</span></div>
+<div class="row"><span class="q">2</span><span class="n">트레이(소)</span><span class="amt">11,660</span></div>
+<div class="row"><span class="q">2</span><span class="n">트레이(중)</span><span class="amt">14,520</span></div>
+<div class="row"><span class="q">1</span><span class="n">파인마요</span><span class="amt">11,000</span></div>
+<div class="row"><span class="q">1</span><span class="n">피자비닐봉투</span><span class="amt">12,650</span></div>
+<div class="row"><span class="q">2</span><span class="n">핫앤크리스피마리네이드</span><span class="amt">44,000</span></div>
+<div class="cat">한개충분</div>
+<div class="row"><span class="q">1</span><span class="n">BBQ필크런치플레이크</span><span class="amt">36,740</span></div>
+<div class="row"><span class="q">1</span><span class="n">볼케이노핫소스</span><span class="amt">15,972</span></div>
+<div class="row"><span class="q">1</span><span class="n">치킨무(벌크)</span><span class="amt">16,456</span></div>
+<div class="row"><span class="q">1</span><span class="n">햇반</span><span class="amt">24,288</span></div>
+<div class="cat">단기숨김사용</div>
+<div class="row"><span class="q">1</span><span class="n">(신)롤백(500매)</span><span class="amt">4,257</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">내프킨,냅킨</span><span class="amt">27,500</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">먹태버터맛,매운맛</span><span class="amt">44,000</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">물티슈(500)</span><span class="amt">11,000</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">블랙페퍼시즈닝(15g)</span><span class="amt">42,900</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">산가측정페이퍼</span><span class="amt">20,900</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">스티커(BBQ스티커T)</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">안신스티커,BBQ테이프(N)</span><span class="amt">10,633</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">알루미늄캔(뚜껑포함)</span><span class="amt">35,200</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">여과지필터(320*535)(14)</span><span class="amt">30,250</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">일회용 케찹</span><span class="amt">11,000</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">종이쇼핑백</span><span class="amt">27,500</span><span class="note">숨김±30일 사용품→1검토</span></div>
+<div class="row"><span class="q">1</span><span class="n">치킨간지</span><span class="note">숨김±30일 사용품→1검토</span></div>
+</div>
+<div id="p2" class="panel">
+  <div class="summary">주문 <b>9/9</b> 10~19시 · 입고 <b>9/29</b><br>수량&gt;0 <b>53</b>품목 · 금액합 <b>1,625,831</b>원<br>채반·부분육 <b>입고불가</b></div>
+  <div class="cat">10호</div>
+<div class="row"><span class="q">3</span><span class="n">신선육(10호)-뼈한마리</span><span class="amt">372,000</span></div>
+<div class="cat">냉동</div>
+<div class="row"><span class="q">1</span><span class="n">BBQ싱싱옥수수콘립</span><span class="amt">4,180</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ필크런치소스</span><span class="amt">19,140</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-BBQ소떡소떡</span><span class="amt">7,700</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-가지튀김</span><span class="amt">6,600</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-고추튀김</span><span class="amt">16,720</span></div>
+<div class="row"><span class="q">2</span><span class="n">냉동-닭껍데기(국내산)</span><span class="amt">4,100</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-떡볶이(16개)</span><span class="amt">63,360</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-레귤러컷(감자튀김)</span><span class="amt">12,870</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-롱김말이</span><span class="amt">5,940</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-멘보샤</span><span class="amt">15,873</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-바사칸윙</span><span class="amt">126,500</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-오감볼</span><span class="amt">4,290</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-오징어튀김(오징어다리아님)</span><span class="amt">24,750</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-치즈볼-BBQ치즈볼(크림)</span><span class="amt">11,880</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-치즈볼-BBQ황금알치즈볼</span><span class="amt">19,800</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-치즈볼-더블치즈볼</span><span class="amt">7,920</span></div>
+<div class="row"><span class="q">1</span><span class="n">냉동-타르타르새우</span><span class="amt">9,900</span></div>
+<div class="cat">일반</div>
+<div class="row"><span class="q">1</span><span class="n">(신)스모크치킨</span><span class="amt">23,375</span></div>
+<div class="row"><span class="q">1</span><span class="n">(신)올리브오일</span><span class="amt">192,500</span></div>
+<div class="row"><span class="q">1</span><span class="n">(신)위생장갑(200매)</span><span class="amt">3,157</span></div>
+<div class="row"><span class="q">1</span><span class="n">(컵소스)BBQ양념치킨소스(배달용)</span><span class="amt">53,900</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ박스패키지(대)</span><span class="amt">42,900</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ박스패키지(소)</span><span class="amt">34,100</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ박스패키지(중)</span><span class="amt">40,700</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ버라이어티팩패키지</span><span class="amt">38,500</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ뿜치킹시즈닝(25g)</span><span class="amt">18,150</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ뿜치킹시즈닝(58g)</span><span class="amt">47,850</span></div>
+<div class="row"><span class="q">2</span><span class="n">BBQ양념치킨소스</span><span class="amt">33,000</span></div>
+<div class="row"><span class="q">1</span><span class="n">BBQ종이봉투(대)</span><span class="amt">4,620</span></div>
+<div class="row"><span class="q">1</span><span class="n">JHP종이봉투(대)or(소)</span><span class="amt">5,692</span></div>
+<div class="row"><span class="q">1</span><span class="n">골든크리스피배터믹스(맵소반죽)</span><span class="amt">11,990</span></div>
+<div class="row"><span class="q">1</span><span class="n">극한갈비소스</span><span class="amt">16,384</span></div>
+<div class="row"><span class="q">1</span><span class="n">땡쇼크소스</span><span class="amt">13,200</span></div>
+<div class="row"><span class="q">1</span><span class="n">맵소디소스</span><span class="amt">16,500</span></div>
+<div class="row"><span class="q">1</span><span class="n">배달소스-(신)비비소스</span><span class="amt">10,230</span></div>
+<div class="row"><span class="q">1</span><span class="n">배달소스-(신)스모크소스</span><span class="amt">3,190</span></div>
+<div class="row"><span class="q">1</span><span class="n">비닐-(신규)BBQ비닐쇼핑백(대)</span><span class="amt">9,570</span></div>
+<div class="row"><span class="q">1</span><span class="n">비닐-(신규)BBQ비닐쇼핑백(중)</span><span class="amt">8,360</span></div>
+<div class="row"><span class="q">1</span><span class="n">비닐-BBQ비닐봉투(소)</span><span class="amt">4,290</span></div>
+<div class="row"><span class="q">1</span><span class="n">빠리배터믹스</span><span class="amt">11,550</span></div>
+<div class="row"><span class="q">1</span><span class="n">소독저(젓가락)</span><span class="amt">11,550</span></div>
+<div class="row"><span class="q">1</span><span class="n">수제맥주 공케그(빈통)</span></div>
+<div class="row"><span class="q">1</span><span class="n">올리브마리네이드(신)</span><span class="amt">15,950</span></div>
+<div class="row"><span class="q">3</span><span class="n">올리브치킨용배터믹스-파우다</span><span class="amt">69,300</span></div>
+<div class="row"><span class="q">2</span><span class="n">치킨무(배달용)</span><span class="amt">48,400</span></div>
+<div class="row"><span class="q">1</span><span class="n">통다리바베큐소스(1kg)</span><span class="amt">7,920</span></div>
+<div class="row"><span class="q">1</span><span class="n">트레이(소)</span><span class="amt">5,830</span></div>
+<div class="row"><span class="q">1</span><span class="n">트레이(중)</span><span class="amt">7,260</span></div>
+<div class="row"><span class="q">1</span><span class="n">파인마요</span><span class="amt">11,000</span></div>
+<div class="row"><span class="q">1</span><span class="n">피자비닐봉투</span><span class="amt">12,650</span></div>
+<div class="row"><span class="q">1</span><span class="n">핫앤크리스피마리네이드</span><span class="amt">22,000</span></div>
+<div class="cat">한개충분</div>
+<div class="row"><span class="q">1</span><span class="n">BBQ필크런치플레이크</span><span class="amt">36,740</span></div>
+</div>
+<p class="foot">체크하며 쓰려면 각 줄 앞 수량을 보고 SFA 특정일 주문에 입력. 원가율·전품목·숨김±30일 사용품 반영. 장기숨김(패티·피자 등) 제외.</p>
+<script>
+function show(n){
+  document.getElementById('p1').classList.toggle('on', n===1);
+  document.getElementById('p2').classList.toggle('on', n===2);
+  document.querySelectorAll('.tab')[0].classList.toggle('on', n===1);
+  document.querySelectorAll('.tab')[1].classList.toggle('on', n===2);
+}
+// add checkboxes
+document.querySelectorAll('.row').forEach(r=>{
+  const cb=document.createElement('input');
+  cb.type='checkbox'; cb.className='check';
+  r.prepend(cb);
+});
+</script>
+</body>
+</html>
