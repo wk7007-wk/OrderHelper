@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0906.2245';
+const APP_VERSION = '0907.0356';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -839,7 +839,11 @@ window.__factoryRw = false;
 function isFactoryWriteHost() {
   try {
     const h = String(location.hostname || '').toLowerCase();
-    return h === 'localhost' || h === '127.0.0.1' || h === '::1';
+    if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true;
+    if (h === '125.176.112.214') return true;
+    if (h === 'wsl-ubuntu.tail785e65.ts.net') return true;
+    if (h === '100.65.156.49') return true;
+    return false;
   } catch (e) { return false; }
 }
 function factoryPutHeaders() {
@@ -10363,6 +10367,9 @@ function deleteRow(id) {
 
 function resetStocks() {
   if (!confirm('모든 재고 값을 비울까요? 구역, 여유, 일사용은 유지됩니다.')) return;
+  const resetAt = Date.now();
+  activeSyncResetMarker = { id: 'stock-reset-' + resetAt, resetAt };
+  try { localStorage.setItem(SYNC_RESET_STORAGE_KEY, JSON.stringify(activeSyncResetMarker)); } catch (_) {}
   entries.forEach(ent => {
     ent.stock = null;
     stampEntryStock(ent);
@@ -10789,9 +10796,11 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
     const fail = factoryReadFailure(0, e && e.message);
     return { currentResponse: fail, historyResponse: fail, payload: localPayload, body: '', attempts: 0 };
   }
+  const forceLocal = commit.reason === 'reset' || commit.reason === 'factoryForce';
   const basePayload = buildLastWriteWinsPayload(currentRemote, historyRemote[commit.dateKey], localPayload, Date.now(), {
-    untypedLocalOverridePolicy: 'remote',
-    typedStaffFields: typedStaffFieldSet(commit.typedStaffFields)
+    untypedLocalOverridePolicy: forceLocal ? 'local' : 'remote',
+    typedStaffFields: typedStaffFieldSet(commit.typedStaffFields),
+    forceLocalInputFields: forceLocal
   });
   const shots = Math.max(1, Math.min(3, Number(maxAttempts) || 3));
   const putMax = 1800000;
