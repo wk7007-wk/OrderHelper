@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0906.0605';
+const APP_VERSION = '0906.2110';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -896,12 +896,11 @@ async function ensureFactoryHttpsPutReady() {
       try {
         const u = new URL(b);
         if (String(u.hostname || '').endsWith('.ts.net')) b = 'https://' + u.hostname;
-        else if (isGithubPagesHost()) return;
-      } catch (e) { if (isGithubPagesHost()) return; }
+      } catch (e) {}
     }
-    if (isGithubPagesHost() && b.indexOf('https://') !== 0) return;
     window.__factoryHttpsBase = b;
     window.__factoryRw = true;
+    window.__factorySyncMode = window.__factorySyncMode || 'endpoints';
     FACTORY_ORDER_URL = window.__factoryHttpsBase + '/order_desk.json';
     FACTORY_BROWSER_URL = window.__factoryHttpsBase + '/orderhelper_browser.json';
   };
@@ -963,10 +962,22 @@ async function ensureFactoryHttpsPutReady() {
   };
   const run = async () => {
     if (isGithubPagesHost()) {
-      const jump = new URLSearchParams(location.search);
-      jump.set('to', 'orderhelper');
-      location.replace('/bbq-dashboard/go.html?' + jump.toString());
-      return 'jump';
+      const stay = new URLSearchParams(location.search).get('stay') === '1';
+      if (!stay) {
+        try {
+          const ep0 = await loadEp();
+          const f0 = (ep0 && ep0.sets && ep0.sets.factory) || (ep0 && ep0.factory) || {};
+          const wan0 = String(f0.wan_base || '').replace(/\/$/, '');
+          if (wan0 && await probe(wan0 + '/health')) {
+            location.replace(wan0 + '/OrderHelper/' + location.search);
+            return 'wan_jump';
+          }
+        } catch (e) {}
+        const jump = new URLSearchParams(location.search);
+        jump.set('to', 'orderhelper');
+        location.replace('/bbq-dashboard/go.html?' + jump.toString());
+        return 'jump';
+      }
     }
     window.__factoryHttpsBase = factoryHttpsBaseFallback();
     window.__factoryRw = true;
