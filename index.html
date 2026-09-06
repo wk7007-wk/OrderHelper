@@ -986,7 +986,6 @@ async function ensureFactoryHttpsPutReady() {
           const f0 = (ep0 && ep0.sets && ep0.sets.factory) || (ep0 && ep0.factory) || {};
           let wan0 = String(f0.wan_base || '').replace(/\/$/, '');
           if (!wan0) wan0 = 'http://125.176.112.214:2421';
-          if (wan0.indexOf('218.147.118.71') >= 0) wan0 = 'http://125.176.112.214:2421';
           const q = location.search || '';
           const join = wan0 + '/OrderHelper/' + (q ? (q.indexOf('?') === 0 ? q : '?' + q) : '');
           location.replace(join);
