@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0906.2110';
+const APP_VERSION = '0906.2236';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -836,6 +836,20 @@ let FACTORY_MAGIC_HEALTH = '';
 let FACTORY_MAGIC_BASE = '';
 // address-book ts_base/pages_base_http: http://wsl-ubuntu.tail785e65.ts.net:2421
 window.__factoryRw = false;
+function isFactoryWriteHost() {
+  try {
+    const h = String(location.hostname || '').toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '::1';
+  } catch (e) { return false; }
+}
+function factoryPutHeaders() {
+  // Phone/WAN: never send legacy write secrets. Writes = factory localhost + write_token via bots/CLI.
+  return { 'Content-Type': 'application/json' };
+}
+function canFactoryBrowserPut() {
+  return isFactoryWriteHost() && window.__factoryRw === true && isFactoryLiveOrderUrl(FACTORY_ORDER_URL);
+}
+
 let FACTORY_ORDER_URL = '';
 let FACTORY_BROWSER_URL = factoryJsonUrl('orderhelper_browser.json');
 window.__factoryReady = null;
@@ -9063,10 +9077,11 @@ async function publishBrowserDiag(trigger = 'tick') {
     factory: lastBrowserFactory,
     put: lastBrowserPut
   };
+  if (!isFactoryWriteHost()) return;
   try {
     await fetch(FACTORY_BROWSER_URL, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' },
+      headers: factoryPutHeaders(),
       body: JSON.stringify(packet)
     });
   } catch (_) {}
@@ -10792,6 +10807,12 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
         }));
       body = JSON.stringify({ current: sendPayload, history });
       if (body.length > putMax && attempt < shots) continue;
+      if (!isFactoryWriteHost()) {
+        const hint = 'wan_readonly · 폰/공인은 GET sync만. 쓰기는 공장 localhost+write_token';
+        lastBrowserPut = { ok: false, at: Date.now(), error: hint, trigger: 'put_skip', probe: 'wan_readonly' };
+        const fail = factoryReadFailure(0, hint);
+        return { currentResponse: fail, historyResponse: fail, payload: sendPayload, body, attempts: attempt };
+      }
       if (window.__factoryRw === false || !isFactoryLiveOrderUrl(FACTORY_ORDER_URL)) {
         const forced = await ensureFactoryHttpsPutReady();
         if (!forced || window.__factoryRw === false || !isFactoryLiveOrderUrl(FACTORY_ORDER_URL)) {
@@ -10803,7 +10824,7 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
       }
       response = await fetch(FACTORY_ORDER_URL, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: 'token grok-ops', 'X-Write-Token': 'storebot-bus' },
+        headers: factoryPutHeaders(),
         body,
         signal: controller.signal
       });
