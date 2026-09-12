@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0913.0458';
+const APP_VERSION = '0913.0842';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -1179,6 +1179,46 @@ const LEGACY_PACK_MULTIPLE_ITEMS = new Set([
 // FACTORS SoT = orderUnitCorrections (factor>1). No hardcoded SKU list.
 // conversionFactorForItem() reads manual factor first; empty defaults = corrections-only.
 const DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS = Object.freeze({});
+// Axis(3): sales×recipe expected daily order-units (from /recipes.json). Gap report≠send block.
+let recipeExpectedDaily = Object.create(null);
+let recipePeriodDays = 88;
+let recipeSource = '';
+async function loadRecipeExpectedDaily() {
+  try {
+    const urls = ['/recipes.json', 'http://127.0.0.1:2421/recipes.json'];
+    let data = null;
+    for (const u of urls) {
+      try {
+        const res = await fetch(u, { cache: 'no-store' });
+        if (!res.ok) continue;
+        data = await res.json();
+        recipeSource = u;
+        break;
+      } catch (e) {}
+    }
+    if (!data || typeof data !== 'object') return;
+    const period = Number(data.period_days || 88);
+    recipePeriodDays = Number.isFinite(period) && period > 0 ? period : 88;
+    const exp = data.expected_usage_from_sheet_sales || {};
+    const next = Object.create(null);
+    Object.keys(exp).forEach(k => {
+      const tot = Number(exp[k]);
+      if (Number.isFinite(tot) && tot > 0) next[canonicalItemName(k)] = tot / recipePeriodDays;
+    });
+    recipeExpectedDaily = next;
+  } catch (e) {}
+}
+try { loadRecipeExpectedDaily(); } catch (e) {}
+function recipeMaxOrderBoxes(itemOrName, orderDays) {
+  const name = canonicalItemName(typeof itemOrName === 'string' ? itemOrName : (itemOrName?.name || ''));
+  const daily = Number(recipeExpectedDaily[name]);
+  if (!Number.isFinite(daily) || daily <= 0) return null;
+  const days = Number(orderDays);
+  const d = Number.isFinite(days) && days > 0 ? days : (Number(typeof orderDaysAt !== 'undefined' ? orderDays : 6) || 6);
+  // 2.5× window + 2 slack
+  return Math.max(2, Math.ceil(daily * d * 2.5 + 2 - 1e-9));
+}
+
 
 // 배달옵션 메뉴 → 발주 SKU (메뉴믹스/cycleHint 후속). 윙봉 주문은 벌크신선통날개.
 const MENU_OPTION_ALIASES = Object.freeze({
@@ -4980,16 +5020,24 @@ function hardGateSfaOrderLine(line) {
     ? rawAmount
     : (unitPrice && Number.isFinite(qty) ? qty * unitPrice : null);
   const maxBoxes = typicalMaxOrderBoxes(item);
+  const od = Number(line?.orderDays ?? (typeof orderDays !== 'undefined' ? orderDays : 6));
+  const recipeMax = recipeMaxOrderBoxes(item, od);
   const reasons = [];
   if (!name) reasons.push('name_missing');
   if (!Number.isFinite(qty) || qty < 0) reasons.push('qty_invalid');
+  // (1) factor / qty anomaly
   if (Number.isFinite(qty) && qty > maxBoxes) reasons.push('qty_anomaly_gt_' + maxBoxes);
   if (factor && factor >= 8 && Number.isFinite(qty) && qty >= Math.max(6, Math.ceil(factor * 0.75))) {
     reasons.push('qty_looks_like_unfactored_stock');
   }
+  // (2) amount anomaly
   if (amount != null && unitPrice && amount > unitPrice * maxBoxes) reasons.push('amount_anomaly');
+  // (3) sales×recipe expected vs order boxes
+  if (recipeMax != null && Number.isFinite(qty) && qty > recipeMax) {
+    reasons.push('recipe_expect_anomaly_gt_' + recipeMax);
+  }
   const ok = reasons.length === 0;
-  return { ok, name, qty, amount, factor: factor || null, maxBoxes, unitPrice, reasons };
+  return { ok, name, qty, amount, factor: factor || null, maxBoxes, recipeMaxBoxes: recipeMax, unitPrice, reasons };
 }
 
 function hardGateSfaOrderLines(lines) {
