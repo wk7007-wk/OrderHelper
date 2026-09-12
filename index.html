@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0907.1412';
+const APP_VERSION = '0913.0405';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -839,13 +839,44 @@ window.__factoryRw = false;
 function isFactoryWriteHost() {
   try {
     const h = String(location.hostname || '').toLowerCase();
-    // Browser PUT only on loopback. Phone/WAN = GET sync; writes via factory localhost+write_token.
+    if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true;
+    if (h === 'wsl-ubuntu.tail785e65.ts.net') return true;
+    if (h === '100.65.156.49') return true;
+    if (h === '125.176.112.214') return true;
+    return false;
+  } catch (e) { return false; }
+}
+function ohWriteToken() {
+  try {
+    const q = new URLSearchParams(location.search || '');
+    const fromQ = String(q.get('write_token') || q.get('wt') || '').trim();
+    if (fromQ) {
+      try { sessionStorage.setItem('oh_factory_write_token', fromQ); } catch (e) {}
+      try {
+        q.delete('write_token'); q.delete('wt');
+        const u = new URL(location.href);
+        u.search = q.toString();
+        history.replaceState(null, '', u.toString());
+      } catch (e2) {}
+      return fromQ;
+    }
+  } catch (e3) {}
+  try { if (window.__factoryWriteToken) return String(window.__factoryWriteToken || '').trim(); } catch (e4) {}
+  try { return String(sessionStorage.getItem('oh_factory_write_token') || '').trim(); } catch (e5) { return ''; }
+}
+function isOhLoopbackHost() {
+  try {
+    const h = String(location.hostname || '').toLowerCase();
     return h === 'localhost' || h === '127.0.0.1' || h === '::1';
   } catch (e) { return false; }
 }
+let __ohWanPutAt = 0;
+const OH_WAN_PUT_COOLDOWN_MS = 2000;
 function factoryPutHeaders() {
-  // Phone/WAN: never send legacy write secrets. Writes = factory localhost + write_token via bots/CLI.
-  return { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json' };
+  const tok = ohWriteToken();
+  if (tok) headers['X-Write-Token'] = tok;
+  return headers;
 }
 function canFactoryBrowserPut() {
   return isFactoryWriteHost() && window.__factoryRw === true && isFactoryLiveOrderUrl(FACTORY_ORDER_URL);
@@ -926,14 +957,17 @@ async function ensureFactoryHttpsPutReady() {
   };
   const probe = async (url) => {
     if (!url) return false;
+    const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    const t = setTimeout(function () { try { if (ctrl) ctrl.abort(); } catch (e) {} }, 4000);
     try {
-      const r = await fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now(), { cache: 'no-cache' });
+      const r = await fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now(), { cache: 'no-cache', signal: ctrl ? ctrl.signal : undefined });
       if (!r.ok) return false;
       try {
         const j = await r.json();
         return !!(j && (j.ok === true || j.status === 'ok' || j.http));
       } catch (e) { return true; }
     } catch (e) { return false; }
+    finally { clearTimeout(t); }
   };
   const loadEp = async () => {
     const cands = isGithubPagesHost()
@@ -4632,9 +4666,22 @@ function actualOrderForInterval(prev, curr, name) {
 
 function setActualOrderValue(name, value) {
   if (!name) return;
-  const num = value === '' ? null : parseFloat(value);
-  if (num === null || !Number.isFinite(num) || num < 0) delete actualOrders[name];
-  else actualOrders[name] = Math.ceil(num);
+  let num = value === '' ? null : parseFloat(value);
+  if (num === null || !Number.isFinite(num) || num < 0) {
+    delete actualOrders[name];
+  } else {
+    const item = (Array.isArray(MASTER) ? MASTER.find(row => canonicalItemName(row.name) === canonicalItemName(name)) : null) || { name };
+    const factor = conversionFactorForItem(item);
+    if (factor && factor > 1 + 1e-9 && num > typicalMaxOrderBoxes(item)) {
+      num = coerceStockNeedToOrderBoxes(item, num);
+    }
+    const gate = hardGateSfaOrderLine({ name, qty: Math.ceil(num) });
+    if (!gate.ok) {
+      try { console.warn('[SFA_HARD_GATE_BLOCK] setActualOrder', name, gate.reasons.join('+')); } catch (e) {}
+      return;
+    }
+    actualOrders[name] = Math.ceil(num);
+  }
   actualOrders = cleanActualOrders();
 }
 
@@ -4895,14 +4942,107 @@ function stockUnitsForOrderQty(orderQty, orderUnitToStockFactor) {
   return qty * factor;
 }
 
+
+function typicalMaxOrderBoxes(item) {
+  const factor = Number(conversionFactorForItem(item) || 1);
+  const daily = Number(item?.daily);
+  const buffer = Number(item?.buffer);
+  const d = Number.isFinite(daily) && daily > 0 ? daily : 0;
+  const b = Number.isFinite(buffer) && buffer > 0 ? buffer : 0;
+  const need = d * 6 + b;
+  const byNeed = factor > 1 + 1e-9 ? Math.ceil((need - 1e-9) / factor) : Math.ceil(need - 1e-9 || 0);
+  const base = factor > 1 + 1e-9 ? 3 : 5;
+  return Math.max(base, byNeed * 2);
+}
+
+function unitPriceForItem(itemOrName) {
+  const name = canonicalItemName(typeof itemOrName === 'string' ? itemOrName : (itemOrName?.name || ''));
+  const p = Number(DEFAULT_ORDER_UNIT_PRICES[name]);
+  return Number.isFinite(p) && p > 0 ? p : null;
+}
+
+/** factor SKU: boxes = ceil(stockNeed / N) only. Never treat piece-count as boxes. */
+function coerceStockNeedToOrderBoxes(item, stockNeedOrQty) {
+  const need = Number(stockNeedOrQty);
+  if (!Number.isFinite(need) || need <= 0) return 0;
+  const factor = conversionFactorForItem(item);
+  if (factor && factor > 1 + 1e-9) {
+    return applyOrderUnitCorrectionQty(item, orderUnitsForStockNeed(need, factor));
+  }
+  return applyOrderUnitCorrectionQty(item, roundOrderQty(need));
+}
+
+function hardGateSfaOrderLine(line) {
+  const name = canonicalItemName(line?.name || '');
+  const item = (Array.isArray(MASTER) ? MASTER.find(row => canonicalItemName(row.name) === name) : null) || { name, daily: 0, buffer: 0 };
+  const qty = Number(line?.qty);
+  const factor = conversionFactorForItem(item);
+  const unitPrice = unitPriceForItem(item);
+  const rawAmount = Number(line?.amount);
+  const amount = Number.isFinite(rawAmount) && rawAmount > 0
+    ? rawAmount
+    : (unitPrice && Number.isFinite(qty) ? qty * unitPrice : null);
+  const maxBoxes = typicalMaxOrderBoxes(item);
+  const reasons = [];
+  if (!name) reasons.push('name_missing');
+  if (!Number.isFinite(qty) || qty < 0) reasons.push('qty_invalid');
+  if (Number.isFinite(qty) && qty > maxBoxes) reasons.push('qty_anomaly_gt_' + maxBoxes);
+  if (factor && factor >= 8 && Number.isFinite(qty) && qty >= Math.max(6, Math.ceil(factor * 0.75))) {
+    reasons.push('qty_looks_like_unfactored_stock');
+  }
+  if (amount != null && unitPrice && amount > unitPrice * maxBoxes) reasons.push('amount_anomaly');
+  const ok = reasons.length === 0;
+  return { ok, name, qty, amount, factor: factor || null, maxBoxes, unitPrice, reasons };
+}
+
+function hardGateSfaOrderLines(lines) {
+  const blocked = [];
+  const passed = [];
+  const log = [];
+  for (const line of (Array.isArray(lines) ? lines : [])) {
+    const g = hardGateSfaOrderLine(line);
+    if (g.ok) passed.push({ name: g.name, qty: Number(line.qty), amount: line.amount });
+    else {
+      blocked.push({ name: g.name, qty: line.qty, amount: line.amount, gate: g });
+      log.push(g.name + ':' + g.reasons.join('+'));
+    }
+  }
+  const ok = blocked.length === 0;
+  try {
+    if (!ok) console.warn('[SFA_HARD_GATE_BLOCK]', log.join(' | '));
+    else console.info('[SFA_HARD_GATE_PASS]', passed.length);
+  } catch (e) {}
+  return { ok, passed, blocked, log, blockedCount: blocked.length };
+}
+
+/** Proposed SFA cart: coerce factor SKUs from stock-need, then hard-gate. Fail closed. */
+function prepareSfaSubmitLines(lines) {
+  const coerced = [];
+  for (const line of (Array.isArray(lines) ? lines : [])) {
+    const name = canonicalItemName(line?.name || '');
+    const item = (Array.isArray(MASTER) ? MASTER.find(row => canonicalItemName(row.name) === name) : null) || { name };
+    const factor = conversionFactorForItem(item);
+    let qty = Number(line?.qty);
+    if (factor && factor > 1 + 1e-9 && Number.isFinite(qty) && qty > typicalMaxOrderBoxes(item)) {
+      qty = coerceStockNeedToOrderBoxes(item, qty);
+    } else if (factor && factor > 1 + 1e-9 && line?.asStockNeed === true) {
+      qty = coerceStockNeedToOrderBoxes(item, qty);
+    }
+    coerced.push({ name, qty, amount: line?.amount });
+  }
+  const gate = hardGateSfaOrderLines(coerced);
+  return Object.assign({}, gate, { coerced });
+}
+
 function recommendedOrderQty(item, stockNeed) {
   const need = Number(stockNeed);
   if (!Number.isFinite(need) || need <= 0) return 0;
+  // factor SKU: boxes = ceil(need/N) only (never send piece-count as boxes)
   const factor = conversionFactorForItem(item);
-  const parts = orderUnitParts(item);
-  if (factor && (!parts.same || Math.abs(factor - 1) > 1e-9)) {
-    return applyOrderUnitCorrectionQty(item, orderUnitsForStockNeed(need, factor));
+  if (factor && factor > 1 + 1e-9) {
+    return coerceStockNeedToOrderBoxes(item, need);
   }
+  const parts = orderUnitParts(item);
   if (!parts.same) return applyOrderUnitCorrectionQty(item, 1);
   return applyOrderUnitCorrectionQty(item, roundOrderQty(need));
 }
@@ -10904,6 +11044,19 @@ async function putConfirmedSaveTargets(commit, timeoutMs = SAVE_REQUEST_TIMEOUT_
           const fail = factoryReadFailure(0, hint);
           return { currentResponse: fail, historyResponse: fail, payload: sendPayload, body, attempts: attempt };
         }
+      }
+      if (!isOhLoopbackHost()) {
+        const gap = Date.now() - (__ohWanPutAt || 0);
+        if (gap < OH_WAN_PUT_COOLDOWN_MS) {
+          await new Promise((r) => setTimeout(r, OH_WAN_PUT_COOLDOWN_MS - gap));
+        }
+        if (!ohWriteToken()) {
+          const hint = 'wan_need_write_token · sessionStorage oh_factory_write_token 또는 ?write_token=';
+          lastBrowserPut = { ok: false, at: Date.now(), error: hint, trigger: 'put_skip', probe: 'no_token' };
+          const fail = factoryReadFailure(0, hint);
+          return { currentResponse: fail, historyResponse: fail, payload: sendPayload, body, attempts: attempt };
+        }
+        __ohWanPutAt = Date.now();
       }
       response = await fetch(FACTORY_ORDER_URL, {
         method: 'PUT',
