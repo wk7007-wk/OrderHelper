@@ -786,7 +786,7 @@
 </div>
 
 <script>
-const APP_VERSION = '0913.0405';
+const APP_VERSION = '0913.0458';
 const FACTORY_STAFF_POLL_MS = 3000;
 (function(){
   var v = (typeof APP_VERSION === "string" && APP_VERSION) || document.documentElement.getAttribute("data-web-v") || "";
@@ -1176,12 +1176,9 @@ const LEGACY_PACK_MULTIPLE_ITEMS = new Set([
   '냉동-바사칸윙',
   '냉동-떡볶이(16개)'
 ]);
-// Static site defaults: 1 order unit (BOX) = N stock units (개). Qty = ceil(need / N).
-// Not written to Firebase; user-saved orderUnitCorrections still override.
-const DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS = Object.freeze({
-  '냉동-핫윙,비비윙스': 10,
-  '냉동-떡볶이(16개)': 16,
-});
+// FACTORS SoT = orderUnitCorrections (factor>1). No hardcoded SKU list.
+// conversionFactorForItem() reads manual factor first; empty defaults = corrections-only.
+const DEFAULT_ORDER_UNIT_TO_STOCK_FACTORS = Object.freeze({});
 
 // 배달옵션 메뉴 → 발주 SKU (메뉴믹스/cycleHint 후속). 윙봉 주문은 벌크신선통날개.
 const MENU_OPTION_ALIASES = Object.freeze({
