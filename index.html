@@ -843,6 +843,9 @@ function isFactoryWriteHost() {
     if (h === 'wsl-ubuntu.tail785e65.ts.net') return true;
     if (h === '100.65.156.49') return true;
     if (h === '125.176.112.214') return true;
+    if (h === '192.168.219.44' || h === '192.168.219.42') return true;
+    if (h === '100.65.192.68' || h === '100.65.156.49') return true;
+    if (/^192\.168\./.test(h) || /^100\.\d+\./.test(h)) return true;
     return false;
   } catch (e) { return false; }
 }
@@ -1011,6 +1014,12 @@ async function ensureFactoryHttpsPutReady() {
     return 'blocked';
   };
   const run = async () => {
+    if (isGithubPagesHost() && new URLSearchParams(location.search).get('stay') !== '1') {
+      const q = new URLSearchParams(location.search);
+      q.set('to', 'orderhelper');
+      location.replace('https://wk7007-wk.github.io/bbq-dashboard/go.html?' + q.toString());
+      return 'github_go_jump';
+    }
     const ep = await loadEp();
     let mode = '';
     if (isGithubPagesHost()) {
